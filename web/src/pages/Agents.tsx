@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAgents, getAgentDocs, updateAgentDoc, createAgent, deleteAgent } from '../api/client'
+import { getAgents, getAgentDocs, updateAgentDoc, createAgent, deleteAgent, getAgentConfig, updateAgentConfig } from '../api/client'
 import { useNavigate } from 'react-router-dom'
 import {
   Bot, FolderOpen, MessageSquare, Plus, Trash2,
@@ -25,6 +25,19 @@ type Agent = {
   workspaceDir: string
   state: AgentState | null
 }
+
+type SubAgentDef = {
+  description: string
+  prompt?: string
+  promptFile?: string
+  tools?: string[]
+  disallowedTools?: string[]
+  model?: string
+  skills?: string[]
+  maxTurns?: number
+}
+
+type SubAgentsMap = Record<string, SubAgentDef>
 
 // 文档文件列表和对应图标描述
 const DOC_FILES = [
@@ -58,6 +71,9 @@ export function Agents() {
   // 展开的文档
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null)
 
+  // 子 Agent 相关状态
+  const [subAgents, setSubAgents] = useState<SubAgentsMap>({})
+
   const loadAgents = useCallback(() => {
     getAgents().then((list) => setAgents(list as Agent[])).catch(() => {})
   }, [])
@@ -76,6 +92,22 @@ export function Agents() {
       setExpandedDoc(null)
     }
   }, [selected])
+
+  // 选中 agent 时加载子 Agent 配置
+  useEffect(() => {
+    if (selected) {
+      getAgentConfig(selected)
+        .then((config) => setSubAgents((config.agents as SubAgentsMap) ?? {}))
+        .catch(() => setSubAgents({}))
+    }
+  }, [selected])
+
+  // 保存子 Agent 配置
+  const handleSaveSubAgents = async (updatedAgents: SubAgentsMap) => {
+    if (!selected) return
+    await updateAgentConfig(selected, { agents: updatedAgents })
+    setSubAgents(updatedAgents)
+  }
 
   const selectedAgent = agents.find((a) => a.id === selected)
 
@@ -221,6 +253,8 @@ export function Agents() {
             setEditContent={setEditContent}
             onStartChat={() => navigate('/')}
             onDelete={() => handleDelete(selectedAgent.id)}
+            subAgents={subAgents}
+            onSaveSubAgents={handleSaveSubAgents}
           />
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -331,6 +365,8 @@ function AgentDetail({
   setEditContent,
   onStartChat,
   onDelete,
+  subAgents,
+  onSaveSubAgents,
 }: {
   t: ReturnType<typeof useI18n>['t']
   agent: Agent
@@ -346,6 +382,8 @@ function AgentDetail({
   setEditContent: (v: string) => void
   onStartChat: () => void
   onDelete: () => void
+  subAgents: SubAgentsMap
+  onSaveSubAgents: (agents: SubAgentsMap) => Promise<void>
 }) {
   return (
     <div className="p-6 max-w-3xl space-y-6">
@@ -420,6 +458,9 @@ function AgentDetail({
           } />
         )}
       </div>
+
+      {/* 子 Agent 区 */}
+      <SubAgentsSection t={t} subAgents={subAgents} onSave={onSaveSubAgents} />
 
       {/* 文档区 */}
       <div>
@@ -552,6 +593,390 @@ function DocSection({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// === 清理编辑草稿，去除空可选字段 ===
+function cleanDraft(draft: SubAgentDef): SubAgentDef {
+  const result: SubAgentDef = { description: draft.description }
+  if (draft.prompt?.trim()) result.prompt = draft.prompt.trim()
+  if (draft.promptFile?.trim()) result.promptFile = draft.promptFile.trim()
+  if (draft.tools && draft.tools.length > 0) result.tools = draft.tools
+  if (draft.disallowedTools && draft.disallowedTools.length > 0) result.disallowedTools = draft.disallowedTools
+  if (draft.model && draft.model !== 'inherit') result.model = draft.model
+  if (draft.skills && draft.skills.length > 0) result.skills = draft.skills
+  if (draft.maxTurns && draft.maxTurns > 0) result.maxTurns = draft.maxTurns
+  return result
+}
+
+// === 子 Agent 管理区 ===
+function SubAgentsSection({
+  t,
+  subAgents,
+  onSave,
+}: {
+  t: ReturnType<typeof useI18n>['t']
+  subAgents: SubAgentsMap
+  onSave: (agents: SubAgentsMap) => Promise<void>
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null) // null=无编辑, '__new__'=新增
+  const [editDraft, setEditDraft] = useState<SubAgentDef>({ description: '' })
+  const [newId, setNewId] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+
+  const entries = Object.entries(subAgents)
+
+  const handleEdit = (id: string) => {
+    setEditingId(id)
+    setEditDraft({ ...subAgents[id]! })
+    setExpandedId(id)
+  }
+
+  const handleAdd = () => {
+    setEditingId('__new__')
+    setNewId('')
+    setEditDraft({ description: '' })
+    setExpandedId('__new__')
+  }
+
+  const handleCancel = () => {
+    setEditingId(null)
+    if (expandedId === '__new__') setExpandedId(null)
+  }
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      let updated: SubAgentsMap
+      if (editingId === '__new__') {
+        if (!newId.trim()) return
+        updated = { ...subAgents, [newId.trim()]: cleanDraft(editDraft) }
+      } else if (editingId) {
+        updated = { ...subAgents, [editingId]: cleanDraft(editDraft) }
+      } else {
+        return
+      }
+      await onSave(updated)
+      setEditingId(null)
+      if (editingId === '__new__') setExpandedId(newId.trim())
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm(t.agents.confirmDeleteSub)) return
+    const updated = Object.fromEntries(entries.filter(([k]) => k !== id))
+    setIsSaving(true)
+    try {
+      await onSave(updated)
+      if (expandedId === id) setExpandedId(null)
+      if (editingId === id) setEditingId(null)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold flex items-center gap-2">
+          <Bot className="h-4 w-4" />
+          {t.agents.subAgents}
+        </h2>
+        <button
+          onClick={handleAdd}
+          disabled={editingId === '__new__'}
+          className="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          {t.agents.addSubAgent}
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {entries.length === 0 && editingId !== '__new__' && (
+          <p className="text-sm text-muted-foreground italic py-2">{t.agents.noSubAgents}</p>
+        )}
+
+        {entries.map(([id, def]) => {
+          const isExpanded = expandedId === id
+          const isEditing = editingId === id
+          return (
+            <div key={id} className="border border-border rounded-md overflow-hidden">
+              {/* 标题栏 */}
+              <button
+                onClick={() => setExpandedId(isExpanded ? null : id)}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-accent/30 transition-colors"
+              >
+                <ChevronRight className={cn('h-3.5 w-3.5 transition-transform shrink-0', isExpanded && 'rotate-90')} />
+                <span className="font-medium">{id}</span>
+                <span className="text-xs text-muted-foreground truncate flex-1">{def.description}</span>
+                {def.model && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{def.model}</span>
+                )}
+                {def.tools && def.tools.length > 0 && (
+                  <span className="text-xs text-muted-foreground shrink-0">{def.tools.length} tools</span>
+                )}
+              </button>
+
+              {/* 展开内容 */}
+              {isExpanded && (
+                <div className="border-t border-border">
+                  {/* 工具栏 */}
+                  <div className="flex items-center justify-end px-3 py-1.5 bg-muted/30 border-b border-border/50 gap-2">
+                    {isEditing ? (
+                      <>
+                        <button
+                          onClick={handleCancel}
+                          className="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-muted-foreground hover:bg-accent transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                          {t.common.cancel}
+                        </button>
+                        <button
+                          onClick={handleSave}
+                          disabled={isSaving || !editDraft.description.trim()}
+                          className="flex items-center gap-1 px-3 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                        >
+                          <Save className="h-3 w-3" />
+                          {isSaving ? t.agents.saving : t.common.save}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleEdit(id)}
+                          className="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-muted-foreground hover:bg-accent transition-colors"
+                        >
+                          <Pencil className="h-3 w-3" />
+                          {t.common.edit}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(id)}
+                          className="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-destructive hover:bg-destructive/10 transition-colors"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          {t.common.delete}
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* 编辑/只读区 */}
+                  <div className="p-3">
+                    {isEditing ? (
+                      <SubAgentForm t={t} draft={editDraft} setDraft={setEditDraft} />
+                    ) : (
+                      <SubAgentReadView t={t} def={def} />
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {/* 新增子 Agent 表单 */}
+        {editingId === '__new__' && (
+          <div className="border border-border rounded-md overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 text-sm bg-accent/20">
+              <Plus className="h-3.5 w-3.5" />
+              <span className="font-medium">{t.agents.addSubAgent}</span>
+            </div>
+            <div className="border-t border-border">
+              <div className="flex items-center justify-end px-3 py-1.5 bg-muted/30 border-b border-border/50 gap-2">
+                <button
+                  onClick={handleCancel}
+                  className="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-muted-foreground hover:bg-accent transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                  {t.common.cancel}
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving || !newId.trim() || !editDraft.description.trim()}
+                  className="flex items-center gap-1 px-3 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  <Save className="h-3 w-3" />
+                  {isSaving ? t.agents.saving : t.common.save}
+                </button>
+              </div>
+              <div className="p-3 space-y-3">
+                {/* ID 输入（仅新增时显示） */}
+                <div>
+                  <label className="block text-xs font-medium mb-1">{t.agents.subAgentId}</label>
+                  <input
+                    value={newId}
+                    onChange={(e) => setNewId(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                    placeholder={t.agents.subAgentIdPlaceholder}
+                    className="w-full px-3 py-2 text-sm rounded-md bg-muted border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">{t.agents.subAgentIdHint}</p>
+                </div>
+                <SubAgentForm t={t} draft={editDraft} setDraft={setEditDraft} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// === 子 Agent 只读视图 ===
+function SubAgentReadView({ t, def }: { t: ReturnType<typeof useI18n>['t']; def: SubAgentDef }) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <span className="text-xs font-medium text-muted-foreground">{t.agents.descriptionLabel}</span>
+        <p className="text-sm mt-0.5">{def.description}</p>
+      </div>
+
+      {def.prompt && (
+        <div>
+          <span className="text-xs font-medium text-muted-foreground">{t.agents.promptLabel}</span>
+          <pre className="text-sm whitespace-pre-wrap font-mono bg-muted/50 rounded p-2 mt-0.5 text-foreground/80">
+            {def.prompt}
+          </pre>
+        </div>
+      )}
+
+      {def.promptFile && (
+        <InfoRow label={t.agents.promptFileLabel} value={<span className="text-xs font-mono">{def.promptFile}</span>} />
+      )}
+
+      {def.model && (
+        <InfoRow label={t.agents.model} value={<span className="text-xs px-1.5 py-0.5 rounded bg-muted">{def.model}</span>} />
+      )}
+
+      {def.maxTurns != null && (
+        <InfoRow label={t.agents.maxTurnsLabel} value={<span className="text-sm">{def.maxTurns}</span>} />
+      )}
+
+      {def.tools && def.tools.length > 0 && (
+        <div>
+          <span className="text-xs font-medium text-muted-foreground">{t.agents.toolsLabel}</span>
+          <div className="flex flex-wrap gap-1 mt-1">
+            {def.tools.map((tool) => (
+              <span key={tool} className="text-xs px-1.5 py-0.5 rounded bg-muted">{tool}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {def.disallowedTools && def.disallowedTools.length > 0 && (
+        <div>
+          <span className="text-xs font-medium text-muted-foreground">{t.agents.disallowedToolsLabel}</span>
+          <div className="flex flex-wrap gap-1 mt-1">
+            {def.disallowedTools.map((tool) => (
+              <span key={tool} className="text-xs px-1.5 py-0.5 rounded bg-destructive/10 text-destructive">{tool}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// === 子 Agent 编辑表单 ===
+function SubAgentForm({
+  t,
+  draft,
+  setDraft,
+}: {
+  t: ReturnType<typeof useI18n>['t']
+  draft: SubAgentDef
+  setDraft: (d: SubAgentDef) => void
+}) {
+  const inputClass = 'w-full px-3 py-2 text-sm rounded-md bg-muted border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring'
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-xs font-medium mb-1">{t.agents.descriptionLabel}</label>
+        <input
+          value={draft.description}
+          onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+          placeholder={t.agents.descriptionPlaceholder}
+          className={inputClass}
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium mb-1">{t.agents.promptLabel}</label>
+        <textarea
+          value={draft.prompt ?? ''}
+          onChange={(e) => setDraft({ ...draft, prompt: e.target.value })}
+          placeholder={t.agents.promptPlaceholder}
+          rows={4}
+          className={cn(inputClass, 'resize-y font-mono')}
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium mb-1">{t.agents.promptFileLabel}</label>
+        <input
+          value={draft.promptFile ?? ''}
+          onChange={(e) => setDraft({ ...draft, promptFile: e.target.value })}
+          placeholder={t.agents.promptFilePlaceholder}
+          className={inputClass}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium mb-1">{t.agents.model}</label>
+          <select
+            value={draft.model ?? 'inherit'}
+            onChange={(e) => setDraft({ ...draft, model: e.target.value === 'inherit' ? undefined : e.target.value })}
+            className={inputClass}
+          >
+            <option value="inherit">inherit</option>
+            <option value="sonnet">sonnet</option>
+            <option value="opus">opus</option>
+            <option value="haiku">haiku</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium mb-1">{t.agents.maxTurnsLabel}</label>
+          <input
+            type="number"
+            value={draft.maxTurns ?? ''}
+            onChange={(e) => setDraft({ ...draft, maxTurns: e.target.value ? Number(e.target.value) : undefined })}
+            min={1}
+            className={inputClass}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium mb-1">{t.agents.toolsLabel}</label>
+        <input
+          value={(draft.tools ?? []).join(', ')}
+          onChange={(e) => {
+            const val = e.target.value
+            setDraft({ ...draft, tools: val ? val.split(',').map((s) => s.trim()).filter(Boolean) : [] })
+          }}
+          placeholder={t.agents.toolsPlaceholder}
+          className={inputClass}
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium mb-1">{t.agents.disallowedToolsLabel}</label>
+        <input
+          value={(draft.disallowedTools ?? []).join(', ')}
+          onChange={(e) => {
+            const val = e.target.value
+            setDraft({ ...draft, disallowedTools: val ? val.split(',').map((s) => s.trim()).filter(Boolean) : [] })
+          }}
+          placeholder={t.agents.toolsPlaceholder}
+          className={inputClass}
+        />
+      </div>
     </div>
   )
 }
