@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { randomUUID } from 'node:crypto'
-import { getMessages, getChats } from '../db/index.ts'
+import { getMessages, getChats, deleteChat } from '../db/index.ts'
 import type { AgentManager, AgentQueue } from '../agent/index.ts'
 import type { MessageRouter } from '../channel/index.ts'
 import type { InboundMessage } from '../channel/index.ts'
@@ -58,6 +58,13 @@ export function createMessagesRoutes(agentManager: AgentManager, agentQueue: Age
     const msgs = getMessages(chatId, limit, before ?? undefined)
     // 返回时按时间正序
     return c.json(msgs.reverse())
+  })
+
+  // DELETE /api/chats/:chatId — 删除对话及其消息
+  messages.delete('/chats/:chatId', (c) => {
+    const chatId = c.req.param('chatId')
+    deleteChat(chatId)
+    return c.json({ ok: true })
   })
 
   return messages
