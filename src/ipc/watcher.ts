@@ -13,6 +13,7 @@ interface ScheduleTaskMessage {
   chatId: string
   name?: string
   description?: string
+  timezone?: string
 }
 
 interface PauseTaskMessage {
@@ -43,6 +44,7 @@ export interface IpcDeps {
     chatId: string
     name?: string
     description?: string
+    timezone?: string
   }) => void
   onPauseTask: (taskId: string) => void
   onResumeTask: (taskId: string) => void
@@ -173,6 +175,7 @@ export class IpcWatcher {
           chatId: message.chatId,
           name: message.name,
           description: message.description,
+          timezone: message.timezone,
         })
         break
       }
