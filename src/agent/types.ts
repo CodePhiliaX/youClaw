@@ -1,24 +1,18 @@
 import type { AgentRuntime } from './runtime.ts'
+import type { AgentConfig as SchemaAgentConfig } from './schema.ts'
 
-export interface AgentConfig {
-  id: string
-  name: string
-  model: string
+// 扩展 schema 配置，添加运行时字段
+export interface AgentConfig extends SchemaAgentConfig {
   workspaceDir: string
-  trigger?: string           // 触发模式（正则），如 "@assistant"
-  requiresTrigger?: boolean  // 群聊是否需要触发（默认 true）
-  telegram?: {
-    chatIds?: string[]       // 绑定的 Telegram chat IDs，如 ["tg:123456"]
-  }
-  memory?: {
-    enabled?: boolean
-  }
-  skills?: string[]
 }
 
 export interface AgentState {
   sessionId: string | null
   isProcessing: boolean
+  lastProcessedAt: string | null
+  totalProcessed: number
+  lastError: string | null
+  queueDepth: number
 }
 
 export interface ProcessParams {
@@ -27,8 +21,12 @@ export interface ProcessParams {
   agentId: string
 }
 
-export interface ManagedAgent {
+export interface AgentInstance {
   config: AgentConfig
+  workspaceDir: string
   runtime: AgentRuntime
   state: AgentState
 }
+
+// 向后兼容别名
+export type ManagedAgent = AgentInstance
