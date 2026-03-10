@@ -79,6 +79,10 @@ export function initDatabase(): Database {
   _db.exec('PRAGMA foreign_keys=ON')
   _db.exec(SCHEMA)
 
+  // 迁移：添加 name 和 description 列
+  try { _db.exec('ALTER TABLE scheduled_tasks ADD COLUMN name TEXT') } catch {}
+  try { _db.exec('ALTER TABLE scheduled_tasks ADD COLUMN description TEXT') } catch {}
+
   getLogger().info({ path: paths.db }, '数据库初始化完成')
   return _db
 }
@@ -173,6 +177,8 @@ export interface ScheduledTask {
   last_run: string | null
   status: string
   created_at: string
+  name: string | null
+  description: string | null
 }
 
 export interface TaskRunLog {
@@ -193,12 +199,14 @@ export function createTask(task: {
   scheduleType: string
   scheduleValue: string
   nextRun: string
+  name?: string
+  description?: string
 }): void {
   const db = getDatabase()
   db.run(
-    `INSERT INTO scheduled_tasks (id, agent_id, chat_id, prompt, schedule_type, schedule_value, next_run, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [task.id, task.agentId, task.chatId, task.prompt, task.scheduleType, task.scheduleValue, task.nextRun, new Date().toISOString()]
+    `INSERT INTO scheduled_tasks (id, agent_id, chat_id, prompt, schedule_type, schedule_value, next_run, created_at, name, description)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [task.id, task.agentId, task.chatId, task.prompt, task.scheduleType, task.scheduleValue, task.nextRun, new Date().toISOString(), task.name ?? null, task.description ?? null]
   )
 }
 
@@ -218,6 +226,8 @@ export function updateTask(id: string, updates: Partial<{
   status: string
   nextRun: string | null
   lastRun: string
+  name: string
+  description: string
 }>): void {
   const db = getDatabase()
   const fields: string[] = []
@@ -228,6 +238,8 @@ export function updateTask(id: string, updates: Partial<{
   if (updates.status !== undefined) { fields.push('status = ?'); values.push(updates.status) }
   if (updates.nextRun !== undefined) { fields.push('next_run = ?'); values.push(updates.nextRun) }
   if (updates.lastRun !== undefined) { fields.push('last_run = ?'); values.push(updates.lastRun) }
+  if (updates.name !== undefined) { fields.push('name = ?'); values.push(updates.name) }
+  if (updates.description !== undefined) { fields.push('description = ?'); values.push(updates.description) }
 
   if (fields.length === 0) return
 
