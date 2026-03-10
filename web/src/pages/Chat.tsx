@@ -148,7 +148,7 @@ export function Chat() {
     <TooltipProvider>
       <div className="flex h-full">
         {/* 左面板 — 对话列表 */}
-        <div className="w-72 flex-shrink-0 border-r border-border flex flex-col bg-[var(--card)]/30">
+        <div className="w-72 flex-shrink-0 border-r border-border flex flex-col bg-[var(--card)]/30 overflow-hidden">
           {/* 顶部操作栏 */}
           <div className="p-3 space-y-2">
             <div className="flex items-center justify-between">
@@ -209,9 +209,9 @@ export function Chat() {
                         )}
                       >
                         <MessageSquare className="h-4 w-4 shrink-0 opacity-60" />
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 overflow-hidden">
                           <p className="text-sm truncate">{chat.name || chat.chat_id}</p>
-                          <p className="text-[10px] opacity-60">{agentName(chat.agent_id)}</p>
+                          <p className="text-[10px] opacity-60 truncate">{agentName(chat.agent_id)}</p>
                         </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
