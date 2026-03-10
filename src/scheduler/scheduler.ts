@@ -73,6 +73,9 @@ export class Scheduler {
     const dueTasks = getTasksDueBy(now)
 
     for (const task of dueTasks) {
+      // 先同步锁定任务，防止下次 tick 重复取出（竞态条件修复）
+      updateTask(task.id, { runningSince: now })
+
       // 不 await：并行执行多个到期任务
       this.executeTask(task).catch((err) => {
         logger.error({ taskId: task.id, error: String(err) }, '执行定时任务失败')
@@ -116,8 +119,8 @@ export class Scheduler {
       })
 
       if (newFailures >= MAX_CONSECUTIVE_FAILURES) {
-        // 连续失败过多，自动暂停
-        const nextRun = this.calculateNextRun(task)
+        // 连续失败过多，自动暂停（传入 consecutiveFailures 以正确计算退避后的 nextRun）
+        const nextRun = this.calculateNextRun(task, { consecutiveFailures: newFailures })
         updateTask(task.id, {
           runningSince: null,
           consecutiveFailures: newFailures,
@@ -147,8 +150,7 @@ export class Scheduler {
 
     logger.info({ taskId: task.id, agentId: task.agent_id }, '执行定时任务')
 
-    // 标记为正在运行
-    updateTask(task.id, { runningSince: runAt })
+    // running_since 已在 tick() 中同步设置，此处不再重复
 
     try {
       const result = await this.agentQueue.enqueue(task.agent_id, task.chat_id, task.prompt)
@@ -164,6 +166,15 @@ export class Scheduler {
 
       // 保存执行结果到 messages 表，使 Chat 页面可见
       this.saveTaskMessages(task, runAt, result ?? '(no output)')
+
+      // 通过 EventBus 推送结果到 channel（Telegram/Web 等）
+      this.eventBus.emit({
+        type: 'complete',
+        agentId: task.agent_id,
+        chatId: task.chat_id,
+        fullText: result ?? '(no output)',
+        sessionId: `task:${task.id}`,
+      })
 
       // 计算下次运行时间（成功时重置退避）
       const nextRun = this.calculateNextRun(task)
@@ -203,8 +214,8 @@ export class Scheduler {
       const newFailures = (task.consecutive_failures ?? 0) + 1
 
       if (newFailures >= MAX_CONSECUTIVE_FAILURES) {
-        // 连续失败过多，自动暂停
-        const nextRun = this.calculateNextRun(task)
+        // 连续失败过多，自动暂停（传入 consecutiveFailures 以正确计算退避后的 nextRun）
+        const nextRun = this.calculateNextRun(task, { consecutiveFailures: newFailures })
         updateTask(task.id, {
           lastRun: runAt,
           nextRun,
@@ -251,7 +262,7 @@ export class Scheduler {
   ): void {
     const timestamp = new Date().toISOString()
 
-    // 保存用户 prompt 消息
+    // 保存用户 prompt 消息（isFromMe=false 表示非 bot 发出，与 router 语义一致）
     saveMessage({
       id: `${task.id}-${runAt}-user`,
       chatId: task.chat_id,
@@ -259,11 +270,11 @@ export class Scheduler {
       senderName,
       content: task.prompt,
       timestamp: runAt,
-      isFromMe: true,
+      isFromMe: false,
       isBotMessage: false,
     })
 
-    // 保存 bot 结果消息
+    // 保存 bot 结果消息（isFromMe=true 表示 bot 发出）
     saveMessage({
       id: `${task.id}-${runAt}-bot`,
       chatId: task.chat_id,
@@ -271,7 +282,7 @@ export class Scheduler {
       senderName: task.agent_id,
       content: result,
       timestamp,
-      isFromMe: false,
+      isFromMe: true,
       isBotMessage: true,
     })
 
@@ -283,17 +294,39 @@ export class Scheduler {
   /** 手动执行任务（不设 running_since，不影响 consecutiveFailures） */
   async runManually(task: ScheduledTask): Promise<{ status: string; result?: string; error?: string }> {
     const runAt = new Date().toISOString()
+    const startMs = Date.now()
     const runId = crypto.randomUUID().slice(0, 8)
 
     try {
       const result = await this.agentQueue.enqueue(task.agent_id, task.chat_id, task.prompt)
+      const durationMs = Date.now() - startMs
+
+      // 记录运行日志
+      saveTaskRunLog({
+        taskId: task.id,
+        runAt,
+        durationMs,
+        status: 'success',
+        result: `[manual] ${result ?? ''}`.slice(0, 500),
+      })
 
       // 保存执行结果到 messages 表
       this.saveTaskMessages(task, `${runId}-${runAt}`, result ?? '(no output)', 'manual', 'Manual Run')
 
       return { status: 'success', result: result ?? undefined }
     } catch (err) {
+      const durationMs = Date.now() - startMs
       const error = err instanceof Error ? err.message : String(err)
+
+      // 记录失败日志
+      saveTaskRunLog({
+        taskId: task.id,
+        runAt,
+        durationMs,
+        status: 'error',
+        error: `[manual] ${error}`,
+      })
+
       return { status: 'error', error }
     }
   }
@@ -323,7 +356,11 @@ export class Scheduler {
         break
       }
       case 'once': {
-        return null
+        // once 成功后返回 null（标记 completed）；失败时由退避逻辑计算重试时间
+        if (!options?.consecutiveFailures) return null
+        // 有失败，需要退避重试：以当前时间为基准计算退避
+        nextTime = now
+        break
       }
       default:
         return null
