@@ -19,6 +19,7 @@ export interface ProcessParams {
   chatId: string
   prompt: string
   agentId: string
+  requestedSkills?: string[]
 }
 
 export interface AgentInstance {

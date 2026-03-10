@@ -22,7 +22,7 @@ export class PromptBuilder {
   build(
     workspaceDir: string,
     config: AgentConfig,
-    context?: { agentId: string; chatId: string },
+    context?: { agentId: string; chatId: string; requestedSkills?: string[] },
   ): string {
     const parts: string[] = []
 
@@ -43,7 +43,7 @@ export class PromptBuilder {
     }
 
     // 注入 skills
-    const skillsPrompt = this.buildSkillsPrompt(config)
+    const skillsPrompt = this.buildSkillsPrompt(config, context?.requestedSkills)
     if (skillsPrompt) {
       parts.push(skillsPrompt)
     }
@@ -131,7 +131,7 @@ export class PromptBuilder {
   /**
    * 构建 skills 提示词片段
    */
-  private buildSkillsPrompt(config: AgentConfig): string | null {
+  private buildSkillsPrompt(config: AgentConfig, requestedSkills?: string[]): string | null {
     if (!this.skillsLoader) return null
 
     const skills = this.skillsLoader.loadSkillsForAgent(config)
@@ -139,7 +139,17 @@ export class PromptBuilder {
 
     if (eligibleSkills.length === 0) return null
 
-    const limited = this.skillsLoader.applyPromptLimits(eligibleSkills)
+    // 如果用户显式请求了 skills，只注入匹配的；否则回退到全部 eligible
+    let skillsToInject = eligibleSkills
+    if (requestedSkills && requestedSkills.length > 0) {
+      const requested = new Set(requestedSkills)
+      const matched = eligibleSkills.filter((s) => requested.has(s.name))
+      if (matched.length > 0) {
+        skillsToInject = matched
+      }
+    }
+
+    const limited = this.skillsLoader.applyPromptLimits(skillsToInject)
 
     let prompt = '## Skills\n'
     for (const skill of limited) {

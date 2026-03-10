@@ -5,6 +5,7 @@ interface QueueItem {
   agentId: string
   chatId: string
   prompt: string
+  requestedSkills?: string[]
   resolve: (result: string) => void
   reject: (error: Error) => void
 }
@@ -31,11 +32,11 @@ export class AgentQueue {
   /**
    * 入队消息，返回 agent 回复
    */
-  async enqueue(agentId: string, chatId: string, prompt: string): Promise<string> {
+  async enqueue(agentId: string, chatId: string, prompt: string, requestedSkills?: string[]): Promise<string> {
     return new Promise<string>((resolve, reject) => {
       const chatKey = `${agentId}:${chatId}`
       const queue = this.chatQueues.get(chatKey) ?? []
-      queue.push({ agentId, chatId, prompt, resolve, reject })
+      queue.push({ agentId, chatId, prompt, requestedSkills, resolve, reject })
       this.chatQueues.set(chatKey, queue)
 
       // 更新 agent state 的 queueDepth
@@ -132,6 +133,7 @@ export class AgentQueue {
         chatId: item.chatId,
         prompt: item.prompt,
         agentId: item.agentId,
+        requestedSkills: item.requestedSkills,
       })
 
       // 更新 agent state

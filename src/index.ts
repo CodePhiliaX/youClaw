@@ -48,7 +48,7 @@ async function main() {
   const agentQueue = new AgentQueue(agentManager)
 
   // 9. 创建 MessageRouter（带 MemoryManager）
-  const router = new MessageRouter(agentManager, agentQueue, eventBus, memoryManager)
+  const router = new MessageRouter(agentManager, agentQueue, eventBus, memoryManager, skillsLoader)
 
   // 10. 如果有 TELEGRAM_BOT_TOKEN，创建 TelegramChannel 并连接
   if (env.TELEGRAM_BOT_TOKEN) {

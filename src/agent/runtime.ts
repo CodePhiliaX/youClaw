@@ -39,6 +39,7 @@ export class AgentRuntime {
         chatId,
         existingSessionId,
         env.AGENT_MODEL,
+        params.requestedSkills,
       )
 
       // 保存 session
@@ -83,6 +84,7 @@ export class AgentRuntime {
     chatId: string,
     existingSessionId: string | null,
     model: string,
+    requestedSkills?: string[],
   ): Promise<{ fullText: string; sessionId: string }> {
     const abortController = new AbortController()
     let fullText = ''
@@ -92,7 +94,7 @@ export class AgentRuntime {
     const systemPrompt = this.promptBuilder.build(
       this.config.workspaceDir,
       this.config,
-      { agentId, chatId },
+      { agentId, chatId, requestedSkills },
     )
 
     // 构建 query 选项
