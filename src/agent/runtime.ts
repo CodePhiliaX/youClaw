@@ -1,7 +1,6 @@
 import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { getEnv } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
 import { getSession, saveSession } from '../db/index.ts'
@@ -19,7 +18,6 @@ function toUnpacked(p: string): string {
 
 // Electron 打包后 cli.js 在 asar.unpacked 中，需要显式指定路径
 function resolveCliPath(): string {
-  const thisFile = fileURLToPath(import.meta.url)
   const require = createRequire(import.meta.url)
   const sdkEntry = require.resolve('@anthropic-ai/claude-agent-sdk')
   const cliPath = resolve(dirname(sdkEntry), 'cli.js')
@@ -199,7 +197,6 @@ export class AgentRuntime {
 
     // 构建 query 选项
     // cwd 和 cli 路径都需要指向 asar.unpacked 中的真实文件系统路径
-    const isElectronPackaged = !!process.versions.electron && !(process as any).defaultApp
     const cwd = toUnpacked(this.config.workspaceDir)
     const mcpServerNames = this.config.mcpServers ? Object.keys(this.config.mcpServers) : []
 
@@ -223,12 +220,6 @@ export class AgentRuntime {
       allowDangerouslySkipPermissions: true,
       pathToClaudeCodeExecutable: resolveCliPath(),
       ...(existingSessionId ? { resume: existingSessionId } : {}),
-      // Electron 打包后 PATH 中无 node，使用 Electron 自身 + ELECTRON_RUN_AS_NODE 作为 Node 运行时
-      ...(isElectronPackaged ? {
-        executable: process.execPath,
-        executableArgs: ['--no-warnings'],
-        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-      } : {}),
     }
 
     // 子 Agent 配置（通过 AgentCompiler 编译 ref 引用）

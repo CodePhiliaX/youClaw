@@ -40,5 +40,9 @@ data/
 # Agent memory logs (keep MEMORY.md template)
 agents/*/memory/logs/
 
+# Playwright
+test-results/
+playwright-report/
+
 
 plans/

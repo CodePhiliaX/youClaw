@@ -72,6 +72,7 @@ export function Skills() {
                 {group.skills.map(skill => (
                   <button
                     key={skill.name}
+                    data-testid="skill-item"
                     onClick={() => setSelected(skill.name)}
                     className={cn(
                       'flex items-center gap-3 w-full px-3 py-2 text-sm rounded-md text-left transition-colors',
@@ -119,6 +120,7 @@ export function Skills() {
                 <p className="text-sm text-muted-foreground">{selectedSkill.frontmatter.description}</p>
               </div>
               <Button
+                data-testid="skill-toggle-btn"
                 variant={selectedSkill.enabled ? 'secondary' : 'default'}
                 size="sm"
                 onClick={async () => {

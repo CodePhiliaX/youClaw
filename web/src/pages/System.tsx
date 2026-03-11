@@ -51,7 +51,7 @@ function StatusCard({
   status?: 'ok' | 'warn' | 'off'
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4 flex items-start gap-3">
+    <div className="rounded-lg border border-border bg-card p-4 flex items-start gap-3" data-testid="status-card">
       <div
         className={cn(
           'w-9 h-9 rounded-md flex items-center justify-center shrink-0',
@@ -154,7 +154,7 @@ export function System() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* 顶部: 状态卡片 */}
-      <div className="p-4 pb-2 border-b border-border shrink-0">
+      <div className="p-4 pb-2 border-b border-border shrink-0" data-testid="system-status">
         <h1 className="text-lg font-semibold mb-3">{t.system.title}</h1>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatusCard

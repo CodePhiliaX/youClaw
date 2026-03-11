@@ -19,12 +19,15 @@
     "start": "node --import tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "dev:web": "cd web && npm run dev",
+    "test:e2e": "npx playwright test --config e2e/playwright.config.ts",
+    "test:e2e:ui": "npx playwright test --config e2e/playwright.config.ts --ui",
     "dev:electron": "node scripts/dev-electron.mjs",
     "pack": "node scripts/build-electron.mjs && electron-builder --dir && codesign --force --deep --sign - release/mac-arm64/You\\ Claw.app",
     "dist": "node scripts/build-electron.mjs && electron-builder",
     "publish": "node scripts/build-electron.mjs && electron-builder --publish always"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.16.0",
     "electron": "^40.8.0",

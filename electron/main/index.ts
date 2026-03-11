@@ -68,23 +68,28 @@ function loadDotEnv(): void {
   }
 }
 
-/** macOS 从 Finder/Dock 启动时 PATH 极度精简，需要从用户 shell 获取完整 PATH */
-function fixPath(): void {
+function fixShellEnv(): void {
   if (process.platform !== "darwin" || !app.isPackaged) return;
   try {
-    const shellPath = execSync("zsh -ilc 'echo $PATH' 2>/dev/null || bash -ilc 'echo $PATH' 2>/dev/null", {
+    const envStr = execSync("zsh -ilc env 2>/dev/null || bash -ilc env 2>/dev/null", {
       encoding: "utf-8",
-    }).trim();
-    if (shellPath) {
-      process.env.PATH = shellPath;
+    });
+    for (const line of envStr.split("\n")) {
+      const eq = line.indexOf("=");
+      if (eq === -1) continue;
+      const key = line.slice(0, eq);
+      const value = line.slice(eq + 1);
+      // 不覆盖已有值（electron-store 设置优先）
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
     }
   } catch {
-    // 静默失败，保持原始 PATH
   }
 }
 
 async function startEmbeddedBackend(): Promise<void> {
-  fixPath();
+  fixShellEnv();
   loadDotEnv();
 
   // Inject API key and base URL from electron-store if not already set via .env
