@@ -20,5 +20,6 @@ export function getPaths() {
     skills: resolve(UNPACKED_ROOT, 'skills'),
     prompts: resolve(UNPACKED_ROOT, 'prompts'),
     browserProfiles: resolve(dataDir, 'browser-profiles'),
+    logs: resolve(dataDir, 'logs'),
   }
 }

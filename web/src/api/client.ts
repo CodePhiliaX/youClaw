@@ -335,3 +335,45 @@ export async function runScheduledTask(id: string) {
 export async function getScheduledTaskLogs(id: string) {
   return apiFetch<TaskRunLogDTO[]>(`/api/tasks/${id}/logs`)
 }
+
+// ===== 系统日志 API =====
+
+export interface LogEntry {
+  level: number
+  time: number
+  msg: string
+  category?: string
+  agentId?: string
+  chatId?: string
+  tool?: string
+  input?: string
+  durationMs?: number
+  [key: string]: unknown
+}
+
+export interface LogQueryResult {
+  entries: LogEntry[]
+  total: number
+  hasMore: boolean
+}
+
+export async function getLogDates() {
+  return apiFetch<string[]>('/api/logs')
+}
+
+export async function getLogEntries(date: string, params?: {
+  level?: string
+  category?: string
+  search?: string
+  offset?: number
+  limit?: number
+}) {
+  const qs = new URLSearchParams()
+  if (params?.level) qs.set('level', params.level)
+  if (params?.category) qs.set('category', params.category)
+  if (params?.search) qs.set('search', params.search)
+  if (params?.offset !== undefined) qs.set('offset', String(params.offset))
+  if (params?.limit !== undefined) qs.set('limit', String(params.limit))
+  const q = qs.toString()
+  return apiFetch<LogQueryResult>(`/api/logs/${date}${q ? `?${q}` : ''}`)
+}

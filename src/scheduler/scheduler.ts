@@ -9,6 +9,7 @@ import {
   upsertChat,
   pruneOldTaskRunLogs,
 } from '../db/index.ts'
+import { cleanOldLogs } from '../logger/reader.ts'
 import type { ScheduledTask } from '../db/index.ts'
 import type { AgentQueue } from '../agent/queue.ts'
 import type { AgentManager } from '../agent/manager.ts'
@@ -78,7 +79,7 @@ export class Scheduler {
 
       // 不 await：并行执行多个到期任务
       this.executeTask(task).catch((err) => {
-        logger.error({ taskId: task.id, error: String(err) }, '执行定时任务失败')
+        logger.error({ taskId: task.id, error: String(err), category: 'task' }, '执行定时任务失败')
       })
     }
 
@@ -90,6 +91,11 @@ export class Scheduler {
         const deleted = pruneOldTaskRunLogs(LOG_RETAIN_DAYS)
         if (deleted > 0) {
           logger.info({ deleted }, '已裁剪过期运行日志')
+        }
+        // 清理过期系统日志文件
+        const deletedLogs = cleanOldLogs(LOG_RETAIN_DAYS)
+        if (deletedLogs > 0) {
+          logger.info({ deleted: deletedLogs }, '已清理过期系统日志文件')
         }
       } catch (err) {
         logger.error({ error: String(err) }, '裁剪运行日志失败')
@@ -106,7 +112,7 @@ export class Scheduler {
     for (const task of stuckTasks) {
       const newFailures = (task.consecutive_failures ?? 0) + 1
       logger.warn(
-        { taskId: task.id, runningSince: task.running_since, consecutiveFailures: newFailures },
+        { taskId: task.id, runningSince: task.running_since, consecutiveFailures: newFailures, category: 'task' },
         '检测到卡住任务，重置 running_since'
       )
 
@@ -128,7 +134,7 @@ export class Scheduler {
           lastResult: `ERROR: 连续失败 ${newFailures} 次，自动暂停`,
           nextRun,
         })
-        logger.warn({ taskId: task.id, consecutiveFailures: newFailures }, '任务连续失败过多，已自动暂停')
+        logger.warn({ taskId: task.id, consecutiveFailures: newFailures, category: 'task' }, '任务连续失败过多，已自动暂停')
       } else {
         // 计算退避后的下次运行时间
         const nextRun = this.calculateNextRun(task, { consecutiveFailures: newFailures })
@@ -148,7 +154,7 @@ export class Scheduler {
     const runAt = new Date().toISOString()
     const startMs = Date.now()
 
-    logger.info({ taskId: task.id, agentId: task.agent_id }, '执行定时任务')
+    logger.info({ taskId: task.id, agentId: task.agent_id, taskName: task.name, category: 'task' }, '执行定时任务')
 
     // running_since 已在 tick() 中同步设置，此处不再重复
 
@@ -193,7 +199,7 @@ export class Scheduler {
         })
       }
 
-      logger.info({ taskId: task.id, durationMs }, '定时任务执行成功')
+      logger.info({ taskId: task.id, agentId: task.agent_id, durationMs, category: 'task' }, '定时任务执行成功')
     } catch (err) {
       const durationMs = Date.now() - startMs
       const errorMsg = err instanceof Error ? err.message : String(err)
@@ -220,7 +226,7 @@ export class Scheduler {
           status: 'paused',
           lastResult: `ERROR: ${errorMsg}`.slice(0, 500),
         })
-        logger.warn({ taskId: task.id, consecutiveFailures: newFailures }, '任务连续失败过多，已自动暂停')
+        logger.warn({ taskId: task.id, consecutiveFailures: newFailures, category: 'task' }, '任务连续失败过多，已自动暂停')
       } else {
         // 计算退避后的下次运行时间
         const nextRun = this.calculateNextRun(task, { consecutiveFailures: newFailures })
@@ -244,7 +250,7 @@ export class Scheduler {
         }
       }
 
-      logger.error({ taskId: task.id, error: errorMsg, consecutiveFailures: newFailures }, '定时任务执行失败')
+      logger.error({ taskId: task.id, agentId: task.agent_id, error: errorMsg, consecutiveFailures: newFailures, category: 'task' }, '定时任务执行失败')
     }
   }
 

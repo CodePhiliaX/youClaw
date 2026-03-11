@@ -68,8 +68,9 @@ export class AgentRuntime {
 
     // 查找已有 session
     const existingSessionId = getSession(agentId, chatId)
-    logger.info({ agentId, chatId, hasSession: !!existingSessionId }, '开始处理消息')
+    logger.info({ agentId, chatId, hasSession: !!existingSessionId, category: 'agent' }, '开始处理消息')
 
+    const startTime = Date.now()
     try {
       // pre_process hook
       let finalPrompt = prompt
@@ -125,7 +126,8 @@ export class AgentRuntime {
         sessionId,
       })
 
-      logger.info({ agentId, chatId, responseLength: finalText.length }, '消息处理完成')
+      const durationMs = Date.now() - startTime
+      logger.info({ agentId, chatId, sessionId, responseLength: finalText.length, durationMs, category: 'agent' }, '消息处理完成')
 
       // on_session_end hook
       if (this.hooksManager) {
@@ -140,7 +142,7 @@ export class AgentRuntime {
       return finalText
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
-      logger.error({ agentId, chatId, error: errorMsg }, '消息处理失败')
+      logger.error({ agentId, chatId, error: errorMsg, durationMs: Date.now() - startTime, category: 'agent' }, '消息处理失败')
 
       // on_error hook
       if (this.hooksManager) {
@@ -281,6 +283,13 @@ export class AgentRuntime {
                 continue
               }
             }
+            const logger = getLogger()
+            logger.info({
+              agentId, chatId,
+              tool: block.name,
+              input: JSON.stringify(block.input).slice(0, 500),
+              category: 'tool_use',
+            }, `工具调用: ${block.name}`)
             this.emitToolUse(agentId, chatId, block.name, block.input)
           }
         }

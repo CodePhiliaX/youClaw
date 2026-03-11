@@ -16,6 +16,7 @@ export const en = {
     skills: 'Skills',
     browser: 'Browser',
     system: 'System',
+    logs: 'Logs',
   },
   topbar: {
     title: 'YouClaw',
@@ -246,5 +247,20 @@ export const en = {
     dbPath: 'DB Path',
     startedAt: 'Started At',
     loadingStatus: 'Loading system status...',
+  },
+  logs: {
+    title: 'Logs',
+    selectDate: 'Select date',
+    allLevels: 'All Levels',
+    allCategories: 'All',
+    categoryAgent: 'Agent',
+    categoryTool: 'Tool Use',
+    categoryTask: 'Cron Jobs',
+    categorySystem: 'System',
+    searchLogs: 'Search logs...',
+    noLogs: 'No logs for this date',
+    loadMore: 'Load more',
+    totalEntries: 'entries',
+    duration: 'Duration',
   },
 } as const

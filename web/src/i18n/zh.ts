@@ -18,6 +18,7 @@ export const zh: Translations = {
     skills: 'Skills',
     browser: '浏览器',
     system: '系统',
+    logs: '日志',
   },
   topbar: {
     title: 'YouClaw',
@@ -248,5 +249,20 @@ export const zh: Translations = {
     dbPath: '数据库路径',
     startedAt: '启动时间',
     loadingStatus: '正在加载系统状态...',
+  },
+  logs: {
+    title: '日志',
+    selectDate: '选择日期',
+    allLevels: '全部级别',
+    allCategories: '全部',
+    categoryAgent: 'Agent',
+    categoryTool: '工具调用',
+    categoryTask: '定时任务',
+    categorySystem: '系统',
+    searchLogs: '搜索日志...',
+    noLogs: '该日期无日志',
+    loadMore: '加载更多',
+    totalEntries: '条记录',
+    duration: '耗时',
   },
 } as const

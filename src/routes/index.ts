@@ -9,6 +9,7 @@ import { createMemoryRoutes } from './memory.ts'
 import { createTasksRoutes } from './tasks.ts'
 import { createSystemRoutes } from './system.ts'
 import { createBrowserProfilesRoutes } from './browser-profiles.ts'
+import { createLogsRoutes } from './logs.ts'
 import type { AgentManager, AgentQueue } from '../agent/index.ts'
 import type { EventBus } from '../events/index.ts'
 import type { MessageRouter } from '../channel/index.ts'
@@ -49,6 +50,7 @@ export function createApp(deps: AppDeps) {
   app.route('/api', createTasksRoutes(scheduler, agentManager, agentQueue))
   app.route('/api', createSystemRoutes(agentManager, eventBus))
   app.route('/api', createBrowserProfilesRoutes())
+  app.route('/api', createLogsRoutes())
 
   return app
 }
