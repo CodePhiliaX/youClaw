@@ -118,6 +118,7 @@ describe('MessageRouter.handleInbound', () => {
       'web:chat-1',
       '/pdf /agent-browser summarize report',
       'router reply',
+      undefined,
     )
 
     const chats = getChats()
