@@ -123,6 +123,43 @@ export async function getMemoryLog(agentId: string, date: string) {
   return apiFetch<{ content: string }>(`/api/agents/${agentId}/memory/logs/${date}`)
 }
 
+// 全局 Memory
+export async function getGlobalMemory() {
+  return apiFetch<{ content: string }>('/api/memory/global')
+}
+
+export async function updateGlobalMemory(content: string) {
+  return apiFetch<{ ok: boolean }>('/api/memory/global', {
+    method: 'PUT',
+    body: JSON.stringify({ content }),
+  })
+}
+
+// 对话存档
+export async function getConversationArchives(agentId: string) {
+  return apiFetch<Array<{ filename: string; date: string }>>(`/api/agents/${agentId}/memory/conversations`)
+}
+
+export async function getConversationArchive(agentId: string, filename: string) {
+  return apiFetch<{ content: string }>(`/api/agents/${agentId}/memory/conversations/${encodeURIComponent(filename)}`)
+}
+
+// 快照
+export async function createSnapshot(agentId: string) {
+  return apiFetch<{ ok: boolean }>(`/api/agents/${agentId}/memory/snapshot`, { method: 'POST' })
+}
+
+export async function getSnapshot(agentId: string) {
+  return apiFetch<{ content: string }>(`/api/agents/${agentId}/memory/snapshot`)
+}
+
+// 记忆搜索
+export async function searchMemory(query: string, agentId?: string) {
+  const params = new URLSearchParams({ q: query })
+  if (agentId) params.set('agentId', agentId)
+  return apiFetch<Array<{ agentId: string; fileType: string; filePath: string; snippet: string; rank: number }>>(`/api/memory/search?${params}`)
+}
+
 // Skills 相关类型
 export interface SkillFrontmatter {
   name: string
