@@ -77,8 +77,12 @@ export const AgentConfigSchema = z.object({
   telegram: z.object({
     chatIds: z.array(z.string()).optional(),
   }).optional(),
+  // Memory 配置（增强版）
   memory: z.object({
     enabled: z.boolean().default(false),
+    recentDays: z.number().default(3),
+    maxContextChars: z.number().default(10000),
+    archiveConversations: z.boolean().default(false),
   }).optional(),
   skills: z.array(z.string()).optional(),
   maxConcurrency: z.number().default(1),
