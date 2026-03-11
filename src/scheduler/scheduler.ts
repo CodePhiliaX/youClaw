@@ -26,7 +26,7 @@ const PRUNE_INTERVAL_TICKS = 120
 const LOG_RETAIN_DAYS = 30
 
 export class Scheduler {
-  private intervalId: Timer | null = null
+  private intervalId: ReturnType<typeof setInterval> | null = null
   private tickCount = 0
 
   constructor(

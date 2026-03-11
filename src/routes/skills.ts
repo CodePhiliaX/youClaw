@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
 import { z } from 'zod/v4'
 import { resolve } from 'node:path'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { ROOT_DIR } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
 import type { SkillsLoader } from '../skills/index.ts'
@@ -53,9 +55,8 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
     try {
       // 读取现有 .env 内容
       let content = ''
-      const file = Bun.file(envPath)
-      if (await file.exists()) {
-        content = await file.text()
+      if (existsSync(envPath)) {
+        content = readFileSync(envPath, 'utf-8')
       }
 
       // 替换或追加
@@ -66,7 +67,7 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
         content = content.trimEnd() + `\n${key}=${value}\n`
       }
 
-      await Bun.write(envPath, content)
+      writeFileSync(envPath, content, 'utf-8')
 
       // 立即更新 process.env，无需重启
       process.env[key] = value
@@ -110,16 +111,16 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
     logger.info({ skillName, method, command }, '开始安装 skill 依赖')
 
     try {
-      const proc = Bun.spawn(['sh', '-c', command], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-      })
-
-      const [stdout, stderr] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-      ])
-      const exitCode = await proc.exited
+      let stdout = ''
+      let stderr = ''
+      let exitCode = 0
+      try {
+        stdout = execSync(command, { encoding: 'utf-8', timeout: 120_000 })
+      } catch (execErr: any) {
+        stdout = execErr.stdout ?? ''
+        stderr = execErr.stderr ?? ''
+        exitCode = execErr.status ?? 1
+      }
 
       // 安装完成后重新加载 skills
       skillsLoader.refresh()

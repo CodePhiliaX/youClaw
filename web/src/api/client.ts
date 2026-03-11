@@ -1,7 +1,20 @@
-const BASE = '' // 使用 vite proxy，无需前缀
+import { isElectron, getElectronAPI } from './transport'
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  if (isElectron) {
+    // Electron 模式：通过 IPC 调用后端（不走 HTTP）
+    const api = getElectronAPI()
+    const method = options?.method ?? 'GET'
+    const body = options?.body as string | undefined
+    const result = await api.apiFetch(method, path, body)
+    if (result.status >= 400) {
+      throw new Error(`API error: ${result.status}`)
+    }
+    return result.data as T
+  }
+
+  // Web 模式：走 HTTP fetch（Vite proxy）
+  const res = await fetch(path, {
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     ...options,
   })

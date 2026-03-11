@@ -2,6 +2,7 @@
   "compilerOptions": {
     // Environment setup & latest features
     "lib": ["ESNext"],
+    "types": ["node"],
     "target": "ESNext",
     "module": "Preserve",
     "moduleDetection": "force",
@@ -26,5 +27,5 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "exclude": ["web"]
+  "exclude": ["web", "tests", "**/*.test.ts"]
 }

@@ -1,4 +1,5 @@
 import { readdirSync } from 'node:fs'
+import { minimatch } from 'minimatch'
 import type { Skill } from './types.ts'
 
 // 扫描时排除的目录和文件
@@ -46,9 +47,8 @@ export function matchSkillGlobs(skill: Skill, filePaths: string[]): boolean {
   if (!globs || globs.length === 0) return true
 
   for (const pattern of globs) {
-    const glob = new Bun.Glob(pattern)
     for (const filePath of filePaths) {
-      if (glob.match(filePath)) return true
+      if (minimatch(filePath, pattern)) return true
     }
   }
 

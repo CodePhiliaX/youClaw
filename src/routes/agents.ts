@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { existsSync, readdirSync, readFileSync, mkdirSync, rmSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { resolve, basename } from 'node:path'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { getPaths } from '../config/index.ts'
@@ -109,7 +109,7 @@ export function createAgentsRoutes(agentManager: AgentManager) {
     }
 
     const filePath = resolve(instance.workspaceDir, filename)
-    await Bun.write(filePath, body.content)
+    writeFileSync(filePath, body.content)
 
     return c.json({ filename, content: body.content })
   })
@@ -154,7 +154,7 @@ export function createAgentsRoutes(agentManager: AgentManager) {
       config.model = body.model
     }
 
-    await Bun.write(resolve(agentDir, 'agent.yaml'), stringifyYaml(config))
+    writeFileSync(resolve(agentDir, 'agent.yaml'), stringifyYaml(config))
 
     // 从 default agent 复制模板文件，若不存在则创建空文件
     const defaultDir = resolve(paths.agents, 'default')
@@ -165,9 +165,9 @@ export function createAgentsRoutes(agentManager: AgentManager) {
 
       if (existsSync(defaultFilePath)) {
         const content = readFileSync(defaultFilePath, 'utf-8')
-        await Bun.write(targetFilePath, content)
+        writeFileSync(targetFilePath, content)
       } else {
-        await Bun.write(targetFilePath, `# ${basename(filename, '.md')}\n`)
+        writeFileSync(targetFilePath, `# ${basename(filename, '.md')}\n`)
       }
     }
 
@@ -203,7 +203,7 @@ export function createAgentsRoutes(agentManager: AgentManager) {
     const merged = { ...existingConfig, ...body, id }
 
     // 写回 agent.yaml
-    await Bun.write(configPath, stringifyYaml(merged))
+    writeFileSync(configPath, stringifyYaml(merged))
 
     // 重新加载 agents
     await agentManager.reloadAgents()

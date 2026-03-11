@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getPaths } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
@@ -50,7 +50,7 @@ export class MemoryManager {
   updateMemory(agentId: string, content: string): void {
     this.ensureMemoryDir(agentId)
     const filePath = this.getMemoryFilePath(agentId)
-    Bun.write(filePath, content)
+    writeFileSync(filePath, content, 'utf-8')
     getLogger().info({ agentId }, 'MEMORY.md 已更新')
   }
 
@@ -74,7 +74,7 @@ export class MemoryManager {
       existing = `# ${date}\n`
     }
 
-    Bun.write(logPath, existing + entry)
+    writeFileSync(logPath, existing + entry, 'utf-8')
     getLogger().debug({ agentId, date }, '每日日志已追加')
   }
 

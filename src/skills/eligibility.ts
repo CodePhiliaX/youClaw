@@ -1,4 +1,13 @@
+import { execSync } from 'node:child_process'
 import type { SkillFrontmatter, EligibilityDetail, DependencyCheckResult, EnvCheckResult } from './types.ts'
+
+function which(cmd: string): string | null {
+  try {
+    return execSync(`which ${cmd}`, { encoding: 'utf-8' }).trim() || null
+  } catch {
+    return null
+  }
+}
 
 export interface EligibilityResult {
   eligible: boolean
@@ -25,7 +34,7 @@ export function checkEligibility(frontmatter: SkillFrontmatter): EligibilityResu
   const depResults: DependencyCheckResult[] = []
   if (frontmatter.dependencies) {
     for (const dep of frontmatter.dependencies) {
-      const path = Bun.which(dep)
+      const path = which(dep)
       depResults.push({ name: dep, found: !!path, path: path ?? undefined })
       if (!path) {
         errors.push(`依赖缺失: 可执行文件 "${dep}" 未找到`)

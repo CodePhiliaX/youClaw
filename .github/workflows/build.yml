@@ -1,0 +1,243 @@
+name: Build & Release
+run-name: ${{ github.ref_name }}
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  # ── Job 1a: Windows build (independent, sign job only waits for this) ──
+  build-windows:
+    runs-on: windows-latest
+    name: Build Windows x64
+
+    steps:
+      - name: Extract version
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install web dependencies
+        run: npm install
+        working-directory: web
+
+      - name: Set version
+        shell: bash
+        run: npm version ${{ steps.version.outputs.VERSION }} --no-git-tag-version
+
+      - name: Build (renderer + backend + electron)
+        run: node scripts/build-electron.mjs
+
+      - name: Package (Windows)
+        run: npx electron-builder --win --x64 --publish never
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            release/*.exe
+            release/*.exe.blockmap
+            release/latest.yml
+          retention-days: 1
+
+  # ── Job 1b: macOS / Linux build ──
+  build-others:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            arch: x64
+            build_arg: "--mac --x64"
+            artifact: "You-Claw-${VERSION}-x64.dmg"
+            platform_label: "macOS Intel"
+          - os: macos-latest
+            arch: arm64
+            build_arg: "--mac --arm64"
+            artifact: "You-Claw-${VERSION}-arm64.dmg"
+            platform_label: "macOS Apple Silicon"
+          - os: ubuntu-latest
+            arch: x64
+            build_arg: "--linux --x64"
+            artifact: "You-Claw-${VERSION}-x86_64.AppImage"
+            platform_label: "Linux x64"
+
+    runs-on: ${{ matrix.os }}
+    name: Build ${{ matrix.platform_label }}
+
+    steps:
+      - name: Extract version
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install web dependencies
+        run: npm install
+        working-directory: web
+
+      - name: Set version
+        shell: bash
+        run: npm version ${{ steps.version.outputs.VERSION }} --no-git-tag-version
+
+      - name: Build (renderer + backend + electron)
+        run: node scripts/build-electron.mjs
+
+      - name: Import macOS certificates
+        if: runner.os == 'macOS'
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.MAC_CERTS }}
+          p12-password: ${{ secrets.MAC_CERTS_PASSWORD }}
+
+      - name: Package & Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npx electron-builder ${{ matrix.build_arg }} --publish always
+
+      - name: Resolve artifact name
+        id: artifact
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          NAME=$(echo '${{ matrix.artifact }}' | sed "s/\${VERSION}/$VERSION/g")
+          echo "NAME=$NAME" >> $GITHUB_OUTPUT
+          echo "URL=https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$NAME" >> $GITHUB_OUTPUT
+
+      - name: Notify Feishu
+        uses: foxundermoon/feishu-action@v2
+        with:
+          url: ${{ secrets.FEISHU_WEBHOOK }}
+          msg_type: post
+          content: |
+            post:
+              zh_cn:
+                title: "You Claw v${{ steps.version.outputs.VERSION }} · ${{ matrix.platform_label }} ${{ job.status == 'success' && '✅' || '❌' }}"
+                content:
+                - - tag: text
+                    text: "Build "
+                  - tag: a
+                    text: "#${{ github.run_number }}"
+                    href: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  - tag: text
+                    text: " ${{ job.status == 'success' && 'succeeded' || 'failed' }}"
+                - - tag: text
+                    text: "Download: "
+                  - tag: a
+                    text: "${{ steps.artifact.outputs.NAME }}"
+                    href: "${{ steps.artifact.outputs.URL }}"
+
+  # ── Job 2: Sign on self-hosted Mac (with USB token) ──
+  sign-windows:
+    needs: build-windows
+    runs-on: self-hosted
+    name: Sign Windows exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Download Windows build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-build
+          path: unsigned
+
+      - name: Sign exe with USB token
+        shell: bash
+        run: |
+          EXE_PATH=$(ls unsigned/*.exe | head -1)
+          echo "Signing: $EXE_PATH"
+          sign.sh "$EXE_PATH"
+
+      - name: Update latest.yml with signed exe hash
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          EXE_PATH="unsigned/You-Claw-${VERSION}.exe"
+          NEW_SHA512=$(shasum -a 512 "$EXE_PATH" | awk '{print $1}' | xxd -r -p | base64 | tr -d '\n')
+          NEW_SIZE=$(stat -f%z "$EXE_PATH" 2>/dev/null || stat -c%s "$EXE_PATH")
+          sed -i.bak "s|sha512: .*|sha512: ${NEW_SHA512}|" unsigned/latest.yml
+          sed -i.bak "s|size: .*|size: ${NEW_SIZE}|" unsigned/latest.yml
+          rm -f unsigned/latest.yml.bak
+          echo "Updated latest.yml:"
+          cat unsigned/latest.yml
+
+      - name: Upload signed exe and latest.yml to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          EXE_NAME="You-Claw-${VERSION}.exe"
+          for i in $(seq 1 30); do
+            if gh release view "${{ github.ref_name }}" > /dev/null 2>&1; then
+              echo "Release found"
+              break
+            fi
+            echo "Waiting for release... ($i/30)"
+            sleep 10
+          done
+          gh release upload "${{ github.ref_name }}" "unsigned/$EXE_NAME" --clobber
+          gh release upload "${{ github.ref_name }}" "unsigned/${EXE_NAME}.blockmap" --clobber
+          gh release upload "${{ github.ref_name }}" "unsigned/latest.yml" --clobber
+
+      - name: Notify Feishu
+        uses: foxundermoon/feishu-action@v2
+        if: always()
+        with:
+          url: ${{ secrets.FEISHU_WEBHOOK }}
+          msg_type: post
+          content: |
+            post:
+              zh_cn:
+                title: "You Claw v${{ steps.version.outputs.VERSION }} · Windows x64 Signing ${{ job.status == 'success' && '✅' || '❌' }}"
+                content:
+                - - tag: text
+                    text: "Signing "
+                  - tag: a
+                    text: "#${{ github.run_number }}"
+                    href: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  - tag: text
+                    text: " ${{ job.status == 'success' && 'succeeded' || 'failed' }}"
+                - - tag: text
+                    text: "Download: "
+                  - tag: a
+                    text: "You-Claw-${{ steps.version.outputs.VERSION }}.exe"
+                    href: "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/You-Claw-${{ steps.version.outputs.VERSION }}.exe"
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -rf unsigned

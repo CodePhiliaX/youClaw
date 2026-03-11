@@ -1,8 +1,12 @@
-import { resolve } from 'node:path'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { getEnv } from './env.ts'
 
 // 项目根目录
-export const ROOT_DIR = resolve(import.meta.dir, '../..')
+// 从 src/config/ 运行时向上 2 级，从 dist/src/config/ 运行时向上 3 级
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const isCompiledBuild = __dirname.replace(/\\/g, '/').includes('/dist/src/')
+export const ROOT_DIR = resolve(__dirname, isCompiledBuild ? '../../..' : '../..')
 
 export function getPaths() {
   const env = getEnv()

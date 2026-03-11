@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { getPaths } from '../config/paths.ts'
 import { getEnv } from '../config/env.ts'
 import type { AgentManager } from '../agent/index.ts'
@@ -28,8 +28,7 @@ export function createSystemRoutes(agentManager: AgentManager, eventBus: EventBu
     // 数据库大小
     let dbSizeBytes = 0
     if (existsSync(paths.db)) {
-      const file = Bun.file(paths.db)
-      dbSizeBytes = file.size
+      dbSizeBytes = statSync(paths.db).size
     }
 
     // Telegram 连接状态
@@ -38,7 +37,7 @@ export function createSystemRoutes(agentManager: AgentManager, eventBus: EventBu
     return c.json({
       uptime: Math.floor(process.uptime()),
       platform: process.platform,
-      nodeVersion: `bun ${Bun.version}`,
+      nodeVersion: `node ${process.version}`,
       agents: {
         total: agents.length,
         active: activeCount,

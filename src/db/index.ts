@@ -1,10 +1,10 @@
-import { Database } from 'bun:sqlite'
+import Database from 'better-sqlite3'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { getPaths } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
 
-let _db: Database | null = null
+let _db: Database.Database | null = null
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS messages (
@@ -68,15 +68,15 @@ CREATE TABLE IF NOT EXISTS task_run_logs (
 CREATE INDEX IF NOT EXISTS idx_task_runs ON task_run_logs(task_id, run_at);
 `
 
-export function initDatabase(): Database {
+export function initDatabase(): Database.Database {
   if (_db) return _db
 
   const paths = getPaths()
   mkdirSync(dirname(paths.db), { recursive: true })
 
   _db = new Database(paths.db)
-  _db.exec('PRAGMA journal_mode=WAL')
-  _db.exec('PRAGMA foreign_keys=ON')
+  _db.pragma('journal_mode = WAL')
+  _db.pragma('foreign_keys = ON')
   _db.exec(SCHEMA)
 
   // 迁移：添加 name 和 description 列
@@ -100,7 +100,7 @@ export function initDatabase(): Database {
   return _db
 }
 
-export function getDatabase(): Database {
+export function getDatabase(): Database.Database {
   if (!_db) throw new Error('数据库未初始化')
   return _db
 }
@@ -118,11 +118,10 @@ export function saveMessage(msg: {
   isBotMessage: boolean
 }) {
   const db = getDatabase()
-  db.run(
+  db.prepare(
     `INSERT OR REPLACE INTO messages (id, chat_id, sender, sender_name, content, timestamp, is_from_me, is_bot_message)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [msg.id, msg.chatId, msg.sender, msg.senderName, msg.content, msg.timestamp, msg.isFromMe ? 1 : 0, msg.isBotMessage ? 1 : 0]
-  )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(msg.id, msg.chatId, msg.sender, msg.senderName, msg.content, msg.timestamp, msg.isFromMe ? 1 : 0, msg.isBotMessage ? 1 : 0)
 }
 
 export function getMessages(chatId: string, limit = 50, before?: string): Array<{
@@ -131,11 +130,11 @@ export function getMessages(chatId: string, limit = 50, before?: string): Array<
 }> {
   const db = getDatabase()
   if (before) {
-    return db.query(
+    return db.prepare(
       `SELECT * FROM messages WHERE chat_id = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?`
     ).all(chatId, before, limit) as any
   }
-  return db.query(
+  return db.prepare(
     `SELECT * FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ?`
   ).all(chatId, limit) as any
 }
@@ -144,43 +143,41 @@ export function getMessages(chatId: string, limit = 50, before?: string): Array<
 
 export function upsertChat(chatId: string, agentId: string, name?: string, channel = 'web') {
   const db = getDatabase()
-  db.run(
+  db.prepare(
     `INSERT INTO chats (chat_id, name, agent_id, channel, last_message_time)
      VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(chat_id) DO UPDATE SET
        last_message_time = excluded.last_message_time,
-       name = COALESCE(excluded.name, chats.name)`,
-    [chatId, name ?? chatId, agentId, channel, new Date().toISOString()]
-  )
+       name = COALESCE(excluded.name, chats.name)`
+  ).run(chatId, name ?? chatId, agentId, channel, new Date().toISOString())
 }
 
 export function getChats(): Array<{
   chat_id: string; name: string; agent_id: string; channel: string; last_message_time: string
 }> {
   const db = getDatabase()
-  return db.query('SELECT * FROM chats ORDER BY last_message_time DESC').all() as any
+  return db.prepare('SELECT * FROM chats ORDER BY last_message_time DESC').all() as any
 }
 
 export function deleteChat(chatId: string) {
   const db = getDatabase()
-  db.run('DELETE FROM messages WHERE chat_id = ?', [chatId])
-  db.run('DELETE FROM chats WHERE chat_id = ?', [chatId])
+  db.prepare('DELETE FROM messages WHERE chat_id = ?').run(chatId)
+  db.prepare('DELETE FROM chats WHERE chat_id = ?').run(chatId)
 }
 
 // ===== Session 操作 =====
 
 export function getSession(agentId: string, chatId: string): string | null {
   const db = getDatabase()
-  const row = db.query('SELECT session_id FROM sessions WHERE agent_id = ? AND chat_id = ?').get(agentId, chatId) as any
+  const row = db.prepare('SELECT session_id FROM sessions WHERE agent_id = ? AND chat_id = ?').get(agentId, chatId) as any
   return row?.session_id ?? null
 }
 
 export function saveSession(agentId: string, chatId: string, sessionId: string) {
   const db = getDatabase()
-  db.run(
-    `INSERT OR REPLACE INTO sessions (agent_id, chat_id, session_id) VALUES (?, ?, ?)`,
-    [agentId, chatId, sessionId]
-  )
+  db.prepare(
+    `INSERT OR REPLACE INTO sessions (agent_id, chat_id, session_id) VALUES (?, ?, ?)`
+  ).run(agentId, chatId, sessionId)
 }
 
 // ===== 定时任务操作 =====
@@ -232,21 +229,20 @@ export function createTask(task: {
   deliveryTarget?: string
 }): void {
   const db = getDatabase()
-  db.run(
+  db.prepare(
     `INSERT INTO scheduled_tasks (id, agent_id, chat_id, prompt, schedule_type, schedule_value, next_run, created_at, name, description, timezone, delivery_mode, delivery_target)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [task.id, task.agentId, task.chatId, task.prompt, task.scheduleType, task.scheduleValue, task.nextRun, new Date().toISOString(), task.name ?? null, task.description ?? null, task.timezone ?? null, task.deliveryMode ?? 'none', task.deliveryTarget ?? null]
-  )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(task.id, task.agentId, task.chatId, task.prompt, task.scheduleType, task.scheduleValue, task.nextRun, new Date().toISOString(), task.name ?? null, task.description ?? null, task.timezone ?? null, task.deliveryMode ?? 'none', task.deliveryTarget ?? null)
 }
 
 export function getTasks(): ScheduledTask[] {
   const db = getDatabase()
-  return db.query('SELECT * FROM scheduled_tasks ORDER BY created_at DESC').all() as ScheduledTask[]
+  return db.prepare('SELECT * FROM scheduled_tasks ORDER BY created_at DESC').all() as ScheduledTask[]
 }
 
 export function getTask(id: string): ScheduledTask | null {
   const db = getDatabase()
-  return (db.query('SELECT * FROM scheduled_tasks WHERE id = ?').get(id) as ScheduledTask | null) ?? null
+  return (db.prepare('SELECT * FROM scheduled_tasks WHERE id = ?').get(id) as ScheduledTask | null) ?? null
 }
 
 export function updateTask(id: string, updates: Partial<{
@@ -287,18 +283,18 @@ export function updateTask(id: string, updates: Partial<{
   if (fields.length === 0) return
 
   values.push(id)
-  db.run(`UPDATE scheduled_tasks SET ${fields.join(', ')} WHERE id = ?`, values)
+  db.prepare(`UPDATE scheduled_tasks SET ${fields.join(', ')} WHERE id = ?`).run(...values)
 }
 
 export function deleteTask(id: string): void {
   const db = getDatabase()
-  db.run('DELETE FROM scheduled_tasks WHERE id = ?', [id])
-  db.run('DELETE FROM task_run_logs WHERE task_id = ?', [id])
+  db.prepare('DELETE FROM scheduled_tasks WHERE id = ?').run(id)
+  db.prepare('DELETE FROM task_run_logs WHERE task_id = ?').run(id)
 }
 
 export function getTasksDueBy(time: string): ScheduledTask[] {
   const db = getDatabase()
-  return db.query(
+  return db.prepare(
     `SELECT * FROM scheduled_tasks WHERE status = 'active' AND next_run IS NOT NULL AND next_run <= ? AND running_since IS NULL`
   ).all(time) as ScheduledTask[]
 }
@@ -306,7 +302,7 @@ export function getTasksDueBy(time: string): ScheduledTask[] {
 /** 查询卡住的任务（running_since 早于阈值） */
 export function getStuckTasks(cutoffIso: string): ScheduledTask[] {
   const db = getDatabase()
-  return db.query(
+  return db.prepare(
     `SELECT * FROM scheduled_tasks WHERE running_since IS NOT NULL AND running_since <= ?`
   ).all(cutoffIso) as ScheduledTask[]
 }
@@ -315,7 +311,7 @@ export function getStuckTasks(cutoffIso: string): ScheduledTask[] {
 export function pruneOldTaskRunLogs(retainDays: number): number {
   const db = getDatabase()
   const cutoff = new Date(Date.now() - retainDays * 24 * 60 * 60 * 1000).toISOString()
-  const result = db.run('DELETE FROM task_run_logs WHERE run_at < ?', [cutoff])
+  const result = db.prepare('DELETE FROM task_run_logs WHERE run_at < ?').run(cutoff)
   return result.changes
 }
 
@@ -331,16 +327,15 @@ export function saveTaskRunLog(log: {
   deliveryStatus?: string
 }): void {
   const db = getDatabase()
-  db.run(
+  db.prepare(
     `INSERT INTO task_run_logs (task_id, run_at, duration_ms, status, result, error, delivery_status)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [log.taskId, log.runAt, log.durationMs, log.status, log.result ?? null, log.error ?? null, log.deliveryStatus ?? null]
-  )
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(log.taskId, log.runAt, log.durationMs, log.status, log.result ?? null, log.error ?? null, log.deliveryStatus ?? null)
 }
 
 export function getTaskRunLogs(taskId: string, limit = 50): TaskRunLog[] {
   const db = getDatabase()
-  return db.query(
+  return db.prepare(
     'SELECT * FROM task_run_logs WHERE task_id = ? ORDER BY run_at DESC LIMIT ?'
   ).all(taskId, limit) as TaskRunLog[]
 }

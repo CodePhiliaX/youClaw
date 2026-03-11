@@ -1,25 +1,37 @@
 {
   "name": "youclaw",
-  "module": "src/index.ts",
+  "version": "1.0.0",
+  "main": "dist/electron/main/index.js",
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun --hot src/index.ts",
-    "start": "bun src/index.ts",
+    "dev": "tsx --watch src/index.ts",
+    "start": "node --import tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "dev:web": "cd web && bun run dev"
+    "dev:web": "cd web && npm run dev",
+    "dev:electron": "npx tsc -p tsconfig.build.json && npx tsc -p electron/tsconfig.json && electron .",
+    "pack": "node scripts/build-electron.mjs && electron-builder --dir",
+    "dist": "node scripts/build-electron.mjs && electron-builder",
+    "publish": "node scripts/build-electron.mjs && electron-builder --publish always"
   },
   "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.16.0",
+    "electron": "^40.8.0",
+    "electron-builder": "^26.8.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.72",
+    "@hono/node-server": "^1.14.3",
+    "better-sqlite3": "^12.6.2",
     "croner": "^10.0.1",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.8.3",
     "grammy": "^1.41.1",
     "hono": "^4.12.6",
+    "minimatch": "^10.0.1",
     "pino": "^10.3.1",
     "yaml": "^2.8.2",
     "zod": "^4.3.6"

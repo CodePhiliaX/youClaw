@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist/src",
+    "rootDir": "src",
+    "declaration": false,
+    "sourceMap": true,
+    "allowImportingTsExtensions": false,
+    "verbatimModuleSyntax": false,
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["web", "tests", "**/*.test.ts"]
+}

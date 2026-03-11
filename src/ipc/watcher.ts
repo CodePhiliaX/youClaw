@@ -1,4 +1,4 @@
-import { readdirSync, unlinkSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
+import { readdirSync, unlinkSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { getLogger } from '../logger/index.ts'
 import { getPaths } from '../config/index.ts'
@@ -58,7 +58,7 @@ export interface IpcDeps {
 // ===== IPC Watcher =====
 
 export class IpcWatcher {
-  private intervalId: Timer | null = null
+  private intervalId: ReturnType<typeof setInterval> | null = null
   private ipcDir: string
 
   constructor(private deps: IpcDeps) {
@@ -232,7 +232,7 @@ export class IpcWatcher {
       }
 
       const errorContent = JSON.stringify({ _error: reason, _originalFile: fileName, _content: content }, null, 2)
-      Bun.write(errorPath, errorContent)
+      writeFileSync(errorPath, errorContent)
 
       // 删除原文件
       try {
@@ -275,5 +275,5 @@ export function writeTasksSnapshot(agentId: string, tasks: Array<{
     tasks,
   }
 
-  Bun.write(snapshotPath, JSON.stringify(snapshot, null, 2))
+  writeFileSync(snapshotPath, JSON.stringify(snapshot, null, 2))
 }
