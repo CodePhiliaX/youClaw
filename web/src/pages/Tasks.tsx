@@ -203,6 +203,7 @@ export function Tasks() {
               <span className="text-xs text-muted-foreground">({tasks.length})</span>
             </div>
             <button
+              data-testid="task-create-btn"
               onClick={handleCreateNew}
               className="flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
             >
@@ -213,6 +214,7 @@ export function Tasks() {
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <input
+              data-testid="task-search"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -237,6 +239,7 @@ export function Tasks() {
               {filteredTasks.map((task) => (
                 <div
                   key={task.id}
+                  data-testid="task-item"
                   onClick={() => selectTask(task.id)}
                   className={cn(
                     'px-3 py-2.5 cursor-pointer transition-colors hover:bg-accent/30',
@@ -347,6 +350,7 @@ function TaskDetail({
         </div>
         <div className="flex items-center gap-1">
           <button
+            data-testid="task-edit-btn"
             onClick={onEdit}
             className="p-2 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
             title={t.common.edit}
@@ -362,6 +366,7 @@ function TaskDetail({
           </button>
           {task.status !== 'completed' && (
             <button
+              data-testid="task-pause-btn"
               onClick={onTogglePause}
               className="p-2 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
               title={task.status === 'active' ? t.tasks.disable : t.tasks.enable}
@@ -370,6 +375,7 @@ function TaskDetail({
             </button>
           )}
           <button
+            data-testid="task-run-btn"
             onClick={onRun}
             className="p-2 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
             title={t.tasks.runNow}
@@ -377,6 +383,7 @@ function TaskDetail({
             <Play className="h-4 w-4" />
           </button>
           <button
+            data-testid="task-delete-btn"
             onClick={onDelete}
             className="p-2 rounded hover:bg-destructive/20 text-muted-foreground hover:text-red-400 transition-colors"
             title={t.common.delete}
@@ -544,6 +551,7 @@ function TaskForm({
         <div>
           <label className="block text-xs text-muted-foreground mb-1">{t.tasks.name}</label>
           <input
+            data-testid="task-input-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -556,6 +564,7 @@ function TaskForm({
         <div>
           <label className="block text-xs text-muted-foreground mb-1">{t.tasks.description}</label>
           <input
+            data-testid="task-input-desc"
             type="text"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -568,6 +577,7 @@ function TaskForm({
         <div>
           <label className="block text-xs text-muted-foreground mb-1">{t.tasks.agent}</label>
           <select
+            data-testid="task-select-agent"
             value={agentId}
             onChange={(e) => setAgentId(e.target.value)}
             disabled={isEdit}
@@ -585,6 +595,7 @@ function TaskForm({
         <div>
           <label className="block text-xs text-muted-foreground mb-1">{t.tasks.prompt}</label>
           <textarea
+            data-testid="task-input-prompt"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             rows={3}
@@ -647,6 +658,7 @@ function TaskForm({
 
         <div className="flex gap-2 pt-2">
           <button
+            data-testid="task-submit-btn"
             type="submit"
             disabled={submitting}
             className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
@@ -654,6 +666,7 @@ function TaskForm({
             {submitting ? t.tasks.saving : isEdit ? t.common.save : t.common.create}
           </button>
           <button
+            data-testid="task-cancel-btn"
             type="button"
             onClick={onCancel}
             className="px-4 py-2 text-sm rounded-md border border-border text-muted-foreground hover:bg-accent transition-colors"

@@ -167,6 +167,7 @@ export function Agents() {
         <div className="p-3 border-b border-border flex items-center justify-between">
           <h2 className="font-semibold text-sm">{t.agents.title}</h2>
           <button
+            data-testid="agent-create-btn"
             onClick={() => {
               setViewMode('create')
               setSelected(null)
@@ -181,6 +182,7 @@ export function Agents() {
           {agents.map((agent) => (
             <button
               key={agent.id}
+              data-testid="agent-item"
               onClick={() => {
                 setSelected(agent.id)
                 setViewMode('detail')
@@ -301,6 +303,7 @@ function CreateAgentForm({
         <div>
           <label className="block text-sm font-medium mb-1.5">{t.agents.agentId}</label>
           <input
+            data-testid="agent-input-id"
             value={newId}
             onChange={(e) => setNewId(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
             placeholder={t.agents.agentIdPlaceholder}
@@ -312,6 +315,7 @@ function CreateAgentForm({
         <div>
           <label className="block text-sm font-medium mb-1.5">{t.agents.agentName}</label>
           <input
+            data-testid="agent-input-name"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder={t.agents.agentNamePlaceholder}
@@ -322,6 +326,7 @@ function CreateAgentForm({
         <div>
           <label className="block text-sm font-medium mb-1.5">{t.agents.model}</label>
           <input
+            data-testid="agent-input-model"
             value={newModel}
             onChange={(e) => setNewModel(e.target.value)}
             className="w-full px-3 py-2 text-sm rounded-md bg-muted border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
@@ -330,6 +335,7 @@ function CreateAgentForm({
 
         <div className="flex gap-2 pt-2">
           <button
+            data-testid="agent-submit-btn"
             onClick={onCreate}
             disabled={isCreating || !newId.trim() || !newName.trim()}
             className="flex items-center gap-2 px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
@@ -408,6 +414,7 @@ function AgentDetail({
           </button>
           {agent.id !== 'default' && (
             <button
+              data-testid="agent-delete-btn"
               onClick={onDelete}
               className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md text-destructive hover:bg-destructive/10 transition-colors"
             >
@@ -555,6 +562,7 @@ function DocSection({
                   {t.common.cancel}
                 </button>
                 <button
+                  data-testid="doc-save-btn"
                   onClick={onSave}
                   disabled={isSaving}
                   className="flex items-center gap-1 px-3 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
@@ -565,6 +573,7 @@ function DocSection({
               </div>
             ) : (
               <button
+                data-testid="doc-edit-btn"
                 onClick={onEdit}
                 className="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-muted-foreground hover:bg-accent transition-colors"
               >
@@ -578,6 +587,7 @@ function DocSection({
           <div className="p-3">
             {isEditing ? (
               <textarea
+                data-testid="doc-textarea"
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
                 className="w-full min-h-[200px] bg-transparent text-sm font-mono resize-y focus:outline-none text-foreground placeholder:text-muted-foreground"

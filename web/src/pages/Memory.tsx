@@ -201,6 +201,7 @@ export function Memory() {
         <Brain className="h-5 w-5 text-muted-foreground" />
         <h1 className="text-sm font-semibold">{t.memory.title}</h1>
         <select
+          data-testid="memory-select-agent"
           value={selectedAgentId}
           onChange={(e) => setSelectedAgentId(e.target.value)}
           className="ml-4 px-3 py-1.5 text-sm rounded-md bg-muted border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
@@ -241,6 +242,7 @@ export function Memory() {
                     {t.common.cancel}
                   </button>
                   <button
+                    data-testid="memory-save-btn"
                     onClick={handleSave}
                     disabled={isSaving}
                     className="flex items-center gap-1 px-3 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
@@ -251,6 +253,7 @@ export function Memory() {
                 </>
               ) : (
                 <button
+                  data-testid="memory-edit-btn"
                   onClick={() => {
                     setEditContent(memoryContent)
                     setIsEditing(true)
@@ -267,6 +270,7 @@ export function Memory() {
           <div className="flex-1 overflow-y-auto p-4">
             {isEditing ? (
               <textarea
+                data-testid="memory-textarea"
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
                 className="w-full h-full bg-transparent text-sm font-mono resize-none focus:outline-none text-foreground placeholder:text-muted-foreground"
@@ -290,6 +294,7 @@ export function Memory() {
           {!isGlobal && (
             <div className="flex border-b border-border">
               <button
+                data-testid="memory-tab-logs"
                 onClick={() => setRightTab('logs')}
                 className={cn(
                   'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs transition-colors',
@@ -300,6 +305,7 @@ export function Memory() {
                 {t.memory.dailyLogs}
               </button>
               <button
+                data-testid="memory-tab-archives"
                 onClick={() => setRightTab('archives')}
                 className={cn(
                   'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs transition-colors',
@@ -310,6 +316,7 @@ export function Memory() {
                 Archives
               </button>
               <button
+                data-testid="memory-tab-search"
                 onClick={() => setRightTab('search')}
                 className={cn(
                   'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs transition-colors',

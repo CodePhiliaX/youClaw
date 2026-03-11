@@ -179,6 +179,7 @@ export function Chat() {
                 <div className="relative">
                   <Textarea
                     ref={textareaRef}
+                    data-testid="chat-input"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
@@ -190,6 +191,7 @@ export function Chat() {
                     <TooltipTrigger asChild>
                       <Button
                         size="icon"
+                        data-testid="chat-send"
                         className="absolute right-2.5 bottom-2.5 h-8 w-8 rounded-lg"
                         onClick={handleSend}
                         disabled={!input.trim() || isProcessing}
@@ -204,7 +206,7 @@ export function Chat() {
             </div>
           ) : (
             <>
-              <ScrollArea className="flex-1">
+              <ScrollArea className="flex-1" data-testid="message-list">
                 <div className="max-w-3xl mx-auto px-4 py-6 space-y-1">
                   {messages.map((msg) => (
                     <MessageBubble key={msg.id} message={msg} t={t} />
@@ -250,6 +252,7 @@ export function Chat() {
                   <div className="relative flex items-end gap-2">
                     <Textarea
                       ref={textareaRef}
+                      data-testid="chat-input"
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={handleKeyDown}
@@ -261,6 +264,7 @@ export function Chat() {
                       <TooltipTrigger asChild>
                         <Button
                           size="icon"
+                          data-testid="chat-send"
                           className="absolute right-2 bottom-1.5 h-8 w-8 rounded-lg"
                           onClick={handleSend}
                           disabled={!input.trim() || isProcessing}
@@ -297,7 +301,7 @@ export function Chat() {
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleNewChat}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleNewChat} data-testid="chat-new">
                     <Plus className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -307,6 +311,7 @@ export function Chat() {
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
+                data-testid="chat-search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t.chat.search}
@@ -336,6 +341,7 @@ export function Chat() {
                     {group.items.map((chat) => (
                       <div
                         key={chat.chat_id}
+                        data-testid="chat-item"
                         onClick={() => loadChat(chat.chat_id)}
                         className={cn(
                           'group flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors',
@@ -393,7 +399,7 @@ function MessageBubble({ message, t }: { message: Message; t: any }) {
   }
 
   return (
-    <div className={cn('group flex gap-3 py-3', isUser && 'flex-row-reverse')}>
+    <div className={cn('group flex gap-3 py-3', isUser && 'flex-row-reverse')} data-testid={isUser ? 'message-user' : 'message-assistant'}>
       <Avatar className="h-8 w-8 mt-0.5">
         <AvatarFallback
           className={cn(
