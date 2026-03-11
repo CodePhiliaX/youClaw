@@ -236,5 +236,14 @@ export function createAgentsRoutes(agentManager: AgentManager) {
     return c.json({ message: `Agent "${id}" 已删除` })
   })
 
+  // GET /api/routes — 汇总路由表
+  agents.get('/routes', (c) => {
+    const router = agentManager.getRouter()
+    if (!router) {
+      return c.json([])
+    }
+    return c.json(router.getRouteTable())
+  })
+
   return agents
 }

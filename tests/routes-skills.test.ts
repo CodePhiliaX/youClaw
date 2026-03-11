@@ -29,6 +29,7 @@ describe('skills routes', () => {
         getConfig: () => ({ maxSkillCount: 50 }),
         refresh: () => [baseSkill],
         loadSkillsForAgent: () => [baseSkill],
+        getAgentSkillsView: () => ({ available: [baseSkill], enabled: [baseSkill], eligible: [baseSkill] }),
       } as any,
       { getAgent: () => ({ config: { id: 'agent-1' } }) } as any,
     )
@@ -48,6 +49,7 @@ describe('skills routes', () => {
         getConfig: () => ({ maxSkillCount: 50, maxTotalChars: 30000 }),
         refresh: () => [baseSkill],
         loadSkillsForAgent: () => [baseSkill],
+        getAgentSkillsView: () => ({ available: [baseSkill], enabled: [baseSkill], eligible: [baseSkill] }),
       } as any,
       { getAgent: () => ({ config: { id: 'agent-1' } }) } as any,
     )
@@ -68,6 +70,7 @@ describe('skills routes', () => {
         getConfig: () => ({}),
         refresh: () => [baseSkill],
         loadSkillsForAgent: () => [baseSkill],
+        getAgentSkillsView: () => ({ available: [], enabled: [], eligible: [] }),
       } as any,
       { getAgent: () => ({ config: { id: 'agent-1' } }) } as any,
     )
@@ -77,7 +80,7 @@ describe('skills routes', () => {
     expect(res.status).toBe(404)
   })
 
-  test('GET /agents/:id/skills 在 agent 存在时返回其 skills', async () => {
+  test('GET /agents/:id/skills 在 agent 存在时返回其 skills 视图', async () => {
     const app = createSkillsRoutes(
       {
         loadAllSkills: () => [baseSkill],
@@ -85,6 +88,11 @@ describe('skills routes', () => {
         getConfig: () => ({}),
         refresh: () => [baseSkill],
         loadSkillsForAgent: () => [baseSkill],
+        getAgentSkillsView: () => ({
+          available: [baseSkill],
+          enabled: [baseSkill],
+          eligible: [baseSkill],
+        }),
       } as any,
       { getAgent: (id: string) => id === 'agent-1' ? { config: { id } } : undefined } as any,
     )
@@ -93,7 +101,10 @@ describe('skills routes', () => {
     const missing = await app.request('/agents/missing/skills')
 
     expect(ok.status).toBe(200)
-    expect((await ok.json() as Array<{ name: string }>)[0]?.name).toBe('pdf')
+    const body = await ok.json() as { available: Array<{ name: string }>; enabled: Array<{ name: string }>; eligible: Array<{ name: string }> }
+    expect(body.available[0]?.name).toBe('pdf')
+    expect(body.enabled[0]?.name).toBe('pdf')
+    expect(body.eligible[0]?.name).toBe('pdf')
     expect(missing.status).toBe(404)
   })
 })

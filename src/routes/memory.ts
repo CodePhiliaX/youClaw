@@ -59,5 +59,38 @@ export function createMemoryRoutes(memoryManager: MemoryManager, agentManager: A
     return c.json({ content })
   })
 
+  // GET /api/agents/:id/memory/conversations — 归档会话列表
+  memory.get('/agents/:id/memory/conversations', (c) => {
+    const id = c.req.param('id')
+    const managed = agentManager.getAgent(id)
+
+    if (!managed) {
+      return c.json({ error: 'Agent not found' }, 404)
+    }
+
+    const chatId = c.req.query('chatId')
+    const conversations = memoryManager.getArchivedConversations(id, chatId)
+    return c.json(conversations)
+  })
+
+  // GET /api/agents/:id/memory/conversations/:chatId/:sessionId — 获取归档会话内容
+  memory.get('/agents/:id/memory/conversations/:chatId/:sessionId', (c) => {
+    const id = c.req.param('id')
+    const chatId = c.req.param('chatId')
+    const sessionId = c.req.param('sessionId')
+    const managed = agentManager.getAgent(id)
+
+    if (!managed) {
+      return c.json({ error: 'Agent not found' }, 404)
+    }
+
+    const content = memoryManager.getArchivedConversation(id, chatId, sessionId)
+    if (!content) {
+      return c.json({ error: '归档会话不存在' }, 404)
+    }
+
+    return c.json({ content })
+  })
+
   return memory
 }

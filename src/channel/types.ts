@@ -6,6 +6,8 @@ export interface InboundMessage {
   content: string
   timestamp: string
   isGroup: boolean
+  channel?: string        // "telegram" | "web" | "api"
+  tags?: string[]         // web 前端传入的路由标签
   requestedSkills?: string[]  // 显式请求的 skills
 }
 

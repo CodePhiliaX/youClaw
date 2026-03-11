@@ -4,18 +4,30 @@ import { getLogger } from '../logger/index.ts'
 import { getSession, saveSession } from '../db/index.ts'
 import type { EventBus } from '../events/index.ts'
 import type { PromptBuilder } from './prompt-builder.ts'
-import type { AgentConfig, ProcessParams } from './types.ts'
+import type { AgentCompiler } from './compiler.ts'
+import type { HooksManager } from './hooks.ts'
 import { resolveMcpServers } from './mcp-utils.ts'
+import type { AgentConfig, ProcessParams } from './types.ts'
 
 export class AgentRuntime {
   private config: AgentConfig
   private eventBus: EventBus
   private promptBuilder: PromptBuilder
+  private compiler: AgentCompiler | null
+  private hooksManager: HooksManager | null
 
-  constructor(config: AgentConfig, eventBus: EventBus, promptBuilder: PromptBuilder) {
+  constructor(
+    config: AgentConfig,
+    eventBus: EventBus,
+    promptBuilder: PromptBuilder,
+    compiler?: AgentCompiler,
+    hooksManager?: HooksManager,
+  ) {
     this.config = config
     this.eventBus = eventBus
     this.promptBuilder = promptBuilder
+    this.compiler = compiler ?? null
+    this.hooksManager = hooksManager ?? null
   }
 
   /**
@@ -29,13 +41,40 @@ export class AgentRuntime {
     // 通知开始处理
     this.emitProcessing(agentId, chatId, true)
 
+    // on_session_start hook
+    if (this.hooksManager) {
+      await this.hooksManager.execute(agentId, 'on_session_start', {
+        agentId,
+        chatId,
+        phase: 'on_session_start',
+        payload: { chatId },
+      })
+    }
+
     // 查找已有 session
     const existingSessionId = getSession(agentId, chatId)
     logger.info({ agentId, chatId, hasSession: !!existingSessionId }, '开始处理消息')
 
     try {
+      // pre_process hook
+      let finalPrompt = prompt
+      if (this.hooksManager) {
+        const preCtx = await this.hooksManager.execute(agentId, 'pre_process', {
+          agentId,
+          chatId,
+          phase: 'pre_process',
+          payload: { prompt, chatId },
+        })
+        if (preCtx.abort) {
+          return preCtx.abortReason ?? '消息被 hook 拦截'
+        }
+        if (preCtx.modifiedPayload?.prompt) {
+          finalPrompt = preCtx.modifiedPayload.prompt as string
+        }
+      }
+
       const { fullText, sessionId } = await this.executeQuery(
-        prompt,
+        finalPrompt,
         agentId,
         chatId,
         existingSessionId,
@@ -48,20 +87,55 @@ export class AgentRuntime {
         saveSession(agentId, chatId, sessionId)
       }
 
+      // post_process hook
+      let finalText = fullText
+      if (this.hooksManager) {
+        const postCtx = await this.hooksManager.execute(agentId, 'post_process', {
+          agentId,
+          chatId,
+          phase: 'post_process',
+          payload: { fullText, chatId },
+        })
+        if (postCtx.modifiedPayload?.fullText) {
+          finalText = postCtx.modifiedPayload.fullText as string
+        }
+      }
+
       // 广播完成事件
       this.eventBus.emit({
         type: 'complete',
         agentId,
         chatId,
-        fullText,
+        fullText: finalText,
         sessionId,
       })
 
-      logger.info({ agentId, chatId, responseLength: fullText.length }, '消息处理完成')
-      return fullText
+      logger.info({ agentId, chatId, responseLength: finalText.length }, '消息处理完成')
+
+      // on_session_end hook
+      if (this.hooksManager) {
+        await this.hooksManager.execute(agentId, 'on_session_end', {
+          agentId,
+          chatId,
+          phase: 'on_session_end',
+          payload: { sessionId, fullText: finalText },
+        })
+      }
+
+      return finalText
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
       logger.error({ agentId, chatId, error: errorMsg }, '消息处理失败')
+
+      // on_error hook
+      if (this.hooksManager) {
+        await this.hooksManager.execute(agentId, 'on_error', {
+          agentId,
+          chatId,
+          phase: 'on_error',
+          payload: { error: errorMsg },
+        })
+      }
 
       this.eventBus.emit({
         type: 'error',
@@ -109,17 +183,21 @@ export class AgentRuntime {
       ...(existingSessionId ? { resume: existingSessionId } : {}),
     }
 
-    // Phase 3: 子 Agent 配置
+    // 子 Agent 配置（通过 AgentCompiler 编译 ref 引用）
     if (this.config.agents) {
-      queryOptions.agents = this.config.agents
+      if (this.compiler) {
+        queryOptions.agents = this.compiler.resolve(this.config.agents, agentId)
+      } else {
+        queryOptions.agents = this.config.agents
+      }
     }
 
-    // Phase 4: MCP 服务器（SDK 期望 Record<string, McpServerConfig> 对象格式）
+    // MCP 服务器（使用公共函数解析环境变量）
     if (this.config.mcpServers) {
       queryOptions.mcpServers = resolveMcpServers(this.config.mcpServers)
     }
 
-    // Phase 4: 工具控制
+    // 工具控制
     if (this.config.allowedTools) {
       queryOptions.allowedTools = this.config.allowedTools
     }
@@ -127,7 +205,7 @@ export class AgentRuntime {
       queryOptions.disallowedTools = this.config.disallowedTools
     }
 
-    // Phase 4: 其他 SDK 能力
+    // 其他 SDK 能力
     if (this.config.maxTurns) {
       queryOptions.maxTurns = this.config.maxTurns
     }
@@ -139,7 +217,7 @@ export class AgentRuntime {
 
     // 流式处理 SDK 消息
     for await (const message of q) {
-      this.handleMessage(message, agentId, chatId, (text) => {
+      await this.handleMessage(message, agentId, chatId, (text) => {
         fullText += text
       }, (sid) => {
         sessionId = sid
@@ -152,13 +230,13 @@ export class AgentRuntime {
   /**
    * 处理 SDK 消息
    */
-  private handleMessage(
+  private async handleMessage(
     message: SDKMessage,
     agentId: string,
     chatId: string,
     appendText: (text: string) => void,
     setSessionId: (sid: string) => void,
-  ): void {
+  ): Promise<void> {
     switch (message.type) {
       case 'assistant': {
         // 提取 session_id
@@ -172,6 +250,19 @@ export class AgentRuntime {
             appendText(block.text)
             this.emitStream(agentId, chatId, block.text)
           } else if (block.type === 'tool_use') {
+            // pre_tool_use hook
+            if (this.hooksManager) {
+              const preCtx = await this.hooksManager.execute(agentId, 'pre_tool_use', {
+                agentId,
+                chatId,
+                phase: 'pre_tool_use',
+                payload: { tool: block.name, input: block.input },
+              })
+              if (preCtx.abort) {
+                this.emitStream(agentId, chatId, `\n[工具 ${block.name} 被 hook 拦截: ${preCtx.abortReason ?? '未知原因'}]\n`)
+                continue
+              }
+            }
             this.emitToolUse(agentId, chatId, block.name, block.input)
           }
         }
@@ -185,7 +276,7 @@ export class AgentRuntime {
         break
       }
 
-      // Phase 3: 子 Agent 系统消息处理
+      // 子 Agent 系统消息处理
       case 'system': {
         this.handleSystemMessage(message, agentId, chatId)
         break
@@ -265,5 +356,4 @@ export class AgentRuntime {
       input: JSON.stringify(input).slice(0, 200),
     })
   }
-
 }

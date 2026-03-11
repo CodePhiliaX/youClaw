@@ -43,7 +43,10 @@ export class MessageRouter {
   async handleInbound(message: InboundMessage): Promise<void> {
     const logger = getLogger()
 
-    // 解析 agent
+    // 推断 channel 类型（优先用消息自带的 channel 字段）
+    const channel = message.channel ?? (message.chatId.startsWith('tg:') ? 'telegram' : 'web')
+
+    // 使用 AgentRouter 或回退到旧逻辑
     const managed = this.agentManager.resolveAgent(message.chatId)
     if (!managed) {
       logger.warn({ chatId: message.chatId }, '没有找到对应的 agent')
@@ -73,7 +76,7 @@ export class MessageRouter {
     }
 
     // 存入数据库
-    upsertChat(message.chatId, config.id, message.senderName, message.chatId.startsWith('tg:') ? 'telegram' : 'web')
+    upsertChat(message.chatId, config.id, message.senderName, channel)
     saveMessage({
       id: message.id,
       chatId: message.chatId,

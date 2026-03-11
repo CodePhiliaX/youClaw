@@ -5,7 +5,7 @@ import { loadEnv, getEnv } from './config/index.ts'
 import { initLogger, getLogger } from './logger/index.ts'
 import { initDatabase, createTask, updateTask, deleteTask, getTasks, getTask } from './db/index.ts'
 import { EventBus } from './events/index.ts'
-import { AgentManager, AgentQueue, PromptBuilder } from './agent/index.ts'
+import { AgentManager, AgentQueue, PromptBuilder, AgentCompiler, AgentRouter, HooksManager, SecretsManager } from './agent/index.ts'
 import { MessageRouter, TelegramChannel } from './channel/index.ts'
 import { SkillsLoader, SkillsWatcher } from './skills/index.ts'
 import { MemoryManager } from './memory/index.ts'
@@ -42,18 +42,36 @@ async function main() {
   // 6. 创建 MemoryManager
   const memoryManager = new MemoryManager()
 
-  // 7. 创建 PromptBuilder 和 AgentManager
+  // 7. 创建 SecretsManager
+  const secretsManager = new SecretsManager()
+  secretsManager.loadFromEnv()
+
+  // 8. 创建 HooksManager
+  const hooksManager = new HooksManager()
+
+  // 9. 创建 PromptBuilder、AgentCompiler、AgentRouter
   const promptBuilder = new PromptBuilder(skillsLoader, memoryManager)
-  const agentManager = new AgentManager(eventBus, promptBuilder)
+  const compiler = new AgentCompiler(promptBuilder)
+  const agentRouter = new AgentRouter()
+
+  // 10. 创建 AgentManager（注入所有新模块）
+  const agentManager = new AgentManager(
+    eventBus,
+    promptBuilder,
+    compiler,
+    hooksManager,
+    agentRouter,
+    secretsManager,
+  )
   await agentManager.loadAgents()
 
-  // 8. 创建 AgentQueue
+  // 11. 创建 AgentQueue
   const agentQueue = new AgentQueue(agentManager)
 
-  // 9. 创建 MessageRouter（带 MemoryManager）
+  // 12. 创建 MessageRouter（带 MemoryManager）
   const router = new MessageRouter(agentManager, agentQueue, eventBus, memoryManager, skillsLoader)
 
-  // 10. 如果有 TELEGRAM_BOT_TOKEN，创建 TelegramChannel 并连接
+  // 13. 如果有 TELEGRAM_BOT_TOKEN，创建 TelegramChannel 并连接
   if (env.TELEGRAM_BOT_TOKEN) {
     const telegramChannel = new TelegramChannel(env.TELEGRAM_BOT_TOKEN, {
       onMessage: (message) => router.handleInbound(message),
@@ -68,12 +86,12 @@ async function main() {
     logger.info('未配置 TELEGRAM_BOT_TOKEN，跳过 Telegram channel')
   }
 
-  // 11. 创建 Scheduler 并启动
+  // 14. 创建 Scheduler 并启动
   const scheduler = new Scheduler(agentQueue, agentManager, eventBus)
   scheduler.start()
   logger.info('定时任务调度器已启动')
 
-  // 12. 创建 IPC Watcher 并启动
+  // 15. 创建 IPC Watcher 并启动
   const ipcWatcher = new IpcWatcher({
     onScheduleTask: (data) => {
       const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -157,7 +175,7 @@ async function main() {
     writeTasksSnapshot(agentId, agentTasks)
   }
 
-  // 13. 创建 HTTP 服务
+  // 16. 创建 HTTP 服务
   const app = createApp({ agentManager, agentQueue, eventBus, router, skillsLoader, memoryManager, scheduler })
 
   const { serve } = await import('@hono/node-server')
@@ -169,7 +187,7 @@ async function main() {
   logger.info({ port: env.PORT }, `HTTP 服务已启动: http://localhost:${env.PORT}`)
   logger.info('YouClaw 已就绪')
 
-  // 14. 优雅关闭
+  // 17. 优雅关闭
   const shutdown = () => {
     logger.info('正在关闭...')
     skillsWatcher.stop()

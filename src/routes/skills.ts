@@ -6,6 +6,7 @@ import { execSync } from 'node:child_process'
 import { ROOT_DIR } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
 import type { SkillsLoader } from '../skills/index.ts'
+import { SkillsInstaller } from '../skills/installer.ts'
 import type { AgentManager } from '../agent/index.ts'
 
 const configureEnvSchema = z.object({
@@ -18,8 +19,19 @@ const installSchema = z.object({
   method: z.string().min(1),
 })
 
+const installFromPathSchema = z.object({
+  sourcePath: z.string().min(1),
+  targetDir: z.string().optional(),
+})
+
+const installFromUrlSchema = z.object({
+  url: z.string().url(),
+  targetDir: z.string().optional(),
+})
+
 export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: AgentManager) {
   const skills = new Hono()
+  const installer = new SkillsInstaller()
 
   // GET /api/skills — 所有可用 skills
   skills.get('/skills', (c) => {
@@ -84,7 +96,7 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
     }
   })
 
-  // POST /api/skills/install — 执行安装命令
+  // POST /api/skills/install — 执行安装命令（已有 skill 的依赖安装）
   skills.post('/skills/install', async (c) => {
     const body = await c.req.json()
     const parsed = installSchema.safeParse(body)
@@ -134,6 +146,79 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
     }
   })
 
+  // POST /api/skills/install-from-path — 从本地路径安装 skill
+  skills.post('/skills/install-from-path', async (c) => {
+    const body = await c.req.json()
+    const parsed = installFromPathSchema.safeParse(body)
+    if (!parsed.success) {
+      return c.json({ error: 'Invalid parameters', details: parsed.error.issues }, 400)
+    }
+
+    const { sourcePath, targetDir } = parsed.data
+    const dest = targetDir ?? resolve(ROOT_DIR, 'skills')
+
+    try {
+      await installer.installFromLocal(sourcePath, dest)
+      skillsLoader.refresh()
+      return c.json({ ok: true })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return c.json({ error: msg }, 500)
+    }
+  })
+
+  // POST /api/skills/install-from-url — 从远程 URL 安装 skill
+  skills.post('/skills/install-from-url', async (c) => {
+    const body = await c.req.json()
+    const parsed = installFromUrlSchema.safeParse(body)
+    if (!parsed.success) {
+      return c.json({ error: 'Invalid parameters', details: parsed.error.issues }, 400)
+    }
+
+    const { url, targetDir } = parsed.data
+    const dest = targetDir ?? resolve(ROOT_DIR, 'skills')
+
+    try {
+      await installer.installFromUrl(url, dest)
+      skillsLoader.refresh()
+      return c.json({ ok: true })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return c.json({ error: msg }, 500)
+    }
+  })
+
+  // DELETE /api/skills/:name — 卸载 skill
+  skills.delete('/skills/:name', async (c) => {
+    const name = c.req.param('name')
+    const logger = getLogger()
+
+    // 查找 skill 获取其路径
+    const allSkills = skillsLoader.loadAllSkills()
+    const skill = allSkills.find((s) => s.name === name)
+
+    if (!skill) {
+      return c.json({ error: 'Skill not found' }, 404)
+    }
+
+    // 只允许卸载项目级和用户级 skills（不允许卸载 workspace 级的）
+    if (skill.source === 'workspace') {
+      return c.json({ error: '不允许通过 API 卸载 workspace 级别的 skill' }, 403)
+    }
+
+    try {
+      const { dirname } = await import('node:path')
+      const skillDir = dirname(skill.path)
+      await installer.uninstall(resolve(skillDir, '..').split('/').pop()!, dirname(skillDir))
+      skillsLoader.refresh()
+      return c.json({ ok: true })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.error({ name, error: msg }, '卸载 skill 失败')
+      return c.json({ error: msg }, 500)
+    }
+  })
+
   // GET /api/skills/:name — 单个 skill 详情
   skills.get('/skills/:name', (c) => {
     const name = c.req.param('name')
@@ -147,7 +232,7 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
     return c.json(skill)
   })
 
-  // GET /api/agents/:id/skills — agent 启用的 skills
+  // GET /api/agents/:id/skills — agent 的 skills 视图（增强版）
   skills.get('/agents/:id/skills', (c) => {
     const id = c.req.param('id')
     const managed = agentManager.getAgent(id)
@@ -156,8 +241,8 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
       return c.json({ error: 'Agent not found' }, 404)
     }
 
-    const agentSkills = skillsLoader.loadSkillsForAgent(managed.config)
-    return c.json(agentSkills)
+    const view = skillsLoader.getAgentSkillsView(managed.config)
+    return c.json(view)
   })
 
   return skills
