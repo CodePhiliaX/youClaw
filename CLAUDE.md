@@ -1,82 +1,94 @@
 # YouClaw
 
-桌面端 AI 助手应用，参考 nanoClaw/OpenClaw 设计。
+Desktop AI assistant app, inspired by nanoClaw/OpenClaw.
 
-## 命令
+## Commands
 
 ```bash
-pnpm dev             # 启动后端开发模式 (hot reload)
-pnpm dev:web         # 启动前端开发模式
-pnpm dev:electron    # 启动 Electron 开发模式
-pnpm start           # 生产模式启动
-pnpm typecheck       # TypeScript 类型检查
-pnpm test            # 运行测试
-pnpm pack            # 打包 Electron 应用（本地测试）
-pnpm dist            # 构建可分发安装包
+bun dev              # Start backend dev mode (Bun)
+bun dev:web          # Start frontend dev mode (Vite)
+bun dev:tauri        # Start Tauri dev mode (Vite frontend + Bun backend + WebView, auto-opens DevTools)
+bun start            # Production backend
+bun typecheck        # TypeScript type check
+bun test             # Run tests (bun test)
+bun build:sidecar    # Compile Bun sidecar binary
+bun build:tauri      # Build Tauri desktop app
 ```
 
-## 技术栈
+## Tech Stack
 
-- **运行时**: Node.js >= 22
-- **包管理**: pnpm
-- **后端**: Hono (HTTP) + node:sqlite (数据库) + Pino (日志)
+- **Runtime**: Bun (backend sidecar + package manager)
+- **Desktop Shell**: Tauri 2 (Rust, window/tray/updater)
+- **Backend**: Hono (HTTP) + bun:sqlite (database) + Pino (logging)
 - **Agent**: @anthropic-ai/claude-agent-sdk
-- **前端**: Vite + React + shadcn/ui + Tailwind CSS
-- **校验**: Zod (v4, 使用 `zod/v4` 导入)
-- **定时任务**: croner (cron 表达式解析)
+- **Frontend**: Vite + React + shadcn/ui + Tailwind CSS
+- **Validation**: Zod (v4, import from `zod/v4`)
+- **Scheduling**: croner (cron expression parser)
 - **Telegram**: grammY
-- **配置格式**: YAML (yaml 库)
+- **Config Format**: YAML (yaml library)
 
-## 架构
+## Architecture
 
-- 详见 `plans/architecture.md`
-- 三层结构：入口层（Telegram/Web/API）→ 核心层（AgentManager/Scheduler/Memory/Skills）→ 存储层（SQLite/文件系统）
-- EventBus 解耦 Agent 执行和多端输出
-- IPC Watcher 通过文件系统实现 Agent ↔ 主进程通信（定时任务的增删改查）
+- **Desktop mode**: Tauri (Rust shell) -> WebView loads frontend + Sidecar runs Bun backend
+- **Web mode**: Vite frontend + Bun backend deployed independently, frontend proxies API via Vite proxy
+- **Dev mode**: `bun dev:tauri` launches Vite frontend + Bun backend + Tauri WebView simultaneously (debug skips sidecar)
+- **Build pipeline**: `bun build --compile` compiles backend into single-file sidecar -> Vite compiles frontend embedded in Rust binary -> Tauri bundles DMG/MSI/AppImage
+- Frontend communicates with Bun backend uniformly via HTTP/SSE (same for desktop and web mode)
+- Port config: Rust reads `port` from Tauri Store -> injects `PORT` env var to sidecar; frontend reads port from the same Store to build baseUrl
+- Three-layer architecture: Entry layer (Telegram/Web/API) -> Core layer (AgentManager/Scheduler/Memory/Skills) -> Storage layer (SQLite/filesystem)
+- EventBus decouples Agent execution from multi-channel output
+- IPC Watcher uses filesystem polling for Agent <-> main process communication (scheduled task CRUD)
 
-## 项目结构
+## Project Structure
 
 ```
 src/
-├── agent/          # AgentManager（加载 agent.yaml）、AgentRuntime（claude-agent-sdk）、AgentQueue（并发队列）、PromptBuilder、SubagentTracker
-├── channel/        # MessageRouter（消息路由）、TelegramChannel
-├── config/         # env.ts（Zod 校验环境变量）、paths.ts（路径常量）
-├── db/             # node:sqlite 初始化、消息/会话/定时任务 CRUD
-├── events/         # EventBus + 类型定义（stream/tool_use/complete/error/subagent_*）
-├── ipc/            # IpcWatcher（文件轮询 IPC）、任务快照写入
-├── logger/         # Pino 日志
-├── memory/         # MemoryManager（per-agent MEMORY.md + logs）
-├── routes/         # Hono API 路由（agents/messages/stream/skills/memory/tasks/system/health）
-├── scheduler/      # Scheduler（30s 轮询、cron/interval/once、退避、卡住检测）
-├── skills/         # SkillsLoader（三级优先级: workspace > builtin > user）、SkillsWatcher（热更新）、资格检查、frontmatter 解析、/skill 调用语法
+├── agent/          # AgentManager (loads agent.yaml), AgentRuntime (claude-agent-sdk), AgentQueue (concurrency), PromptBuilder, SubagentTracker
+├── channel/        # MessageRouter, TelegramChannel
+├── config/         # env.ts (Zod env validation), paths.ts (path constants)
+├── db/             # bun:sqlite init, message/chat/task CRUD
+├── events/         # EventBus + type definitions (stream/tool_use/complete/error/subagent_*)
+├── ipc/            # IpcWatcher (file-polling IPC), task snapshot writer
+├── logger/         # Pino logger
+├── memory/         # MemoryManager (per-agent MEMORY.md + logs)
+├── routes/         # Hono API routes (agents/messages/stream/skills/memory/tasks/system/health)
+├── scheduler/      # Scheduler (30s polling, cron/interval/once, backoff, stuck detection)
+├── skills/         # SkillsLoader (3-tier priority: workspace > builtin > user), SkillsWatcher (hot reload), eligibility check, frontmatter parser, /skill invocation syntax
+src-tauri/
+├── src/            # Rust main process (sidecar spawn, window management, tray, Tauri commands)
+├── capabilities/   # Tauri permission config
+├── bin/            # Bun sidecar compiled binaries
+├── icons/          # App & tray icons (includes trayTemplate for macOS menu bar)
 agents/
 ├── <id>/           # agent.yaml + SOUL.md + TOOLS.md + USER.md + AGENT.md + skills/ + memory/ + prompts/
-skills/             # 项目级 skills（SKILL.md 格式，YAML frontmatter）
-prompts/            # system.md（系统提示词）、env.md（环境描述）
+skills/             # Project-level skills (SKILL.md format, YAML frontmatter)
+prompts/            # system.md (system prompt), env.md (environment description)
 web/src/
-├── pages/          # Chat、Agents、Skills、Memory、Tasks、System
-├── api/            # HTTP client
-├── i18n/           # 中英文国际化
+├── pages/          # Chat, Agents, Skills, Memory, Tasks, System
+├── api/            # HTTP client + transport (baseUrl/port management) + Tauri env detection
+├── i18n/           # i18n (Chinese/English)
 ├── components/     # layout + shadcn/ui
 ```
 
-## 环境变量
+## Environment Variables
 
-- `ANTHROPIC_API_KEY` (必填)
-- `PORT` (默认 3000)
-- `DATA_DIR` (默认 ./data)
-- `AGENT_MODEL` (默认 claude-sonnet-4-6)
-- `LOG_LEVEL` (debug/info/warn/error, 默认 info)
-- `TELEGRAM_BOT_TOKEN` (可选, 启用 Telegram channel)
+- `ANTHROPIC_API_KEY` (required)
+- `PORT` (default 3000)
+- `DATA_DIR` (default ./data)
+- `AGENT_MODEL` (default claude-sonnet-4-6)
+- `LOG_LEVEL` (debug/info/warn/error, default info)
+- `TELEGRAM_BOT_TOKEN` (optional, enables Telegram channel)
 
-## 约定
+## Conventions
 
-- 使用 `node:sqlite`（Node 内置 SQLite）作为数据库驱动，无需 native addon
-- 使用 `node:fs` 的 readFileSync/writeFileSync（非 Bun.file）
-- 使用 `dotenv` 或 `.env` 文件加载环境变量
-- 提交信息使用 Conventional Commits（英文）
-- 代码注释使用中文
-- Agent 配置使用 YAML 格式（`agent.yaml`），Zod schema 校验
-- Skills 使用 Markdown + YAML frontmatter 格式（`SKILL.md`），三级加载优先级：Agent workspace > 项目 `skills/` > `~/.youclaw/skills/`
-- 数据库迁移使用 try/catch ALTER TABLE 模式（无独立迁移工具）
-- API 路由统一挂载在 `/api` 前缀下
+- Use `bun:sqlite` (Bun built-in SQLite) as database driver, no native addon needed
+- Use `node:fs` readFileSync/writeFileSync
+- Bun auto-loads `.env` files
+- Use Bun as package manager (`bun install`, `bun add`), not pnpm/npm
+- Commit messages follow Conventional Commits (English)
+- Code comments in Chinese
+- Agent config uses YAML format (`agent.yaml`), validated with Zod schema
+- Skills use Markdown + YAML frontmatter format (`SKILL.md`), 3-tier loading priority: Agent workspace > project `skills/` > `~/.youclaw/skills/`
+- Database migrations use try/catch ALTER TABLE pattern (no dedicated migration tool)
+- API routes mounted under `/api` prefix
+- Tauri Store for desktop settings persistence (API Key, Base URL, port, theme)

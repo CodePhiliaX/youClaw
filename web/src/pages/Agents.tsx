@@ -21,9 +21,11 @@ type AgentState = {
 type Agent = {
   id: string
   name: string
-  model: string
+  model?: string
   workspaceDir: string
-  state: AgentState | null
+  status?: string
+  hasConfig?: boolean
+  state?: AgentState | null
 }
 
 type SubAgentDef = {

@@ -3,23 +3,20 @@ import { AppSidebar } from './AppSidebar'
 import { SidebarProvider } from '@/hooks/useSidebar'
 import { ChatProvider } from '@/hooks/useChatContext'
 import { SettingsDialog } from '@/components/settings/SettingsDialog'
-import { isElectron, getElectronAPI } from '@/api/transport'
+import { isTauri } from '@/api/transport'
 
 export function Shell({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [platform, setPlatform] = useState('')
 
   useEffect(() => {
-    if (!isElectron) return
-    const cleanup = getElectronAPI().onOpenSettings(() => setSettingsOpen(true))
-    return cleanup
+    if (!isTauri) return
+    import('@tauri-apps/api/core').then(({ invoke }) => {
+      invoke<string>('get_platform').then(setPlatform)
+    })
   }, [])
 
-  useEffect(() => {
-    if (isElectron) setPlatform(getElectronAPI().getPlatform())
-  }, [])
-
-  const isWin = platform === 'win32'
+  const isWin = platform === 'windows'
 
   return (
     <ChatProvider>

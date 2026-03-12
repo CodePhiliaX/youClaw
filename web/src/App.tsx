@@ -1,4 +1,4 @@
-import { BrowserRouter, HashRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Shell } from './components/layout/Shell'
 import { Chat } from './pages/Chat'
 import { Agents } from './pages/Agents'
@@ -10,16 +10,13 @@ import { Channels } from './pages/Channels'
 import { Logs } from './pages/Logs'
 import { BrowserProfiles } from './pages/BrowserProfiles'
 import { useTheme } from './hooks/useTheme'
-import { isElectron } from './api/transport'
 
-// Electron 使用 HashRouter（file:// 协议不支持 BrowserRouter）
-const Router = isElectron ? HashRouter : BrowserRouter
-
+// Tauri devUrl 是 http 协议，可以直接用 BrowserRouter
 export default function App() {
   useTheme()
 
   return (
-    <Router>
+    <BrowserRouter>
       <Shell>
         <Routes>
           <Route path="/" element={<Chat />} />
@@ -33,6 +30,6 @@ export default function App() {
           <Route path="/system" element={<System />} />
         </Routes>
       </Shell>
-    </Router>
+    </BrowserRouter>
   )
 }

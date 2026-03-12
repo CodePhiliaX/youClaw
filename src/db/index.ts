@@ -1,10 +1,10 @@
-import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
+import { Database } from 'bun:sqlite'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { getPaths } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
 
-let _db: DatabaseSync | null = null
+let _db: Database | null = null
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS messages (
@@ -74,23 +74,24 @@ CREATE TABLE IF NOT EXISTS browser_profiles (
 );
 `
 
-// node:sqlite 查询结果类型辅助
-function queryAll<T>(db: DatabaseSync, sql: string, ...params: SQLInputValue[]): T[] {
-  return db.prepare(sql).all(...params) as unknown as T[]
+// bun:sqlite 查询结果类型辅助
+type SQLValue = string | number | boolean | null
+function queryAll<T>(db: Database, sql: string, ...params: SQLValue[]): T[] {
+  return db.query(sql).all(...params) as T[]
 }
 
-function queryGet<T>(db: DatabaseSync, sql: string, ...params: SQLInputValue[]): T | null {
-  const row = db.prepare(sql).get(...params)
-  return (row as unknown as T) ?? null
+function queryGet<T>(db: Database, sql: string, ...params: SQLValue[]): T | null {
+  const row = db.query(sql).get(...params)
+  return (row as T) ?? null
 }
 
-export function initDatabase(): DatabaseSync {
+export function initDatabase(): Database {
   if (_db) return _db
 
   const paths = getPaths()
   mkdirSync(dirname(paths.db), { recursive: true })
 
-  _db = new DatabaseSync(paths.db)
+  _db = new Database(paths.db)
   _db.exec('PRAGMA journal_mode = WAL')
   _db.exec('PRAGMA foreign_keys = ON')
   _db.exec(SCHEMA)
@@ -116,7 +117,7 @@ export function initDatabase(): DatabaseSync {
   return _db
 }
 
-export function getDatabase(): DatabaseSync {
+export function getDatabase(): Database {
   if (!_db) throw new Error('数据库未初始化')
   return _db
 }
@@ -134,10 +135,11 @@ export function saveMessage(msg: {
   isBotMessage: boolean
 }) {
   const db = getDatabase()
-  db.prepare(
+  db.run(
     `INSERT OR REPLACE INTO messages (id, chat_id, sender, sender_name, content, timestamp, is_from_me, is_bot_message)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(msg.id, msg.chatId, msg.sender, msg.senderName, msg.content, msg.timestamp, msg.isFromMe ? 1 : 0, msg.isBotMessage ? 1 : 0)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [msg.id, msg.chatId, msg.sender, msg.senderName, msg.content, msg.timestamp, msg.isFromMe ? 1 : 0, msg.isBotMessage ? 1 : 0]
+  )
 }
 
 export function getMessages(chatId: string, limit = 50, before?: string): Array<{
@@ -159,13 +161,14 @@ export function getMessages(chatId: string, limit = 50, before?: string): Array<
 
 export function upsertChat(chatId: string, agentId: string, name?: string, channel = 'web') {
   const db = getDatabase()
-  db.prepare(
+  db.run(
     `INSERT INTO chats (chat_id, name, agent_id, channel, last_message_time)
      VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(chat_id) DO UPDATE SET
        last_message_time = excluded.last_message_time,
-       name = COALESCE(excluded.name, chats.name)`
-  ).run(chatId, name ?? chatId, agentId, channel, new Date().toISOString())
+       name = COALESCE(excluded.name, chats.name)`,
+    [chatId, name ?? chatId, agentId, channel, new Date().toISOString()]
+  )
 }
 
 export function getChats(): Array<{
@@ -177,8 +180,8 @@ export function getChats(): Array<{
 
 export function deleteChat(chatId: string) {
   const db = getDatabase()
-  db.prepare('DELETE FROM messages WHERE chat_id = ?').run(chatId)
-  db.prepare('DELETE FROM chats WHERE chat_id = ?').run(chatId)
+  db.run('DELETE FROM messages WHERE chat_id = ?', [chatId])
+  db.run('DELETE FROM chats WHERE chat_id = ?', [chatId])
 }
 
 // ===== Session 操作 =====
@@ -191,9 +194,10 @@ export function getSession(agentId: string, chatId: string): string | null {
 
 export function saveSession(agentId: string, chatId: string, sessionId: string) {
   const db = getDatabase()
-  db.prepare(
-    `INSERT OR REPLACE INTO sessions (agent_id, chat_id, session_id) VALUES (?, ?, ?)`
-  ).run(agentId, chatId, sessionId)
+  db.run(
+    `INSERT OR REPLACE INTO sessions (agent_id, chat_id, session_id) VALUES (?, ?, ?)`,
+    [agentId, chatId, sessionId]
+  )
 }
 
 // ===== 定时任务操作 =====
@@ -245,10 +249,11 @@ export function createTask(task: {
   deliveryTarget?: string
 }): void {
   const db = getDatabase()
-  db.prepare(
+  db.run(
     `INSERT INTO scheduled_tasks (id, agent_id, chat_id, prompt, schedule_type, schedule_value, next_run, created_at, name, description, timezone, delivery_mode, delivery_target)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(task.id, task.agentId, task.chatId, task.prompt, task.scheduleType, task.scheduleValue, task.nextRun, new Date().toISOString(), task.name ?? null, task.description ?? null, task.timezone ?? null, task.deliveryMode ?? 'none', task.deliveryTarget ?? null)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [task.id, task.agentId, task.chatId, task.prompt, task.scheduleType, task.scheduleValue, task.nextRun, new Date().toISOString(), task.name ?? null, task.description ?? null, task.timezone ?? null, task.deliveryMode ?? 'none', task.deliveryTarget ?? null]
+  )
 }
 
 export function getTasks(): ScheduledTask[] {
@@ -299,13 +304,13 @@ export function updateTask(id: string, updates: Partial<{
   if (fields.length === 0) return
 
   values.push(id)
-  db.prepare(`UPDATE scheduled_tasks SET ${fields.join(', ')} WHERE id = ?`).run(...values)
+  db.run(`UPDATE scheduled_tasks SET ${fields.join(', ')} WHERE id = ?`, values)
 }
 
 export function deleteTask(id: string): void {
   const db = getDatabase()
-  db.prepare('DELETE FROM scheduled_tasks WHERE id = ?').run(id)
-  db.prepare('DELETE FROM task_run_logs WHERE task_id = ?').run(id)
+  db.run('DELETE FROM scheduled_tasks WHERE id = ?', [id])
+  db.run('DELETE FROM task_run_logs WHERE task_id = ?', [id])
 }
 
 export function getTasksDueBy(time: string): ScheduledTask[] {
@@ -327,8 +332,8 @@ export function getStuckTasks(cutoffIso: string): ScheduledTask[] {
 export function pruneOldTaskRunLogs(retainDays: number): number {
   const db = getDatabase()
   const cutoff = new Date(Date.now() - retainDays * 24 * 60 * 60 * 1000).toISOString()
-  const result = db.prepare('DELETE FROM task_run_logs WHERE run_at < ?').run(cutoff)
-  return Number(result.changes)
+  const result = db.run('DELETE FROM task_run_logs WHERE run_at < ?', [cutoff])
+  return result.changes
 }
 
 // ===== 运行日志 =====
@@ -343,10 +348,11 @@ export function saveTaskRunLog(log: {
   deliveryStatus?: string
 }): void {
   const db = getDatabase()
-  db.prepare(
+  db.run(
     `INSERT INTO task_run_logs (task_id, run_at, duration_ms, status, result, error, delivery_status)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(log.taskId, log.runAt, log.durationMs, log.status, log.result ?? null, log.error ?? null, log.deliveryStatus ?? null)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [log.taskId, log.runAt, log.durationMs, log.status, log.result ?? null, log.error ?? null, log.deliveryStatus ?? null]
+  )
 }
 
 export function getTaskRunLogs(taskId: string, limit = 50): TaskRunLog[] {
@@ -366,9 +372,10 @@ export interface BrowserProfile {
 
 export function createBrowserProfile(profile: { id: string; name: string }): void {
   const db = getDatabase()
-  db.prepare(
-    'INSERT INTO browser_profiles (id, name, created_at) VALUES (?, ?, ?)'
-  ).run(profile.id, profile.name, new Date().toISOString())
+  db.run(
+    'INSERT INTO browser_profiles (id, name, created_at) VALUES (?, ?, ?)',
+    [profile.id, profile.name, new Date().toISOString()]
+  )
 }
 
 export function getBrowserProfiles(): BrowserProfile[] {
@@ -383,7 +390,7 @@ export function getBrowserProfile(id: string): BrowserProfile | null {
 
 export function deleteBrowserProfile(id: string): void {
   const db = getDatabase()
-  db.prepare('DELETE FROM browser_profiles WHERE id = ?').run(id)
+  db.run('DELETE FROM browser_profiles WHERE id = ?', [id])
 }
 
 // ===== Skill 设置 =====
@@ -405,7 +412,8 @@ export function setSkillEnabled(name: string, enabled: boolean): void {
   const db = getDatabase()
   const settings = getSkillSettings()
   settings[name] = { enabled }
-  db.prepare(
-    "INSERT OR REPLACE INTO kv_state (key, value) VALUES ('skill_settings', ?)"
-  ).run(JSON.stringify(settings))
+  db.run(
+    "INSERT OR REPLACE INTO kv_state (key, value) VALUES ('skill_settings', ?)",
+    [JSON.stringify(settings)]
+  )
 }

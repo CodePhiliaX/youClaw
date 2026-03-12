@@ -7,68 +7,26 @@ on:
       - "v*"
 
 jobs:
-  # ── Job 1a: Windows build (independent, sign job only waits for this) ──
-  build-windows:
-    runs-on: windows-latest
-    name: Build Windows x64
-
-    steps:
-      - name: Extract version
-        id: version
-        shell: bash
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install root dependencies
-        run: npm install
-
-      - name: Install web dependencies
-        run: npm install
-        working-directory: web
-
-      - name: Set version
-        shell: bash
-        run: npm version ${{ steps.version.outputs.VERSION }} --no-git-tag-version
-
-      - name: Build (renderer + backend + electron)
-        run: node scripts/build-electron.mjs
-
-      - name: Package (Windows)
-        run: npx electron-builder --win --x64 --publish never
-
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-build
-          path: |
-            release/*.exe
-            release/*.exe.blockmap
-            release/latest.yml
-          retention-days: 1
-
-  # ── Job 1b: macOS build (with codesign) ──
+  # ── macOS builds ──
   build-mac:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - arch: x64
-            build_arg: "--mac --x64"
-            artifact: "You-Claw-${VERSION}-x64.dmg"
-            platform_label: "macOS Intel"
-          - arch: arm64
-            build_arg: "--mac --arm64"
-            artifact: "You-Claw-${VERSION}-arm64.dmg"
+          - arch: aarch64
+            runner: macos-latest
+            bun_target: bun-darwin-arm64
+            sidecar_suffix: aarch64-apple-darwin
+            tauri_args: "--target aarch64-apple-darwin"
             platform_label: "macOS Apple Silicon"
+          - arch: x86_64
+            runner: macos-latest
+            bun_target: bun-darwin-x64
+            sidecar_suffix: x86_64-apple-darwin
+            tauri_args: "--target x86_64-apple-darwin"
+            platform_label: "macOS Intel"
 
-    runs-on: macos-latest
+    runs-on: ${{ matrix.runner }}
     name: Build ${{ matrix.platform_label }}
 
     steps:
@@ -80,24 +38,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action/setup@v1
+
+      - name: Add Rust target (x86_64 cross-compile)
+        if: matrix.arch == 'x86_64'
+        run: rustup target add x86_64-apple-darwin
 
       - name: Install root dependencies
-        run: npm install
+        run: bun install
 
       - name: Install web dependencies
-        run: npm install
+        run: bun install
         working-directory: web
 
       - name: Set version
         shell: bash
-        run: npm version ${{ steps.version.outputs.VERSION }} --no-git-tag-version
+        run: |
+          bun -e "
+            const pkg = JSON.parse(require('fs').readFileSync('package.json','utf8'));
+            pkg.version = '${{ steps.version.outputs.VERSION }}';
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
 
-      - name: Build (renderer + backend + electron)
-        run: node scripts/build-electron.mjs
+      - name: Build sidecar
+        run: |
+          mkdir -p src-tauri/bin
+          bun build --compile --target=${{ matrix.bun_target }} src/index.ts --outfile src-tauri/bin/youclaw-server-${{ matrix.sidecar_suffix }}
 
       - name: Import macOS certificates
         uses: apple-actions/import-codesign-certs@v3
@@ -105,24 +75,29 @@ jobs:
           p12-file-base64: ${{ secrets.MAC_CERTS }}
           p12-password: ${{ secrets.MAC_CERTS_PASSWORD }}
 
-      - name: Package & Publish
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.MAC_CERTS }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npx electron-builder ${{ matrix.build_arg }} --publish always
-
-      - name: Resolve artifact name
-        id: artifact
-        shell: bash
-        run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          NAME=$(echo '${{ matrix.artifact }}' | sed "s/\${VERSION}/$VERSION/g")
-          echo "NAME=$NAME" >> $GITHUB_OUTPUT
-          echo "URL=https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$NAME" >> $GITHUB_OUTPUT
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "You Claw v${{ steps.version.outputs.VERSION }}"
+          releaseBody: ""
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.tauri_args }}
+          updaterJsonKeepUniversal: true
 
       - name: Notify Feishu
+        if: always()
         uses: foxundermoon/feishu-action@v2
         with:
           url: ${{ secrets.FEISHU_WEBHOOK }}
@@ -139,16 +114,85 @@ jobs:
                     href: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   - tag: text
                     text: " ${{ job.status == 'success' && 'succeeded' || 'failed' }}"
-                - - tag: text
-                    text: "Download: "
-                  - tag: a
-                    text: "${{ steps.artifact.outputs.NAME }}"
-                    href: "${{ steps.artifact.outputs.URL }}"
 
-  # ── Job 1c: Linux build (no codesign) ── [temporarily disabled]
+  # ── Windows build ──
+  build-windows:
+    runs-on: windows-latest
+    name: Build Windows x64
+
+    steps:
+      - name: Extract version
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action/setup@v1
+
+      - name: Install root dependencies
+        run: bun install
+
+      - name: Install web dependencies
+        run: bun install
+        working-directory: web
+
+      - name: Set version
+        shell: bash
+        run: |
+          bun -e "
+            const pkg = JSON.parse(require('fs').readFileSync('package.json','utf8'));
+            pkg.version = '${{ steps.version.outputs.VERSION }}';
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Build sidecar
+        run: |
+          mkdir -p src-tauri/bin
+          bun build --compile --target=bun-windows-x64 src/index.ts --outfile src-tauri/bin/youclaw-server-x86_64-pc-windows-msvc.exe
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "You Claw v${{ steps.version.outputs.VERSION }}"
+          releaseBody: ""
+          releaseDraft: false
+          prerelease: false
+          updaterJsonKeepUniversal: true
+
+      - name: Notify Feishu
+        if: always()
+        uses: foxundermoon/feishu-action@v2
+        with:
+          url: ${{ secrets.FEISHU_WEBHOOK }}
+          msg_type: post
+          content: |
+            post:
+              zh_cn:
+                title: "You Claw v${{ steps.version.outputs.VERSION }} · Windows x64 ${{ job.status == 'success' && '✅' || '❌' }}"
+                content:
+                - - tag: text
+                    text: "Build "
+                  - tag: a
+                    text: "#${{ github.run_number }}"
+                    href: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  - tag: text
+                    text: " ${{ job.status == 'success' && 'succeeded' || 'failed' }}"
+
+  # ── Linux build ── [temporarily disabled]
   build-linux:
     if: false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: Build Linux x64
 
     steps:
@@ -160,46 +204,54 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
-      - name: Cache electron-builder binaries
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/electron-builder
-          key: electron-builder-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: electron-builder-${{ runner.os }}-
+      - name: Setup Rust
+        uses: dtolnay/rust-action/setup@v1
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Install root dependencies
-        run: npm install
+        run: bun install
 
       - name: Install web dependencies
-        run: npm install
+        run: bun install
         working-directory: web
 
       - name: Set version
         shell: bash
-        run: npm version ${{ steps.version.outputs.VERSION }} --no-git-tag-version
-
-      - name: Build (renderer + backend + electron)
-        run: node scripts/build-electron.mjs
-
-      - name: Package & Publish
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --linux --x64 --publish always
-
-      - name: Resolve artifact name
-        id: artifact
-        shell: bash
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          echo "NAME=You-Claw-${VERSION}-x86_64.AppImage" >> $GITHUB_OUTPUT
-          echo "URL=https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/You-Claw-${VERSION}-x86_64.AppImage" >> $GITHUB_OUTPUT
+          bun -e "
+            const pkg = JSON.parse(require('fs').readFileSync('package.json','utf8'));
+            pkg.version = '${{ steps.version.outputs.VERSION }}';
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Build sidecar
+        run: |
+          mkdir -p src-tauri/bin
+          bun build --compile --target=bun-linux-x64 src/index.ts --outfile src-tauri/bin/youclaw-server-x86_64-unknown-linux-gnu
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "You Claw v${{ steps.version.outputs.VERSION }}"
+          releaseBody: ""
+          releaseDraft: false
+          prerelease: false
+          updaterJsonKeepUniversal: true
 
       - name: Notify Feishu
+        if: always()
         uses: foxundermoon/feishu-action@v2
         with:
           url: ${{ secrets.FEISHU_WEBHOOK }}
@@ -216,97 +268,3 @@ jobs:
                     href: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   - tag: text
                     text: " ${{ job.status == 'success' && 'succeeded' || 'failed' }}"
-                - - tag: text
-                    text: "Download: "
-                  - tag: a
-                    text: "${{ steps.artifact.outputs.NAME }}"
-                    href: "${{ steps.artifact.outputs.URL }}"
-
-  # ── Job 2: Sign on self-hosted Mac (with USB token) ──
-  sign-windows:
-    needs: build-windows
-    runs-on: self-hosted
-    name: Sign Windows exe
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Extract version
-        id: version
-        shell: bash
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-
-      - name: Download Windows build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-build
-          path: unsigned
-
-      - name: Sign exe with USB token
-        shell: bash
-        run: |
-          EXE_PATH=$(ls unsigned/*.exe | head -1)
-          echo "Signing: $EXE_PATH"
-          sign.sh "$EXE_PATH"
-
-      - name: Update latest.yml with signed exe hash
-        shell: bash
-        run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          EXE_PATH="unsigned/You-Claw-${VERSION}.exe"
-          NEW_SHA512=$(shasum -a 512 "$EXE_PATH" | awk '{print $1}' | xxd -r -p | base64 | tr -d '\n')
-          NEW_SIZE=$(stat -f%z "$EXE_PATH" 2>/dev/null || stat -c%s "$EXE_PATH")
-          sed -i.bak "s|sha512: .*|sha512: ${NEW_SHA512}|" unsigned/latest.yml
-          sed -i.bak "s|size: .*|size: ${NEW_SIZE}|" unsigned/latest.yml
-          rm -f unsigned/latest.yml.bak
-          echo "Updated latest.yml:"
-          cat unsigned/latest.yml
-
-      - name: Upload signed exe and latest.yml to GitHub Release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          EXE_NAME="You-Claw-${VERSION}.exe"
-          for i in $(seq 1 30); do
-            if gh release view "${{ github.ref_name }}" > /dev/null 2>&1; then
-              echo "Release found"
-              break
-            fi
-            echo "Waiting for release... ($i/30)"
-            sleep 10
-          done
-          gh release upload "${{ github.ref_name }}" "unsigned/$EXE_NAME" --clobber
-          gh release upload "${{ github.ref_name }}" "unsigned/${EXE_NAME}.blockmap" --clobber
-          gh release upload "${{ github.ref_name }}" "unsigned/latest.yml" --clobber
-
-      - name: Notify Feishu
-        uses: foxundermoon/feishu-action@v2
-        if: always()
-        with:
-          url: ${{ secrets.FEISHU_WEBHOOK }}
-          msg_type: post
-          content: |
-            post:
-              zh_cn:
-                title: "You Claw v${{ steps.version.outputs.VERSION }} · Windows x64 Signing ${{ job.status == 'success' && '✅' || '❌' }}"
-                content:
-                - - tag: text
-                    text: "Signing "
-                  - tag: a
-                    text: "#${{ github.run_number }}"
-                    href: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  - tag: text
-                    text: " ${{ job.status == 'success' && 'succeeded' || 'failed' }}"
-                - - tag: text
-                    text: "Download: "
-                  - tag: a
-                    text: "You-Claw-${{ steps.version.outputs.VERSION }}.exe"
-                    href: "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/You-Claw-${{ steps.version.outputs.VERSION }}.exe"
-
-      - name: Cleanup
-        if: always()
-        shell: bash
-        run: rm -rf unsigned
