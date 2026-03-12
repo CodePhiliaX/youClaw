@@ -358,6 +358,7 @@ function TaskDetail({
             <Pencil className="h-4 w-4" />
           </button>
           <button
+            data-testid="task-clone-btn"
             onClick={onClone}
             className="p-2 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
             title={t.tasks.clone}
@@ -424,6 +425,7 @@ function TaskDetail({
             {logs.slice(0, 20).map((log) => (
               <div
                 key={log.id}
+                data-testid="task-log-item"
                 className="flex items-center gap-3 text-xs py-1.5 px-2 rounded bg-accent/10 border border-border"
               >
                 {log.status === 'success' ? (
@@ -611,6 +613,7 @@ function TaskForm({
             {(['interval', 'cron', 'once'] as const).map((st) => (
               <button
                 key={st}
+                data-testid={`task-schedule-type-${st}`}
                 type="button"
                 onClick={() => {
                   setScheduleType(st)
@@ -637,6 +640,7 @@ function TaskForm({
             {scheduleType === 'once' && t.tasks.runAt}
           </label>
           <input
+            data-testid="task-input-schedule"
             type={scheduleType === 'once' ? 'datetime-local' : 'text'}
             value={scheduleValue}
             onChange={(e) => setScheduleValue(e.target.value)}
@@ -654,7 +658,7 @@ function TaskForm({
           )}
         </div>
 
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <p data-testid="task-form-error" className="text-xs text-red-400">{error}</p>}
 
         <div className="flex gap-2 pt-2">
           <button
