@@ -112,6 +112,10 @@ test.describe('Level 1: 页面加载与基本 UI', () => {
     await navigateToTasks(page)
   })
 
+  test.afterEach(async ({ request }) => {
+    await cleanupE2ETasks(request)
+  })
+
   test('核心元素可见', async ({ page }) => {
     await expect(page.getByTestId('task-create-btn')).toBeVisible()
     await expect(page.getByTestId('task-search')).toBeVisible()
@@ -119,55 +123,36 @@ test.describe('Level 1: 页面加载与基本 UI', () => {
   })
 
   test('列表数据与 API 一致', async ({ page, request }) => {
-    // 从 API 获取任务列表
-    const res = await request.get(`${API_BASE}/api/tasks`)
-    const apiTasks = await res.json()
-
-    // UI 列表中的 task-item 数量应与 API 一致
-    const items = page.getByTestId('task-item')
-    await expect(items).toHaveCount(apiTasks.length)
-
-    // 逐一比对每个任务的名称、状态、调度信息
-    for (let i = 0; i < apiTasks.length; i++) {
-      const task = apiTasks[i]
-      const item = items.nth(i)
-
-      // 名称或 prompt 前 40 字符
-      const displayName = task.name || task.prompt.slice(0, 40)
-      await expect(item).toContainText(displayName)
-
-      // 状态 badge
-      await expect(item).toContainText(task.status)
-
-      // 调度信息：复用前端的 scheduleLabel 逻辑来构造预期文本
-      let expectedSchedule: string
-      if (task.schedule_type === 'cron') {
-        expectedSchedule = `cron: ${task.schedule_value}`
-      } else if (task.schedule_type === 'interval') {
-        const ms = parseInt(task.schedule_value, 10)
-        if (ms < 60_000) expectedSchedule = `every ${ms / 1000}s`
-        else if (ms < 3_600_000) expectedSchedule = `every ${ms / 60_000}m`
-        else expectedSchedule = `every ${ms / 3_600_000}h`
-      } else {
-        expectedSchedule = task.schedule_value
-      }
-      await expect(item).toContainText(expectedSchedule)
-    }
-  })
-
-  test('空状态显示', async ({ page, request }) => {
     await cleanupE2ETasks(request)
-    // 获取所有任务看看是否有非 E2E 任务
-    const res = await request.get(`${API_BASE}/api/tasks`)
-    const allTasks = await res.json()
 
-    if (allTasks.length === 0) {
-      await page.reload()
-      await page.waitForLoadState('networkidle')
-      // 应该显示"暂无定时任务"
-      await expect(page.getByText('No cron jobs yet')).toBeVisible()
-    }
-    // 如果有非 E2E 任务，跳过空状态验证
+    // 创建 2 个已知任务
+    const nameInterval = UNIQUE()
+    const nameCron = UNIQUE()
+    await createTaskViaAPI(request, {
+      name: nameInterval,
+      scheduleType: 'interval',
+      scheduleValue: '3600000', // 1h
+    })
+    await createTaskViaAPI(request, {
+      name: nameCron,
+      scheduleType: 'cron',
+      scheduleValue: '0 9 * * *',
+    })
+
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+
+    // 验证这 2 个任务在列表中可见
+    const itemInterval = page.getByTestId('task-item').filter({ hasText: nameInterval })
+    const itemCron = page.getByTestId('task-item').filter({ hasText: nameCron })
+
+    await expect(itemInterval).toBeVisible()
+    await expect(itemInterval).toContainText('active')
+    await expect(itemInterval).toContainText('every 1h')
+
+    await expect(itemCron).toBeVisible()
+    await expect(itemCron).toContainText('active')
+    await expect(itemCron).toContainText('cron: 0 9 * * *')
   })
 
   test('新建按钮打开表单', async ({ page }) => {
@@ -263,6 +248,7 @@ test.describe('Level 2: 单个操作', () => {
 
     // 验证表单预填
     await expect(page.getByTestId('task-input-name')).toHaveValue(taskName)
+    await expect(page.getByTestId('task-input-schedule')).toHaveValue('60') // 3600000ms → 60 分钟
     // Agent select 被 disabled
     await expect(page.getByTestId('task-select-agent')).toBeDisabled()
 
@@ -540,6 +526,7 @@ test.describe('Level 4: 高级功能', () => {
     await expect(page.getByTestId('task-item').filter({ hasText: taskName })).toBeVisible()
   })
 
+  // 此测试同时覆盖空状态 UI 分支（filteredTasks.length === 0）
   test('搜索无匹配显示空', async ({ page }) => {
     await page.getByTestId('task-search').fill(`nonexistent-${Date.now()}`)
     await expect(page.getByTestId('task-item')).not.toBeVisible()
@@ -582,6 +569,134 @@ test.describe('Level 4: 高级功能', () => {
     await expect(page.getByTestId('task-edit-btn')).toBeVisible()
     await expect(page.getByTestId('task-delete-btn')).toBeVisible()
     await expect(page.getByTestId('task-run-btn')).toBeVisible()
+  })
+
+  test('搜索按 schedule 文本过滤', async ({ page, request }) => {
+    const taskName = UNIQUE()
+    await createTaskViaAPI(request, {
+      name: taskName,
+      scheduleType: 'cron',
+      scheduleValue: '30 22 * * 5', // 独特的 cron 表达式
+    })
+
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+
+    await page.getByTestId('task-search').fill('30 22')
+    await expect(page.getByTestId('task-item').filter({ hasText: taskName })).toBeVisible()
+  })
+
+  test.describe('请求体断言', () => {
+    test('interval 创建发送正确毫秒值', async ({ page }) => {
+      const taskName = UNIQUE()
+      await page.getByTestId('task-create-btn').click()
+
+      const responsePromise = page.waitForResponse(
+        (r) => r.url().includes('/api/tasks') && r.request().method() === 'POST' && r.status() === 201
+      )
+
+      await page.getByTestId('task-input-name').fill(taskName)
+      await page.getByTestId('task-input-prompt').fill('interval body test')
+      await page.getByTestId('task-input-schedule').fill('45') // 45 分钟
+      await page.getByTestId('task-submit-btn').click()
+
+      const response = await responsePromise
+      const body = response.request().postDataJSON()
+      expect(body.scheduleValue).toBe('2700000') // 45 * 60000
+      expect(body.scheduleType).toBe('interval')
+
+      // 确认任务创建成功并出现在列表中
+      await expect(page.getByTestId('task-item').filter({ hasText: taskName })).toBeVisible()
+    })
+
+    test('once 创建发送正确 ISO 时间', async ({ page }) => {
+      const taskName = UNIQUE()
+      await page.getByTestId('task-create-btn').click()
+      await page.getByTestId('task-schedule-type-once').click()
+
+      // 构造明天 14:30 的 datetime-local 值
+      const tomorrow = new Date()
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      const datetimeLocal = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}T14:30`
+
+      // 用相同输入值计算预期 ISO（和前端 Tasks.tsx:517 逻辑一致）
+      const expectedISO = new Date(datetimeLocal).toISOString()
+
+      const responsePromise = page.waitForResponse(
+        (r) => r.url().includes('/api/tasks') && r.request().method() === 'POST' && r.status() === 201
+      )
+
+      await page.getByTestId('task-input-name').fill(taskName)
+      await page.getByTestId('task-input-prompt').fill('once body test')
+      await page.getByTestId('task-input-schedule').fill(datetimeLocal)
+      await page.getByTestId('task-submit-btn').click()
+
+      const response = await responsePromise
+      const body = response.request().postDataJSON()
+      expect(body.scheduleValue).toBe(expectedISO) // 精确 ISO 比对
+      expect(body.scheduleType).toBe('once')
+
+      await expect(page.getByTestId('task-item').filter({ hasText: taskName })).toBeVisible()
+    })
+
+    test('编辑发送正确 PUT body', async ({ page, request }) => {
+      const taskName = UNIQUE()
+      await createTaskViaAPI(request, {
+        name: taskName,
+        scheduleValue: '7200000', // 120 分钟
+      })
+
+      await page.reload()
+      await page.waitForLoadState('networkidle')
+      await page.getByTestId('task-item').filter({ hasText: taskName }).click()
+      await page.getByTestId('task-edit-btn').click()
+
+      // 验证回显为 120 分钟
+      await expect(page.getByTestId('task-input-schedule')).toHaveValue('120')
+
+      // 改为 30 分钟
+      await page.getByTestId('task-input-schedule').fill('30')
+
+      const responsePromise = page.waitForResponse(
+        (r) => r.url().includes('/api/tasks/') && r.request().method() === 'PUT' && r.status() === 200
+      )
+      await page.getByTestId('task-submit-btn').click()
+
+      const response = await responsePromise
+      const body = response.request().postDataJSON()
+      expect(body.scheduleValue).toBe('1800000') // 30 * 60000
+
+      // 确认 UI 回到详情视图且显示更新后的调度
+      await expect(page.getByRole('heading', { name: taskName })).toBeVisible()
+      await page.getByTestId('task-item').filter({ hasText: taskName }).click()
+      await expect(page.getByText('every 30m').first()).toBeVisible()
+    })
+  })
+
+  test('once 编辑回显 datetime-local 格式', async ({ page, request }) => {
+    const taskName = UNIQUE()
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const datetimeLocal = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}T09:00`
+    const isoValue = new Date(datetimeLocal).toISOString()
+
+    await createTaskViaAPI(request, {
+      name: taskName,
+      scheduleType: 'once',
+      scheduleValue: isoValue,
+    })
+
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+    await page.getByTestId('task-item').filter({ hasText: taskName }).click()
+    await page.getByTestId('task-edit-btn').click()
+
+    // 精确比对：应与 isoToDatetimeLocal(isoValue) 一致
+    const scheduleInput = page.getByTestId('task-input-schedule')
+    const d = new Date(isoValue)
+    const pad = (n: number) => n.toString().padStart(2, '0')
+    const expected = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+    await expect(scheduleInput).toHaveValue(expected)
   })
 
   test('真实手动执行 + 运行日志', async ({ page, request }) => {
@@ -640,10 +755,21 @@ test.describe('Level 5: 边界情况与错误处理', () => {
 
   test('空表单提交显示错误', async ({ page }) => {
     await page.getByTestId('task-create-btn').click()
+
+    // 监听是否有 POST 请求发出
+    let postSent = false
+    await page.route('**/api/tasks', (route) => {
+      if (route.request().method() === 'POST') postSent = true
+      route.continue()
+    })
+
     await page.getByTestId('task-submit-btn').click()
 
     await expect(page.getByTestId('task-form-error')).toBeVisible()
     await expect(page.getByTestId('task-form-error')).toContainText('All fields are required')
+
+    // 确认没有发出 POST 请求
+    expect(postSent).toBe(false)
   })
 
   test('只填 prompt 不填调度值', async ({ page }) => {
