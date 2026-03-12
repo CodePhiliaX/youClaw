@@ -6,7 +6,7 @@ import { useI18n } from '../../i18n'
 export function Sidebar() {
   const { t } = useI18n()
 
-  const navItems = [
+  const navItems: Array<{ to: string; icon: typeof MessageSquare; label: string; testId: string; disabled?: boolean }> = [
     { to: '/', icon: MessageSquare, label: t.nav.chat, testId: 'nav-chat' },
     { to: '/agents', icon: Bot, label: t.nav.agents, testId: 'nav-agents' },
     { to: '/cron', icon: CalendarClock, label: t.nav.tasks, testId: 'nav-cron' },

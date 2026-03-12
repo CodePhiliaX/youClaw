@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Search, ChevronDown, ChevronRight } from 'lucide-react'
 import { getLogDates, getLogEntries } from '../api/client'
-import type { LogEntry, LogQueryResult } from '../api/client'
+import type { LogEntry } from '../api/client'
 import { cn } from '../lib/utils'
 import { useI18n } from '../i18n'
 
@@ -45,7 +45,7 @@ export function Logs() {
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>()
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   // 加载日期列表
   useEffect(() => {

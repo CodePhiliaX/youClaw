@@ -47,5 +47,9 @@ playwright-report/
 
 plans/
 
+# Tauri
+src-tauri/target/
+src-tauri/bin/youclaw-server*
+
 # Claude Code
 .claude/

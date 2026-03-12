@@ -1,50 +1,45 @@
-// Transport 抽象层：自动检测 Electron / Web 环境
+// Transport 抽象层：自动检测 Tauri / Web 环境
 
-export interface ElectronAPI {
-  // 通用 API 调用（替代 HTTP fetch）
-  apiFetch: (method: string, path: string, body?: string) => Promise<{ status: number; data: unknown }>
+export const isTauri = typeof window !== "undefined" && !!(window as any).__TAURI_INTERNALS__
 
-  // 事件订阅（替代 SSE）
-  subscribeEvents: (chatId: string) => Promise<{ subId: string }>
-  unsubscribeEvents: (subId: string) => Promise<void>
-  onAgentEvent: (callback: (event: unknown) => void) => () => void
-
-  // App
-  getVersion: () => Promise<string>
-  getPlatform: () => string
-
-  // Theme
-  getTheme: () => Promise<string>
-  setTheme: (theme: string) => Promise<void>
-
-  // API Key & Base URL
-  getApiKey: () => Promise<string>
-  setApiKey: (key: string) => Promise<void>
-  getBaseUrl: () => Promise<string>
-  setBaseUrl: (url: string) => Promise<void>
-
-  // Updates
-  checkForUpdates: () => Promise<string | null>
-  installUpdate: () => Promise<void>
-  getAllowPrerelease: () => Promise<boolean>
-  setAllowPrerelease: (value: boolean) => Promise<void>
-
-  // 事件
-  onUpdateStatus: (callback: (status: string, data?: unknown) => void) => () => void
-  onOpenSettings: (callback: () => void) => () => void
+export function getTauriInvoke(): (cmd: string, args?: Record<string, unknown>) => Promise<unknown> {
+  if (!isTauri) throw new Error("Not in Tauri environment")
+  return (window as any).__TAURI_INTERNALS__.invoke
 }
 
-declare global {
-  interface Window {
-    electronAPI?: ElectronAPI
+// 缓存后端 baseUrl，避免重复读 store
+let _cachedBaseUrl: string | null = null
+
+/**
+ * 获取后端 baseUrl
+ * - Tauri 模式：从 store 读 port，默认 3000
+ * - Web 模式：空字符串（走 Vite proxy）
+ */
+export async function getBackendBaseUrl(): Promise<string> {
+  if (!isTauri) return ''
+  if (_cachedBaseUrl !== null) return _cachedBaseUrl
+
+  try {
+    const { load } = await import('@tauri-apps/plugin-store')
+    const store = await load('settings.json')
+    const port = (await store.get<string>('port')) || '3000'
+    _cachedBaseUrl = `http://localhost:${port}`
+  } catch {
+    _cachedBaseUrl = 'http://localhost:3000'
   }
+  return _cachedBaseUrl
 }
 
-export const isElectron = typeof window !== "undefined" && !!window.electronAPI
+/**
+ * 同步获取 baseUrl（用于 EventSource 等不支持 async 的场景）
+ * 必须先调用 initBaseUrl() 初始化
+ */
+export function getBaseUrlSync(): string {
+  if (!isTauri) return ''
+  return _cachedBaseUrl ?? 'http://localhost:3000'
+}
 
-export function getElectronAPI(): ElectronAPI {
-  if (!window.electronAPI) {
-    throw new Error("electronAPI not available")
-  }
-  return window.electronAPI
+/** 应用启动时调用一次，预加载 baseUrl */
+export async function initBaseUrl(): Promise<void> {
+  await getBackendBaseUrl()
 }

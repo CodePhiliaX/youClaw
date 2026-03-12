@@ -3,7 +3,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { applyThemeToDOM, getSavedTheme, saveTheme, type Theme } from "@/hooks/useTheme"
-import { isElectron, getElectronAPI } from "@/api/transport"
+import { isTauri } from "@/api/transport"
 import { useI18n } from "@/i18n"
 
 const themeOptions: { value: Theme; labelKey: "dark" | "light" | "system"; descKey: "darkDesc" | "lightDesc" | "systemDesc" }[] = [
@@ -11,6 +11,11 @@ const themeOptions: { value: Theme; labelKey: "dark" | "light" | "system"; descK
   { value: "light", labelKey: "light", descKey: "lightDesc" },
   { value: "system", labelKey: "system", descKey: "systemDesc" },
 ]
+
+async function loadTauriStore() {
+  const { load } = await import("@tauri-apps/plugin-store")
+  return load("settings.json")
+}
 
 export function GeneralPanel() {
   const { t } = useI18n()
@@ -23,11 +28,11 @@ export function GeneralPanel() {
 
   useEffect(() => {
     getSavedTheme().then(setTheme)
-    if (isElectron) {
-      getElectronAPI().getApiKey().then((key) => {
+    if (isTauri) {
+      loadTauriStore().then(async (store) => {
+        const key = await store.get<string>("api-key")
         if (key) setApiKey(key)
-      })
-      getElectronAPI().getBaseUrl().then((url) => {
+        const url = await store.get<string>("base-url")
         if (url) setBaseUrl(url)
       })
     }
@@ -41,23 +46,27 @@ export function GeneralPanel() {
   }
 
   const handleSaveApiKey = async () => {
-    if (!isElectron) return
-    await getElectronAPI().setApiKey(apiKey)
+    if (!isTauri) return
+    const store = await loadTauriStore()
+    await store.set("api-key", apiKey)
+    await store.save()
     setApiKeySaved(true)
     setTimeout(() => setApiKeySaved(false), 2000)
   }
 
   const handleSaveBaseUrl = async () => {
-    if (!isElectron) return
-    await getElectronAPI().setBaseUrl(baseUrl)
+    if (!isTauri) return
+    const store = await loadTauriStore()
+    await store.set("base-url", baseUrl)
+    await store.save()
     setBaseUrlSaved(true)
     setTimeout(() => setBaseUrlSaved(false), 2000)
   }
 
   return (
     <div className="pt-4 space-y-6">
-      {/* API Key 配置（仅 Electron 模式） */}
-      {isElectron && (
+      {/* API Key 配置（仅桌面模式） */}
+      {isTauri && (
         <div>
           <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-4">
             API Key
@@ -91,8 +100,8 @@ export function GeneralPanel() {
         </div>
       )}
 
-      {/* Base URL 配置（仅 Electron 模式） */}
-      {isElectron && (
+      {/* Base URL 配置（仅桌面模式） */}
+      {isTauri && (
         <div>
           <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-4">
             API Base URL

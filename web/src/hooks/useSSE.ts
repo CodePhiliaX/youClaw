@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react'
-import { isElectron, getElectronAPI } from '@/api/transport'
+import { getBaseUrlSync } from '@/api/transport'
 
 type SSEEvent = {
   type: string
@@ -20,39 +20,8 @@ export function useSSE(chatId: string | null, onEvent: (event: SSEEvent) => void
   useEffect(() => {
     if (!chatId) return
 
-    if (isElectron) {
-      // Electron 模式：通过 IPC 事件桥接（替代 SSE）
-      const api = getElectronAPI()
-      let subId: string | null = null
-      let removeListener: (() => void) | null = null
-
-      // 订阅 EventBus 事件
-      api.subscribeEvents(chatId).then((result) => {
-        subId = result.subId
-      })
-
-      // 监听主进程推送的事件
-      removeListener = api.onAgentEvent((event) => {
-        const e = event as SSEEvent
-        // 过滤只属于当前 chatId 的事件
-        if (e.chatId === chatId) {
-          onEventRef.current(e)
-        }
-      })
-
-      return () => {
-        removeListener?.()
-        if (subId) {
-          api.unsubscribeEvents(subId)
-        }
-      }
-    }
-
-    // Web 模式：使用 EventSource（SSE）
-    let es: EventSource | null = null
-    let cancelled = false
-
-    es = new EventSource(`/api/stream/${encodeURIComponent(chatId)}`)
+    const baseUrl = getBaseUrlSync()
+    const es = new EventSource(`${baseUrl}/api/stream/${encodeURIComponent(chatId)}`)
     eventSourceRef.current = es
 
     const handleEvent = (e: Event) => {
@@ -74,8 +43,7 @@ export function useSSE(chatId: string | null, onEvent: (event: SSEEvent) => void
     }
 
     return () => {
-      cancelled = true
-      es?.close()
+      es.close()
       eventSourceRef.current = null
     }
   }, [chatId])

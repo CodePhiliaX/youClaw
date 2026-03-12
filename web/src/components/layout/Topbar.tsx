@@ -1,6 +1,6 @@
 import { Bot, Settings } from 'lucide-react'
 import { useI18n } from '@/i18n'
-import { isElectron, getElectronAPI } from '@/api/transport'
+import { isTauri } from '@/api/transport'
 import { useEffect, useState } from 'react'
 
 interface TopbarProps {
@@ -12,18 +12,21 @@ export function Topbar({ onOpenSettings }: TopbarProps) {
   const [platform, setPlatform] = useState<string>('')
 
   useEffect(() => {
-    if (isElectron) {
-      setPlatform(getElectronAPI().getPlatform())
+    if (isTauri) {
+      import("@tauri-apps/api/core").then(({ invoke }) => {
+        invoke<string>("get_platform").then(setPlatform)
+      })
     }
   }, [])
 
-  const isMac = platform === 'darwin'
-  const isWin = platform === 'win32'
+  const isMac = platform === 'macos'
+  const isWin = platform === 'windows'
 
   return (
     <header
       className="h-12 border-b border-border flex items-center px-4 shrink-0"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      data-tauri-drag-region
     >
       {/* macOS: 给交通灯按钮留出空间 */}
       {isMac && <div className="w-20 shrink-0" />}

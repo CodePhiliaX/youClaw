@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { isElectron, getElectronAPI } from "@/api/transport"
+import { isTauri } from "@/api/transport"
 
 export type Theme = "dark" | "light" | "system"
 
@@ -34,19 +34,31 @@ export function applyThemeToDOM(theme: Theme): void {
 
 // 获取保存的主题
 export async function getSavedTheme(): Promise<Theme> {
-  if (isElectron) {
-    return getElectronAPI().getTheme() as Promise<Theme>
+  if (isTauri) {
+    try {
+      const { load } = await import("@tauri-apps/plugin-store")
+      const store = await load("settings.json")
+      const theme = await store.get<string>("theme")
+      return (theme as Theme) ?? "system"
+    } catch {
+      return "system"
+    }
   }
   return (localStorage.getItem(THEME_KEY) as Theme) ?? "system"
 }
 
 // 保存主题
 export async function saveTheme(theme: Theme): Promise<void> {
-  if (isElectron) {
-    await getElectronAPI().setTheme(theme)
-  } else {
-    localStorage.setItem(THEME_KEY, theme)
+  if (isTauri) {
+    try {
+      const { load } = await import("@tauri-apps/plugin-store")
+      const store = await load("settings.json")
+      await store.set("theme", theme)
+      await store.save()
+    } catch {}
+    return
   }
+  localStorage.setItem(THEME_KEY, theme)
 }
 
 // 初始化主题的 hook（在 App 根组件使用）

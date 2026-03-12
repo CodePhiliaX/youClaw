@@ -8,15 +8,15 @@ Desktop AI assistant powered by Claude, inspired by nanoClaw / OpenClaw.
 - Skills system compatible with OpenClaw SKILL.md format
 - Web UI (React + shadcn/ui) with SSE streaming
 - Telegram channel support
-- Electron desktop app packaging
+- Tauri 2 desktop app (~27MB DMG vs ~338MB Electron)
 
 ## Tech Stack
 
 | Layer | Choice |
 |-------|--------|
-| Runtime | Node.js >= 22 |
-| Package Manager | pnpm |
-| Backend | Hono + SQLite (node:sqlite) + Pino |
+| Runtime & Package Manager | Bun |
+| Desktop Shell | Tauri 2 (Rust) |
+| Backend | Hono + bun:sqlite + Pino |
 | Agent | `@anthropic-ai/claude-agent-sdk` |
 | Frontend | Vite + React + shadcn/ui + Tailwind CSS |
 | Telegram | grammY |
@@ -26,8 +26,8 @@ Desktop AI assistant powered by Claude, inspired by nanoClaw / OpenClaw.
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) >= 22
-- [pnpm](https://pnpm.io/) >= 9
+- [Bun](https://bun.sh/) >= 1.1
+- [Rust](https://rustup.rs/) (for Tauri desktop build)
 - An [Anthropic API key](https://console.anthropic.com/)
 
 ### Setup
@@ -38,44 +38,41 @@ git clone https://github.com/CodePhiliaX/youClaw.git
 cd youClaw
 
 # Install dependencies
-pnpm install
-cd web && pnpm install && cd ..
+bun install
+cd web && bun install && cd ..
 
 # Configure environment
 cp .env.example .env
 # Edit .env and set ANTHROPIC_API_KEY
 ```
 
-### Run
+### Run (Web mode)
 
 ```bash
 # Start backend (hot reload)
-pnpm dev
+bun dev
 
 # Start frontend (in another terminal)
-pnpm dev:web
+bun dev:web
 ```
 
 Open http://localhost:5173 for the Web UI. The API server runs on http://localhost:3000.
 
-### Production
+### Run (Desktop mode)
 
 ```bash
-pnpm start
+# Tauri dev mode (frontend + backend + WebView + DevTools)
+bun dev:tauri
 ```
 
-### Electron (Desktop App)
+### Build Desktop App
 
 ```bash
-# Development
-pnpm dev:electron
-
-# Package (macOS arm64, local testing)
-pnpm pack
-
-# Build distributable
-pnpm dist
+# Build sidecar + Tauri bundle
+bun build:tauri
 ```
+
+Output: `src-tauri/target/release/bundle/` (DMG / MSI / AppImage)
 
 ## Environment Variables
 
@@ -96,7 +93,7 @@ src/
 ├── agent/          # AgentManager, AgentRuntime, AgentQueue, PromptBuilder
 ├── channel/        # MessageRouter, TelegramChannel
 ├── config/         # Environment validation, path constants
-├── db/             # SQLite init, CRUD operations
+├── db/             # bun:sqlite init, CRUD operations
 ├── events/         # EventBus (stream/tool_use/complete/error)
 ├── ipc/            # File-polling IPC between Agent and main process
 ├── logger/         # Pino logger
@@ -104,24 +101,28 @@ src/
 ├── routes/         # Hono API routes (/api/*)
 ├── scheduler/      # Cron/interval/once task scheduler
 ├── skills/         # Skills loader, watcher, frontmatter parser
+src-tauri/
+├── src/            # Rust main process (sidecar, window, tray, updater)
+├── capabilities/   # Tauri permission config
+├── bin/            # Bun sidecar compiled binaries
+├── icons/          # App & tray icons
 agents/             # Agent configs (agent.yaml + SOUL.md + skills/)
 skills/             # Project-level skills (SKILL.md format)
 prompts/            # System & environment prompts
 web/src/            # React frontend
-electron/           # Electron main process
 ```
 
 ## Commands
 
 ```bash
-pnpm dev             # Backend dev server (hot reload)
-pnpm dev:web         # Frontend dev server
-pnpm dev:electron    # Electron dev mode
-pnpm start           # Production mode
-pnpm typecheck       # TypeScript type check
-pnpm test            # Run tests
-pnpm pack            # Package Electron app (local testing)
-pnpm dist            # Build distributable
+bun dev              # Backend dev server (hot reload)
+bun dev:web          # Frontend dev server
+bun dev:tauri        # Tauri dev mode (frontend + backend + WebView)
+bun start            # Production backend
+bun typecheck        # TypeScript type check
+bun test             # Run tests
+bun build:sidecar    # Compile Bun sidecar binary
+bun build:tauri      # Build Tauri desktop app
 ```
 
 ## License

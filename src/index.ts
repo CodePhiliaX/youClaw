@@ -184,8 +184,7 @@ async function main() {
   // 17. 创建 HTTP 服务
   const app = createApp({ agentManager, agentQueue, eventBus, router, skillsLoader, registryManager, memoryManager, memoryIndexer, scheduler })
 
-  const { serve } = await import('@hono/node-server')
-  const server = serve({
+  const server = Bun.serve({
     fetch: app.fetch,
     port: env.PORT,
   })
@@ -199,7 +198,7 @@ async function main() {
     skillsWatcher.stop()
     ipcWatcher.stop()
     scheduler.stop()
-    server.close()
+    server.stop()
     process.exit(0)
   }
 
