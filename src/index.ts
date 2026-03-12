@@ -84,7 +84,7 @@ async function main() {
   const router = new MessageRouter(agentManager, agentQueue, eventBus, memoryManager, skillsLoader)
 
   // 13. 创建 ChannelManager 并加载 channels
-  const channelManager = new ChannelManager(router, (msg) => router.handleInbound(msg))
+  const channelManager = new ChannelManager(router, (msg) => router.handleInbound(msg), eventBus)
   await channelManager.seedFromEnv(env)     // 首次启动从 env 迁移
   await channelManager.loadFromDatabase()   // 加载并连接所有 enabled channel
 

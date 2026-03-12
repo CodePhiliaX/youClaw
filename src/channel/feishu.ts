@@ -1,11 +1,14 @@
 import * as Lark from '@larksuiteoapi/node-sdk'
 import { getLogger } from '../logger/index.ts'
+import type { EventBus } from '../events/bus.ts'
 import type { Channel, InboundMessage, OnInboundMessage } from './types.ts'
 
 const FEISHU_TEXT_CHUNK_LIMIT = 4000
 
 export interface FeishuChannelOpts {
   onMessage: OnInboundMessage
+  eventBus?: EventBus
+  _client?: Lark.Client  // for test injection
 }
 
 /**
@@ -38,22 +41,114 @@ interface FeishuMessageEvent {
   }
 }
 
+/**
+ * 从飞书消息 content JSON 中提取纯文本
+ */
+export function extractTextContent(contentJson: string, messageType: string): string {
+  try {
+    const parsed = JSON.parse(contentJson)
+
+    if (messageType === 'text') {
+      return (parsed.text as string) || ''
+    }
+
+    if (messageType === 'post') {
+      return extractPostText(parsed)
+    }
+
+    return ''
+  } catch {
+    return contentJson
+  }
+}
+
+/**
+ * 从富文本（post）消息中提取文本
+ */
+export function extractPostText(parsed: Record<string, unknown>): string {
+  // post 格式：{ title?, content: [[{ tag, text?, ... }]] } 或 { zh_cn: { title?, content: [...] } }
+  const postBody = (parsed.zh_cn || parsed.en_us || parsed) as Record<string, unknown>
+  const title = (postBody.title as string) || ''
+  const contentBlocks = (postBody.content || []) as Array<Array<Record<string, unknown>>>
+
+  const parts: string[] = []
+  if (title) parts.push(title)
+
+  for (const paragraph of contentBlocks) {
+    const paraTexts: string[] = []
+    for (const element of paragraph) {
+      if (element.tag === 'text') {
+        paraTexts.push(element.text as string)
+      } else if (element.tag === 'a') {
+        paraTexts.push((element.text as string) || (element.href as string) || '')
+      } else if (element.tag === 'at') {
+        // @提及：保留 @name 格式
+        if (element.user_name) {
+          paraTexts.push(`@${element.user_name}`)
+        }
+      } else if (element.tag === 'img') {
+        paraTexts.push('[图片]')
+      }
+    }
+    if (paraTexts.length > 0) {
+      parts.push(paraTexts.join(''))
+    }
+  }
+
+  return parts.join('\n')
+}
+
+/**
+ * 去除消息文本中对 bot 自身的 @提及
+ */
+export function stripBotMention(
+  text: string,
+  mentions: Array<{ key: string; id: { open_id?: string }; name: string }>,
+  botOpenId: string,
+): string {
+  let result = text
+  for (const mention of mentions) {
+    if (mention.id.open_id === botOpenId) {
+      // 去除 @bot 的占位符（如 @_user_1）和名称
+      result = result.replace(new RegExp(mention.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')
+    }
+  }
+  return result.trim()
+}
+
+/**
+ * 文本分片
+ */
+export function chunkText(text: string, limit: number): string[] {
+  if (text.length <= limit) return [text]
+  const chunks: string[] = []
+  for (let i = 0; i < text.length; i += limit) {
+    chunks.push(text.slice(i, i + limit))
+  }
+  return chunks
+}
+
 export class FeishuChannel implements Channel {
   name = 'feishu'
 
   private client: Lark.Client
   private wsClient: Lark.WSClient | null = null
+  private _connected = false
   private appId: string
   private appSecret: string
   private opts: FeishuChannelOpts
   private botOpenId: string | null = null
+  private eventBus: EventBus | null = null
+  private unsubscribeEvents: (() => void) | null = null
+  private pendingReactions: Map<string, { messageId: string; reactionId: string }> = new Map()
 
   constructor(appId: string, appSecret: string, opts: FeishuChannelOpts) {
     this.appId = appId
     this.appSecret = appSecret
     this.opts = opts
+    this.eventBus = opts.eventBus ?? null
 
-    this.client = new Lark.Client({
+    this.client = opts._client ?? new Lark.Client({
       appId,
       appSecret,
       appType: Lark.AppType.SelfBuild,
@@ -97,12 +192,22 @@ export class FeishuChannel implements Channel {
       loggerLevel: Lark.LoggerLevel.info,
     })
 
-    return new Promise<void>((resolve) => {
-      this.wsClient!.start({ eventDispatcher })
-      logger.info('飞书 WebSocket 长连接已启动')
-      // WSClient.start 是异步的但没有回调，给一点时间让连接建立
-      setTimeout(resolve, 1000)
-    })
+    await this.wsClient.start({ eventDispatcher })
+    logger.info('飞书 WebSocket 长连接已启动')
+    // WSClient.start 是异步的但没有回调，给一点时间让连接建立
+    await new Promise<void>(r => setTimeout(r, 1500))
+    this._connected = true
+
+    if (this.eventBus) {
+      this.unsubscribeEvents = this.eventBus.subscribe(
+        { types: ['complete', 'error'] },
+        (event) => {
+          if ('chatId' in event && event.chatId?.startsWith('feishu:')) {
+            this.removeProcessingReaction(event.chatId)
+          }
+        }
+      )
+    }
   }
 
   /**
@@ -119,12 +224,12 @@ export class FeishuChannel implements Channel {
     }
 
     // 提取文本内容
-    let content = this.extractTextContent(msg.content, msg.message_type)
+    let content = extractTextContent(msg.content, msg.message_type)
     if (!content) return
 
     // 处理 @mention：去除 bot 自身的 @提及
     if (msg.mentions && this.botOpenId) {
-      content = this.stripBotMention(content, msg.mentions)
+      content = stripBotMention(content, msg.mentions, this.botOpenId)
     }
 
     const chatId = `feishu:${msg.chat_id}`
@@ -145,82 +250,11 @@ export class FeishuChannel implements Channel {
       channel: 'feishu',
     }
 
+    // 异步添加处理中 reaction（不阻塞消息处理）
+    this.addProcessingReaction(msg.message_id, chatId)
+
     this.opts.onMessage(inbound)
     logger.debug({ chatId, sender: senderId, chatType: msg.chat_type }, '飞书消息已接收')
-  }
-
-  /**
-   * 从飞书消息 content JSON 中提取纯文本
-   */
-  private extractTextContent(contentJson: string, messageType: string): string {
-    try {
-      const parsed = JSON.parse(contentJson)
-
-      if (messageType === 'text') {
-        return (parsed.text as string) || ''
-      }
-
-      if (messageType === 'post') {
-        return this.extractPostText(parsed)
-      }
-
-      return ''
-    } catch {
-      return contentJson
-    }
-  }
-
-  /**
-   * 从富文本（post）消息中提取文本
-   */
-  private extractPostText(parsed: Record<string, unknown>): string {
-    // post 格式：{ title?, content: [[{ tag, text?, ... }]] } 或 { zh_cn: { title?, content: [...] } }
-    const postBody = (parsed.zh_cn || parsed.en_us || parsed) as Record<string, unknown>
-    const title = (postBody.title as string) || ''
-    const contentBlocks = (postBody.content || []) as Array<Array<Record<string, unknown>>>
-
-    const parts: string[] = []
-    if (title) parts.push(title)
-
-    for (const paragraph of contentBlocks) {
-      const paraTexts: string[] = []
-      for (const element of paragraph) {
-        if (element.tag === 'text') {
-          paraTexts.push(element.text as string)
-        } else if (element.tag === 'a') {
-          paraTexts.push((element.text as string) || (element.href as string) || '')
-        } else if (element.tag === 'at') {
-          // @提及：保留 @name 格式
-          if (element.user_name) {
-            paraTexts.push(`@${element.user_name}`)
-          }
-        } else if (element.tag === 'img') {
-          paraTexts.push('[图片]')
-        }
-      }
-      if (paraTexts.length > 0) {
-        parts.push(paraTexts.join(''))
-      }
-    }
-
-    return parts.join('\n')
-  }
-
-  /**
-   * 去除消息文本中对 bot 自身的 @提及
-   */
-  private stripBotMention(
-    text: string,
-    mentions: NonNullable<FeishuMessageEvent['message']['mentions']>,
-  ): string {
-    let result = text
-    for (const mention of mentions) {
-      if (mention.id.open_id === this.botOpenId) {
-        // 去除 @bot 的占位符（如 @_user_1）和名称
-        result = result.replace(new RegExp(mention.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')
-      }
-    }
-    return result.trim()
   }
 
   async sendMessage(chatId: string, text: string): Promise<void> {
@@ -230,7 +264,7 @@ export class FeishuChannel implements Channel {
       const feishuChatId = chatId.replace(/^feishu:/, '')
 
       // 长消息分片
-      const chunks = this.chunkText(text, FEISHU_TEXT_CHUNK_LIMIT)
+      const chunks = chunkText(text, FEISHU_TEXT_CHUNK_LIMIT)
 
       for (const chunk of chunks) {
         // 判断是否包含代码块或表格，选择消息格式
@@ -287,20 +321,35 @@ export class FeishuChannel implements Channel {
     })
   }
 
-  /**
-   * 文本分片
-   */
-  private chunkText(text: string, limit: number): string[] {
-    if (text.length <= limit) return [text]
-    const chunks: string[] = []
-    for (let i = 0; i < text.length; i += limit) {
-      chunks.push(text.slice(i, i + limit))
+  private async addProcessingReaction(messageId: string, chatId: string): Promise<void> {
+    try {
+      const res = await this.client.im.messageReaction.create({
+        data: { reaction_type: { emoji_type: 'OnIt' } },
+        path: { message_id: messageId },
+      })
+      if (res?.data?.reaction_id) {
+        this.pendingReactions.set(chatId, { messageId, reactionId: res.data.reaction_id })
+      }
+    } catch (err) {
+      getLogger().debug({ error: err, messageId }, '添加飞书 reaction 失败')
     }
-    return chunks
+  }
+
+  private async removeProcessingReaction(chatId: string): Promise<void> {
+    const pending = this.pendingReactions.get(chatId)
+    if (!pending) return
+    this.pendingReactions.delete(chatId)
+    try {
+      await this.client.im.messageReaction.delete({
+        path: { message_id: pending.messageId, reaction_id: pending.reactionId },
+      })
+    } catch (err) {
+      getLogger().debug({ error: err, chatId }, '移除飞书 reaction 失败')
+    }
   }
 
   isConnected(): boolean {
-    return this.wsClient !== null
+    return this._connected
   }
 
   ownsChatId(chatId: string): boolean {
@@ -309,8 +358,18 @@ export class FeishuChannel implements Channel {
 
   async disconnect(): Promise<void> {
     const logger = getLogger()
+    if (this.unsubscribeEvents) {
+      this.unsubscribeEvents()
+      this.unsubscribeEvents = null
+    }
     if (this.wsClient) {
+      try {
+        this.wsClient.close()
+      } catch {
+        // ignore close errors
+      }
       this.wsClient = null
+      this._connected = false
       logger.info('飞书 WebSocket 连接已关闭')
     }
   }

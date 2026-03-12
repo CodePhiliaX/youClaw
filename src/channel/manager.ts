@@ -9,6 +9,7 @@ import type { ChannelRecord } from '../db/index.ts'
 import type { Channel, OnInboundMessage, ChannelStatus } from './types.ts'
 import type { MessageRouter } from './router.ts'
 import type { EnvConfig } from '../config/index.ts'
+import type { EventBus } from '../events/bus.ts'
 
 interface ManagedChannel {
   record: ChannelRecord
@@ -26,10 +27,12 @@ export class ChannelManager {
   private managed: Map<string, ManagedChannel> = new Map()
   private router: MessageRouter
   private onMessage: OnInboundMessage
+  private eventBus: EventBus | null = null
 
-  constructor(router: MessageRouter, onMessage: OnInboundMessage) {
+  constructor(router: MessageRouter, onMessage: OnInboundMessage, eventBus?: EventBus) {
     this.router = router
     this.onMessage = onMessage
+    this.eventBus = eventBus ?? null
   }
 
   /**
@@ -261,7 +264,7 @@ export class ChannelManager {
   private async startChannel(record: ChannelRecord): Promise<void> {
     const logger = getLogger()
 
-    const instance = createChannelFromRecord(record, this.onMessage)
+    const instance = createChannelFromRecord(record, this.onMessage, this.eventBus ?? undefined)
 
     const managed: ManagedChannel = {
       record,
@@ -337,7 +340,7 @@ export class ChannelManager {
       if (!record || !record.enabled) return
 
       try {
-        const instance = createChannelFromRecord(record, this.onMessage)
+        const instance = createChannelFromRecord(record, this.onMessage, this.eventBus ?? undefined)
         current.instance = instance
         current.record = record
         await instance.connect()
