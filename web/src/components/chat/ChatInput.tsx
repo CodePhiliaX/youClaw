@@ -118,12 +118,12 @@ export function ChatInput() {
                   value={selectedProfileId ?? '__none__'}
                   onValueChange={v => setSelectedProfileId(v === '__none__' ? null : v)}
                 >
-                  <PromptInputSelectTrigger className="h-7 text-xs gap-1">
+                  <PromptInputSelectTrigger className="h-7 text-xs gap-1" data-testid="chat-browser-profile-trigger">
                     <Globe className="h-3.5 w-3.5" />
                     <PromptInputSelectValue />
                   </PromptInputSelectTrigger>
                   <PromptInputSelectContent>
-                    <PromptInputSelectItem value="__none__">
+                    <PromptInputSelectItem value="__none__" data-testid="chat-browser-profile-none">
                       {t.chat.noBrowserProfile}
                     </PromptInputSelectItem>
                     {browserProfiles.map(p => (
