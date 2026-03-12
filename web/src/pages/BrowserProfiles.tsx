@@ -49,6 +49,7 @@ export function BrowserProfiles() {
               <span className="text-xs text-muted-foreground">({profiles.length})</span>
             </div>
             <button
+              data-testid="browser-create-btn"
               onClick={() => {
                 setSelectedId(null)
                 setShowCreate(true)
@@ -75,6 +76,7 @@ export function BrowserProfiles() {
               {profiles.map((profile) => (
                 <div
                   key={profile.id}
+                  data-testid="browser-profile-item"
                   onClick={() => {
                     setSelectedId(profile.id)
                     setShowCreate(false)
@@ -142,11 +144,12 @@ function ProfileDetail({
   const { t } = useI18n()
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6" data-testid="browser-profile-detail">
       <div className="flex items-start justify-between">
-        <h2 className="text-lg font-semibold">{profile.name}</h2>
+        <h2 className="text-lg font-semibold" data-testid="browser-profile-name">{profile.name}</h2>
         <div className="flex items-center gap-1">
           <button
+            data-testid="browser-launch-btn"
             onClick={onLaunch}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           >
@@ -154,6 +157,7 @@ function ProfileDetail({
             {t.browser.launch}
           </button>
           <button
+            data-testid="browser-delete-btn"
             onClick={onDelete}
             className="p-2 rounded hover:bg-destructive/20 text-muted-foreground hover:text-red-400 transition-colors"
             title={t.common.delete}
@@ -230,6 +234,7 @@ function CreateProfileForm({
           <label className="block text-xs text-muted-foreground mb-1">{t.browser.profileName}</label>
           <input
             type="text"
+            data-testid="browser-input-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t.browser.profileNamePlaceholder}
@@ -243,6 +248,7 @@ function CreateProfileForm({
         <div className="flex gap-2 pt-2">
           <button
             type="submit"
+            data-testid="browser-submit-btn"
             disabled={submitting || !name.trim()}
             className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
@@ -250,6 +256,7 @@ function CreateProfileForm({
           </button>
           <button
             type="button"
+            data-testid="browser-cancel-btn"
             onClick={onCancel}
             className="px-4 py-2 text-sm rounded-md border border-border text-muted-foreground hover:bg-accent transition-colors"
           >
