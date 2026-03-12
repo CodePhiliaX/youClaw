@@ -11,6 +11,10 @@ import {
   PromptInputSelectContent,
   PromptInputSelectItem,
   PromptInputSelectValue,
+  PromptInputActionMenu,
+  PromptInputActionMenuTrigger,
+  PromptInputActionMenuContent,
+  PromptInputActionAddAttachments,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
 import { Bot, Globe } from "lucide-react";
@@ -55,6 +59,12 @@ export function ChatInput() {
           />
           <PromptInputFooter>
             <PromptInputTools>
+              <PromptInputActionMenu>
+                <PromptInputActionMenuTrigger />
+                <PromptInputActionMenuContent>
+                  <PromptInputActionAddAttachments />
+                </PromptInputActionMenuContent>
+              </PromptInputActionMenu>
               {agents.length > 1 && (
                 <PromptInputSelect value={agentId} onValueChange={setAgentId}>
                   <PromptInputSelectTrigger className="h-7 text-xs gap-1">
