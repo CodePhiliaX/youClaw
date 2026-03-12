@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, ty
 import { useChat, type Message, type ToolUseItem } from './useChat'
 import { getChats, getAgents, deleteChat as deleteChatApi, getBrowserProfiles, type BrowserProfileDTO } from '../api/client'
 import type { ChatItem } from '../lib/chat-utils'
+import type { Attachment } from '../types/attachment'
 
 type Agent = { id: string; name: string }
 
@@ -13,7 +14,7 @@ interface ChatContextType {
   isProcessing: boolean
   pendingToolUse: ToolUseItem[]
   chatStatus: 'submitted' | 'streaming' | 'ready' | 'error'
-  send: (prompt: string, browserProfileId?: string) => Promise<void>
+  send: (prompt: string, browserProfileId?: string, attachments?: Attachment[]) => Promise<void>
   loadChat: (chatId: string) => Promise<void>
   newChat: () => void
   stop: () => void
