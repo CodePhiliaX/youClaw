@@ -1,4 +1,5 @@
 import { getBackendBaseUrl } from './transport'
+import type { Attachment } from '../types/attachment'
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const base = await getBackendBaseUrl()
@@ -11,10 +12,10 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
 }
 
 // 发消息给 agent
-export async function sendMessage(agentId: string, prompt: string, chatId?: string, browserProfileId?: string) {
+export async function sendMessage(agentId: string, prompt: string, chatId?: string, browserProfileId?: string, attachments?: Attachment[]) {
   return apiFetch<{ chatId: string; status: string }>(`/api/agents/${agentId}/message`, {
     method: 'POST',
-    body: JSON.stringify({ prompt, chatId, browserProfileId }),
+    body: JSON.stringify({ prompt, chatId, browserProfileId, attachments }),
   })
 }
 
@@ -25,7 +26,7 @@ export async function getChats() {
 
 // 获取消息历史
 export async function getMessages(chatId: string) {
-  return apiFetch<Array<{ id: string; chat_id: string; sender: string; sender_name: string; content: string; timestamp: string; is_from_me: number; is_bot_message: number }>>(`/api/chats/${encodeURIComponent(chatId)}/messages`)
+  return apiFetch<Array<{ id: string; chat_id: string; sender: string; sender_name: string; content: string; timestamp: string; is_from_me: number; is_bot_message: number; attachments: Attachment[] | null }>>(`/api/chats/${encodeURIComponent(chatId)}/messages`)
 }
 
 // 删除聊天
