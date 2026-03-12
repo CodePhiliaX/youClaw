@@ -172,9 +172,22 @@ export function System() {
           />
           <StatusCard
             icon={Send}
-            label={t.system.telegram}
-            value={status.telegram.connected ? t.system.connected : t.system.disconnected}
-            status={status.telegram.connected ? 'ok' : 'off'}
+            label={t.system.channels}
+            value={
+              status.channels && status.channels.length > 0
+                ? `${status.channels.filter((c) => c.connected).length} / ${status.channels.length}`
+                : status.telegram.connected ? t.system.connected : t.system.disconnected
+            }
+            sub={
+              status.channels && status.channels.length > 0
+                ? status.channels.map((c) => c.name).join(', ')
+                : undefined
+            }
+            status={
+              status.channels && status.channels.some((c) => c.connected)
+                ? 'ok'
+                : status.telegram.connected ? 'ok' : 'off'
+            }
           />
           <StatusCard
             icon={Database}

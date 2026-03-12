@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { MessageSquare, Bot, CalendarClock, Brain, Puzzle, Globe, ScrollText, Settings } from 'lucide-react'
+import { MessageSquare, Bot, CalendarClock, Brain, Puzzle, Radio, Globe, ScrollText, Settings } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useI18n } from '../../i18n'
 
@@ -12,6 +12,7 @@ export function Sidebar() {
     { to: '/cron', icon: CalendarClock, label: t.nav.tasks, testId: 'nav-cron' },
     { to: '/memory', icon: Brain, label: t.nav.memory, testId: 'nav-memory' },
     { to: '/skills', icon: Puzzle, label: t.nav.skills, testId: 'nav-skills' },
+    { to: '/channels', icon: Radio, label: t.nav.channels, testId: 'nav-channels' },
     { to: '/browser', icon: Globe, label: t.nav.browser, testId: 'nav-browser' },
     { to: '/logs', icon: ScrollText, label: t.nav.logs, testId: 'nav-logs' },
     { to: '/system', icon: Settings, label: t.nav.system, testId: 'nav-system' },

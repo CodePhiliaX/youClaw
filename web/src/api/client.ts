@@ -405,3 +405,35 @@ export async function getLogEntries(date: string, params?: {
   const q = qs.toString()
   return apiFetch<LogQueryResult>(`/api/logs/${date}${q ? `?${q}` : ''}`)
 }
+
+// ===== Channels API =====
+
+export interface ChannelEnvKey {
+  key: string
+  label: string
+  placeholder: string
+  secret: boolean
+}
+
+export interface ChannelDefinition {
+  id: string
+  label: string
+  description: string
+  chatIdPrefix: string
+  envKeys: ChannelEnvKey[]
+  docsUrl: string
+  connected: boolean
+  configured: boolean
+  envValues: Record<string, { value: string; configured: boolean }>
+}
+
+export async function getChannels() {
+  return apiFetch<ChannelDefinition[]>('/api/channels')
+}
+
+export async function updateChannelEnv(key: string, value: string) {
+  return apiFetch<{ ok: boolean; needsRestart: boolean }>('/api/channels/env', {
+    method: 'PUT',
+    body: JSON.stringify({ key, value }),
+  })
+}
