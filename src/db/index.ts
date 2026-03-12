@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { getPaths } from '../config/index.ts'
@@ -74,6 +74,16 @@ CREATE TABLE IF NOT EXISTS browser_profiles (
 );
 `
 
+// node:sqlite 查询结果类型辅助
+function queryAll<T>(db: DatabaseSync, sql: string, ...params: SQLInputValue[]): T[] {
+  return db.prepare(sql).all(...params) as unknown as T[]
+}
+
+function queryGet<T>(db: DatabaseSync, sql: string, ...params: SQLInputValue[]): T | null {
+  const row = db.prepare(sql).get(...params)
+  return (row as unknown as T) ?? null
+}
+
 export function initDatabase(): DatabaseSync {
   if (_db) return _db
 
@@ -136,13 +146,13 @@ export function getMessages(chatId: string, limit = 50, before?: string): Array<
 }> {
   const db = getDatabase()
   if (before) {
-    return db.prepare(
-      `SELECT * FROM messages WHERE chat_id = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?`
-    ).all(chatId, before, limit) as any
+    return queryAll(db,
+      `SELECT * FROM messages WHERE chat_id = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?`,
+      chatId, before, limit)
   }
-  return db.prepare(
-    `SELECT * FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ?`
-  ).all(chatId, limit) as any
+  return queryAll(db,
+    `SELECT * FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ?`,
+    chatId, limit)
 }
 
 // ===== Chat 操作 =====
@@ -162,7 +172,7 @@ export function getChats(): Array<{
   chat_id: string; name: string; agent_id: string; channel: string; last_message_time: string
 }> {
   const db = getDatabase()
-  return db.prepare('SELECT * FROM chats ORDER BY last_message_time DESC').all() as any
+  return queryAll(db, 'SELECT * FROM chats ORDER BY last_message_time DESC')
 }
 
 export function deleteChat(chatId: string) {
@@ -175,7 +185,7 @@ export function deleteChat(chatId: string) {
 
 export function getSession(agentId: string, chatId: string): string | null {
   const db = getDatabase()
-  const row = db.prepare('SELECT session_id FROM sessions WHERE agent_id = ? AND chat_id = ?').get(agentId, chatId) as any
+  const row = queryGet<{ session_id: string }>(db, 'SELECT session_id FROM sessions WHERE agent_id = ? AND chat_id = ?', agentId, chatId)
   return row?.session_id ?? null
 }
 
@@ -243,12 +253,12 @@ export function createTask(task: {
 
 export function getTasks(): ScheduledTask[] {
   const db = getDatabase()
-  return db.prepare('SELECT * FROM scheduled_tasks ORDER BY created_at DESC').all() as ScheduledTask[]
+  return queryAll<ScheduledTask>(db, 'SELECT * FROM scheduled_tasks ORDER BY created_at DESC')
 }
 
 export function getTask(id: string): ScheduledTask | null {
   const db = getDatabase()
-  return (db.prepare('SELECT * FROM scheduled_tasks WHERE id = ?').get(id) as ScheduledTask | null) ?? null
+  return queryGet<ScheduledTask>(db, 'SELECT * FROM scheduled_tasks WHERE id = ?', id)
 }
 
 export function updateTask(id: string, updates: Partial<{
@@ -300,17 +310,17 @@ export function deleteTask(id: string): void {
 
 export function getTasksDueBy(time: string): ScheduledTask[] {
   const db = getDatabase()
-  return db.prepare(
-    `SELECT * FROM scheduled_tasks WHERE status = 'active' AND next_run IS NOT NULL AND next_run <= ? AND running_since IS NULL`
-  ).all(time) as ScheduledTask[]
+  return queryAll<ScheduledTask>(db,
+    `SELECT * FROM scheduled_tasks WHERE status = 'active' AND next_run IS NOT NULL AND next_run <= ? AND running_since IS NULL`,
+    time)
 }
 
 /** 查询卡住的任务（running_since 早于阈值） */
 export function getStuckTasks(cutoffIso: string): ScheduledTask[] {
   const db = getDatabase()
-  return db.prepare(
-    `SELECT * FROM scheduled_tasks WHERE running_since IS NOT NULL AND running_since <= ?`
-  ).all(cutoffIso) as ScheduledTask[]
+  return queryAll<ScheduledTask>(db,
+    `SELECT * FROM scheduled_tasks WHERE running_since IS NOT NULL AND running_since <= ?`,
+    cutoffIso)
 }
 
 /** 清理超期运行日志 */
@@ -318,7 +328,7 @@ export function pruneOldTaskRunLogs(retainDays: number): number {
   const db = getDatabase()
   const cutoff = new Date(Date.now() - retainDays * 24 * 60 * 60 * 1000).toISOString()
   const result = db.prepare('DELETE FROM task_run_logs WHERE run_at < ?').run(cutoff)
-  return result.changes
+  return Number(result.changes)
 }
 
 // ===== 运行日志 =====
@@ -341,9 +351,9 @@ export function saveTaskRunLog(log: {
 
 export function getTaskRunLogs(taskId: string, limit = 50): TaskRunLog[] {
   const db = getDatabase()
-  return db.prepare(
-    'SELECT * FROM task_run_logs WHERE task_id = ? ORDER BY run_at DESC LIMIT ?'
-  ).all(taskId, limit) as TaskRunLog[]
+  return queryAll<TaskRunLog>(db,
+    'SELECT * FROM task_run_logs WHERE task_id = ? ORDER BY run_at DESC LIMIT ?',
+    taskId, limit)
 }
 
 // ===== 浏览器 Profile 操作 =====
@@ -363,12 +373,12 @@ export function createBrowserProfile(profile: { id: string; name: string }): voi
 
 export function getBrowserProfiles(): BrowserProfile[] {
   const db = getDatabase()
-  return db.prepare('SELECT * FROM browser_profiles ORDER BY created_at DESC').all() as BrowserProfile[]
+  return queryAll<BrowserProfile>(db, 'SELECT * FROM browser_profiles ORDER BY created_at DESC')
 }
 
 export function getBrowserProfile(id: string): BrowserProfile | null {
   const db = getDatabase()
-  return (db.prepare('SELECT * FROM browser_profiles WHERE id = ?').get(id) as BrowserProfile | null) ?? null
+  return queryGet<BrowserProfile>(db, 'SELECT * FROM browser_profiles WHERE id = ?', id)
 }
 
 export function deleteBrowserProfile(id: string): void {
@@ -382,7 +392,7 @@ export type SkillSettings = Record<string, { enabled: boolean }>
 
 export function getSkillSettings(): SkillSettings {
   const db = getDatabase()
-  const row = db.prepare("SELECT value FROM kv_state WHERE key = 'skill_settings'").get() as { value: string } | null
+  const row = queryGet<{ value: string }>(db, "SELECT value FROM kv_state WHERE key = 'skill_settings'")
   if (!row) return {}
   try {
     return JSON.parse(row.value) as SkillSettings
