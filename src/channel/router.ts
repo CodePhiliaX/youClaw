@@ -127,6 +127,14 @@ export class MessageRouter {
     }
   }
 
+  // 获取所有已注册 channel 的状态
+  getChannelStatuses(): Array<{ name: string; connected: boolean }> {
+    return this.channels.map((ch) => ({
+      name: ch.name,
+      connected: ch.isConnected(),
+    }))
+  }
+
   // 根据 chatId 前缀推断 channel 名称
   private inferChannel(chatId: string): string {
     for (const ch of this.channels) {
