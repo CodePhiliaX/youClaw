@@ -1,12 +1,20 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { sendMessage, getMessages } from '../api/client'
 import { useSSE } from './useSSE'
+
+export type ToolUseItem = {
+  id: string
+  name: string
+  input?: string
+  status: 'running' | 'done'
+}
 
 export type Message = {
   id: string
   role: 'user' | 'assistant'
   content: string
   timestamp: string
+  toolUse?: ToolUseItem[]  // 新增
 }
 
 export function useChat(agentId: string) {
@@ -14,25 +22,47 @@ export function useChat(agentId: string) {
   const [messages, setMessages] = useState<Message[]>([])
   const [streamingText, setStreamingText] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
+  const [pendingToolUse, setPendingToolUse] = useState<ToolUseItem[]>([])
+  const [chatStatus, setChatStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready')
 
-  useSSE(chatId, (event) => {
+  const pendingToolUseRef = useRef<ToolUseItem[]>([])
+  useEffect(() => { pendingToolUseRef.current = pendingToolUse }, [pendingToolUse])
+
+  const { close: closeSSE } = useSSE(chatId, (event) => {
     switch (event.type) {
       case 'stream':
         setStreamingText(prev => prev + (event.text ?? ''))
         break
-      case 'complete':
+      case 'tool_use':
+        setPendingToolUse(prev => {
+          const updated = prev.map(t => t.status === 'running' ? { ...t, status: 'done' as const } : t)
+          return [...updated, {
+            id: Date.now().toString(),
+            name: event.tool ?? 'unknown',
+            input: event.input,
+            status: 'running',
+          }]
+        })
+        break
+      case 'complete': {
+        const finalToolUse = pendingToolUseRef.current.map(t => ({ ...t, status: 'done' as const }))
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'assistant',
           content: event.fullText ?? '',
           timestamp: new Date().toISOString(),
+          toolUse: finalToolUse.length > 0 ? finalToolUse : undefined,
         }])
         setStreamingText('')
+        setPendingToolUse([])
         break
+      }
       case 'processing':
         setIsProcessing(event.isProcessing ?? false)
         break
       case 'error':
+        setChatStatus('error')
+        setTimeout(() => setChatStatus('ready'), 2000)
         // 显示错误信息给用户，而不是静默吞掉
         if (event.error) {
           setMessages(prev => [...prev, {
@@ -47,6 +77,12 @@ export function useChat(agentId: string) {
         break
     }
   })
+
+  useEffect(() => {
+    if (isProcessing && !streamingText) setChatStatus('submitted')
+    else if (isProcessing && streamingText) setChatStatus('streaming')
+    else setChatStatus('ready')
+  }, [isProcessing, streamingText])
 
   const send = useCallback(async (prompt: string) => {
     // 添加用户消息到列表
@@ -93,7 +129,15 @@ export function useChat(agentId: string) {
     setMessages([])
     setStreamingText('')
     setIsProcessing(false)
+    setPendingToolUse([])
   }, [])
 
-  return { chatId, messages, streamingText, isProcessing, send, loadChat, newChat }
+  const stop = useCallback(() => {
+    closeSSE()
+    setIsProcessing(false)
+    setStreamingText('')
+    setPendingToolUse([])
+  }, [closeSSE])
+
+  return { chatId, messages, streamingText, isProcessing, pendingToolUse, chatStatus, send, loadChat, newChat, stop }
 }
