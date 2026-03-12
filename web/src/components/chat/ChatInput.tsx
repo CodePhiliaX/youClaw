@@ -1,5 +1,5 @@
-import { useI18n } from '@/i18n'
-import { useChatContext } from '@/hooks/useChatContext'
+import { useI18n } from "@/i18n";
+import { useChatContext } from "@/hooks/useChatContext";
 import {
   PromptInput,
   PromptInputTextarea,
@@ -12,21 +12,22 @@ import {
   PromptInputSelectItem,
   PromptInputSelectValue,
   type PromptInputMessage,
-} from '@/components/ai-elements/prompt-input'
-import { Bot } from 'lucide-react'
+} from "@/components/ai-elements/prompt-input";
+import { Bot } from "lucide-react";
 
 export function ChatInput() {
-  const { t } = useI18n()
-  const { send, chatStatus, stop, agentId, setAgentId, agents } = useChatContext()
+  const { t } = useI18n();
+  const { send, chatStatus, stop, agentId, setAgentId, agents } =
+    useChatContext();
 
   const handleSubmit = (msg: PromptInputMessage) => {
-    const text = msg.text.trim()
-    if (!text) return
-    send(text)
-  }
+    const text = msg.text.trim();
+    if (!text) return;
+    send(text);
+  };
 
   return (
-    <div className="border-t border-border bg-background">
+    <div className="bg-background">
       <div className="max-w-3xl mx-auto px-4 py-3">
         <PromptInput onSubmit={handleSubmit}>
           <PromptInputTextarea
@@ -42,7 +43,7 @@ export function ChatInput() {
                     <PromptInputSelectValue />
                   </PromptInputSelectTrigger>
                   <PromptInputSelectContent>
-                    {agents.map(a => (
+                    {agents.map((a) => (
                       <PromptInputSelectItem key={a.id} value={a.id}>
                         {a.name}
                       </PromptInputSelectItem>
@@ -60,5 +61,5 @@ export function ChatInput() {
         </PromptInput>
       </div>
     </div>
-  )
+  );
 }
