@@ -110,7 +110,7 @@ export class TelegramChannel implements Channel {
     })
 
     // 以 Long Polling 模式启动
-    return new Promise<void>((resolve) => {
+    return new Promise<void>((resolve, reject) => {
       this.bot!.start({
         onStart: (botInfo) => {
           logger.info(
@@ -119,6 +119,11 @@ export class TelegramChannel implements Channel {
           )
           resolve()
         },
+      }).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err)
+        logger.error({ err: msg }, 'Telegram bot failed to start')
+        this.bot = null
+        reject(new Error(`Telegram bot failed to start: ${msg}`))
       })
     })
   }
