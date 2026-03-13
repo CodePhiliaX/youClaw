@@ -45,7 +45,8 @@ export function createApp(deps: AppDeps) {
       'http://localhost:5173',
       'http://localhost:3000',
       'tauri://localhost',        // macOS Tauri WebView
-      'https://tauri.localhost',  // Windows/Linux Tauri WebView
+      'http://tauri.localhost',   // Windows Tauri WebView
+      'https://tauri.localhost',  // Linux Tauri WebView
     ],
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowHeaders: ['Content-Type'],

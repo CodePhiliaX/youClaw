@@ -240,7 +240,6 @@ pub fn run() {
         ])
         .setup(|app| {
             // debug 模式自动打开 DevTools
-            #[cfg(debug_assertions)]
             if let Some(win) = app.get_webview_window("main") {
                 win.open_devtools();
             }

@@ -4,8 +4,9 @@ import { getEnv } from './env.ts'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// bun build --compile 后 __dirname 在虚拟 FS /$bunfs/root/ 下
-const isBunCompiled = __dirname.includes('/$bunfs/')
+// bun build --compile 后 __dirname 在虚拟 FS 下
+// macOS/Linux: /$bunfs/root/  Windows: B:\~BUN\root
+const isBunCompiled = __dirname.includes('/$bunfs/') || __dirname.includes('~BUN')
 
 // 开发模式：项目根目录
 export const ROOT_DIR = isBunCompiled

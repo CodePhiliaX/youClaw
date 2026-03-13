@@ -177,6 +177,7 @@ async function main() {
   const server = Bun.serve({
     fetch: app.fetch,
     port: env.PORT,
+    hostname: '127.0.0.1',  // 只监听本地，避免 Windows 防火墙弹窗
   })
 
   logger.info({ port: env.PORT }, `HTTP 服务已启动: http://localhost:${env.PORT}`)

@@ -39,32 +39,25 @@ export function getBaseUrlSync(): string {
   return _cachedBaseUrl ?? 'http://localhost:3000'
 }
 
-/** 应用启动时调用一次，预加载 baseUrl。Tauri 模式下等待 sidecar ready 事件获取端口 */
+/** 应用启动时调用一次，预加载 baseUrl。优先从 store 快速读取，同时监听 sidecar ready 事件更新端口 */
 export async function initBaseUrl(): Promise<void> {
   if (!isTauri) return
 
+  // 先从 store 快速读取端口，不阻塞渲染
+  await getBackendBaseUrl()
+
+  // 同时监听 sidecar-event，如果 sidecar 重启或端口变更则更新缓存
   try {
     const { listen } = await import('@tauri-apps/api/event')
-    await new Promise<void>((resolve) => {
-      // 最多等 30s，超时后从 store 读取兜底
-      const timeout = setTimeout(async () => {
-        await getBackendBaseUrl()
-        resolve()
-      }, 30000)
-
-      listen<{ status: string; message: string }>('sidecar-event', (event) => {
-        if (event.payload.status === 'ready') {
-          clearTimeout(timeout)
-          // 从 "Backend ready on port XXXXX" 提取端口
-          const match = event.payload.message.match(/port\s+(\d+)/)
-          if (match) {
-            _cachedBaseUrl = `http://localhost:${match[1]}`
-          }
-          resolve()
+    listen<{ status: string; message: string }>('sidecar-event', (event) => {
+      if (event.payload.status === 'ready') {
+        const match = event.payload.message.match(/port\s+(\d+)/)
+        if (match) {
+          _cachedBaseUrl = `http://localhost:${match[1]}`
         }
-      })
+      }
     })
   } catch {
-    await getBackendBaseUrl()
+    // 监听失败不影响启动
   }
 }
