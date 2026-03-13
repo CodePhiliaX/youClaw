@@ -56,6 +56,11 @@ export async function navigateToBrowser(page: Page) {
   await page.waitForLoadState('networkidle')
 }
 
+/** 通过 API 启动浏览器 Profile（不断言状态码） */
+export async function launchProfileViaAPI(request: APIRequestContext, id: string) {
+  return request.post(`${API_BASE}/api/browser-profiles/${encodeURIComponent(id)}/launch`)
+}
+
 /** 通过 UI 创建 Profile */
 export async function createProfileUI(page: Page, name: string) {
   await page.getByTestId('browser-create-btn').click()

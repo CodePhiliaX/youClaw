@@ -102,26 +102,20 @@ test.describe('Browser Profiles: CRUD 操作', () => {
     await expect(page.getByTestId('browser-profile-item').filter({ hasText: name })).toBeVisible({ timeout: 5_000 })
   })
 
-  test('通过 API 创建多个 Profile 并在 UI 全部可见', async ({ page, request }) => {
+  test('通过 UI 连续创建多个 Profile 均可见', async ({ page }) => {
     const names = [
       `E2E-multi-${Date.now()}-a`,
       `E2E-multi-${Date.now()}-b`,
       `E2E-multi-${Date.now()}-c`,
     ]
 
+    // 通过 UI 创建，避免 reload 时被并行 worker 清理
     for (const name of names) {
-      await createProfileViaAPI(request, name)
+      await createProfileUI(page, name)
     }
 
-    await page.reload()
-    await page.waitForLoadState('networkidle')
-
     for (const name of names) {
-      await expect(page.getByTestId('browser-profile-item').filter({ hasText: name })).toBeVisible()
+      await expect(page.getByTestId('browser-profile-item').filter({ hasText: name })).toBeVisible({ timeout: 5_000 })
     }
-
-    // 数量至少为 3
-    const count = await page.getByTestId('browser-profile-item').count()
-    expect(count).toBeGreaterThanOrEqual(3)
   })
 })
