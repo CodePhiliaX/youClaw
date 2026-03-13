@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { sendMessage, getMessages } from '../api/client'
 import { useSSE } from './useSSE'
+import type { Attachment } from '../types/attachment'
 
 export type ToolUseItem = {
   id: string
@@ -15,6 +16,7 @@ export type Message = {
   content: string
   timestamp: string
   toolUse?: ToolUseItem[]  // 新增
+  attachments?: Attachment[]
 }
 
 export function useChat(agentId: string) {
@@ -85,18 +87,19 @@ export function useChat(agentId: string) {
     else setChatStatus('ready')
   }, [isProcessing, streamingText, chatStatus])
 
-  const send = useCallback(async (prompt: string, browserProfileId?: string) => {    // 添加用户消息到列表
+  const send = useCallback(async (prompt: string, browserProfileId?: string, attachments?: Attachment[]) => {    // 添加用户消息到列表
     setMessages(prev => [...prev, {
       id: Date.now().toString(),
       role: 'user',
       content: prompt,
       timestamp: new Date().toISOString(),
+      attachments,
     }])
     setIsProcessing(true)
     setStreamingText('')
 
     try {
-      const result = await sendMessage(agentId, prompt, chatId ?? undefined, browserProfileId)
+      const result = await sendMessage(agentId, prompt, chatId ?? undefined, browserProfileId, attachments)
       if (!chatId) {
         setChatId(result.chatId)
       }
@@ -121,6 +124,7 @@ export function useChat(agentId: string) {
       role: m.is_bot_message ? 'assistant' as const : 'user' as const,
       content: m.content,
       timestamp: m.timestamp,
+      attachments: (m as { attachments?: Attachment[] | null }).attachments ?? undefined,
     })))
   }, [])
 

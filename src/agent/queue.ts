@@ -7,6 +7,7 @@ interface QueueItem {
   prompt: string
   requestedSkills?: string[]
   browserProfileId?: string
+  attachments?: Array<{ filename: string; mediaType: string; data: string; size: number }>
   resolve: (result: string) => void
   reject: (error: Error) => void
 }
@@ -33,11 +34,11 @@ export class AgentQueue {
   /**
    * 入队消息，返回 agent 回复
    */
-  async enqueue(agentId: string, chatId: string, prompt: string, requestedSkills?: string[], browserProfileId?: string): Promise<string> {
+  async enqueue(agentId: string, chatId: string, prompt: string, requestedSkills?: string[], browserProfileId?: string, attachments?: Array<{ filename: string; mediaType: string; data: string; size: number }>): Promise<string> {
     return new Promise<string>((resolve, reject) => {
       const chatKey = `${agentId}:${chatId}`
       const queue = this.chatQueues.get(chatKey) ?? []
-      queue.push({ agentId, chatId, prompt, requestedSkills, browserProfileId, resolve, reject })
+      queue.push({ agentId, chatId, prompt, requestedSkills, browserProfileId, attachments, resolve, reject })
       this.chatQueues.set(chatKey, queue)
 
       // 更新 agent state 的 queueDepth
@@ -136,6 +137,7 @@ export class AgentQueue {
         agentId: item.agentId,
         requestedSkills: item.requestedSkills,
         browserProfileId: item.browserProfileId,
+        attachments: item.attachments,
       })
 
       // 更新 agent state

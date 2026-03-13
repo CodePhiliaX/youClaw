@@ -1,32 +1,47 @@
 import { Hono } from 'hono'
 import { randomUUID } from 'node:crypto'
+import { z } from 'zod/v4'
+import { bodyLimit } from 'hono/body-limit'
 import { getMessages, getChats, deleteChat } from '../db/index.ts'
 import type { AgentManager, AgentQueue } from '../agent/index.ts'
 import type { MessageRouter } from '../channel/index.ts'
 import type { InboundMessage } from '../channel/index.ts'
+import { ALLOWED_MEDIA_TYPES, MAX_FILE_SIZE, MAX_FILES } from '../types/attachment.ts'
 
 export function createMessagesRoutes(agentManager: AgentManager, agentQueue: AgentQueue, router: MessageRouter) {
   const messages = new Hono()
 
   // POST /api/agents/:id/message — 发消息给 agent
-  messages.post('/agents/:id/message', async (c) => {
+  messages.post('/agents/:id/message', bodyLimit({ maxSize: 75 * 1024 * 1024 }), async (c) => {
     const agentId = c.req.param('id')
-    const body = await c.req.json<{ prompt: string; chatId?: string; skills?: string[]; browserProfileId?: string }>()
 
-    if (!body.prompt) {
-      return c.json({ error: 'prompt is required' }, 400)
+    const AttachmentSchema = z.object({
+      filename: z.string(),
+      mediaType: z.enum(ALLOWED_MEDIA_TYPES),
+      data: z.string(),
+      size: z.number().max(MAX_FILE_SIZE),
+    })
+    const BodySchema = z.object({
+      prompt: z.string().min(1),
+      chatId: z.string().optional(),
+      skills: z.array(z.string()).optional(),
+      browserProfileId: z.string().optional(),
+      attachments: z.array(AttachmentSchema).max(MAX_FILES).optional(),
+    })
+
+    const parseResult = BodySchema.safeParse(await c.req.json())
+    if (!parseResult.success) {
+      return c.json({ error: 'Invalid request', details: parseResult.error.issues }, 400)
     }
+    const body = parseResult.data
 
-    // 验证 agent 存在
     const managed = agentManager.getAgent(agentId)
     if (!managed) {
       return c.json({ error: 'Agent not found' }, 404)
     }
 
-    // 如果没有 chatId，创建一个新的 web chat
     const chatId = body.chatId ?? `web:${randomUUID()}`
 
-    // 构建 InboundMessage，通过 router 统一处理
     const inbound: InboundMessage = {
       id: randomUUID(),
       chatId,
@@ -38,12 +53,10 @@ export function createMessagesRoutes(agentManager: AgentManager, agentQueue: Age
       agentId,
       requestedSkills: body.skills,
       browserProfileId: body.browserProfileId,
+      attachments: body.attachments,
     }
 
-    // 后台处理（不阻塞请求）
     router.handleInbound(inbound)
-
-    // 立即返回 chatId，前端通过 SSE 获取流式回复
     return c.json({ chatId, status: 'processing' })
   })
 
@@ -59,8 +72,11 @@ export function createMessagesRoutes(agentManager: AgentManager, agentQueue: Age
     const before = c.req.query('before')
 
     const msgs = getMessages(chatId, limit, before ?? undefined)
-    // 返回时按时间正序
-    return c.json(msgs.reverse())
+    const parsed = msgs.map(m => ({
+      ...m,
+      attachments: m.attachments ? JSON.parse(m.attachments) : null,
+    }))
+    return c.json(parsed.reverse())
   })
 
   // DELETE /api/chats/:chatId — 删除对话及其消息

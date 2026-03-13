@@ -1,11 +1,21 @@
-import { User } from 'lucide-react'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Message as AIMessage, MessageContent } from '@/components/ai-elements/message'
-import { useI18n } from '@/i18n'
-import type { Message } from '@/hooks/useChat'
+import { User } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Message as AIMessage,
+  MessageContent,
+} from "@/components/ai-elements/message";
+import {
+  Attachments,
+  Attachment,
+  AttachmentPreview,
+  AttachmentInfo,
+} from "@/components/ai-elements/attachments";
+import { useI18n } from "@/i18n";
+import type { Message } from "@/hooks/useChat";
 
 export function UserMessage({ message }: { message: Message }) {
-  const { t } = useI18n()
+  const { t } = useI18n();
+  const attachments = message.attachments ?? [];
 
   return (
     <AIMessage from="user" data-testid="message-user">
@@ -19,14 +29,38 @@ export function UserMessage({ message }: { message: Message }) {
           <div className="text-xs font-medium text-muted-foreground mb-1.5">
             {t.chat.you}
             <span className="ml-2 text-[10px] opacity-60">
-              {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {new Date(message.timestamp).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </span>
           </div>
           <MessageContent>
-            <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+            <p className="text-sm whitespace-pre-wrap leading-relaxed">
+              {message.content}
+            </p>
           </MessageContent>
+          {attachments.length > 0 && (
+            <Attachments variant="grid" className="mt-2 ml-0">
+              {attachments.map((a, i) => (
+                <Attachment
+                  key={i}
+                  data={{
+                    id: String(i),
+                    type: "file" as const,
+                    filename: a.filename,
+                    mediaType: a.mediaType,
+                    url: `data:${a.mediaType};base64,${a.data}`,
+                  }}
+                >
+                  <AttachmentPreview />
+                  <AttachmentInfo />
+                </Attachment>
+              ))}
+            </Attachments>
+          )}
         </div>
       </div>
     </AIMessage>
-  )
+  );
 }

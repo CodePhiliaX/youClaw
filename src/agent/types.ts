@@ -21,6 +21,7 @@ export interface ProcessParams {
   agentId: string
   requestedSkills?: string[]
   browserProfileId?: string
+  attachments?: Array<{ filename: string; mediaType: string; data: string; size: number }>
 }
 
 export interface AgentInstance {

@@ -123,6 +123,9 @@ export function initDatabase(): Database {
   // 迁移：添加投递状态列到运行日志
   try { _db.exec('ALTER TABLE task_run_logs ADD COLUMN delivery_status TEXT') } catch {}
 
+  // 迁移：添加附件列
+  try { _db.exec('ALTER TABLE messages ADD COLUMN attachments TEXT') } catch {}
+
   getLogger().info({ path: paths.db }, '数据库初始化完成')
   return _db
 }
@@ -143,18 +146,19 @@ export function saveMessage(msg: {
   timestamp: string
   isFromMe: boolean
   isBotMessage: boolean
+  attachments?: string
 }) {
   const db = getDatabase()
   db.run(
-    `INSERT OR REPLACE INTO messages (id, chat_id, sender, sender_name, content, timestamp, is_from_me, is_bot_message)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [msg.id, msg.chatId, msg.sender, msg.senderName, msg.content, msg.timestamp, msg.isFromMe ? 1 : 0, msg.isBotMessage ? 1 : 0]
+    `INSERT OR REPLACE INTO messages (id, chat_id, sender, sender_name, content, timestamp, is_from_me, is_bot_message, attachments)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [msg.id, msg.chatId, msg.sender, msg.senderName, msg.content, msg.timestamp, msg.isFromMe ? 1 : 0, msg.isBotMessage ? 1 : 0, msg.attachments ?? null]
   )
 }
 
 export function getMessages(chatId: string, limit = 50, before?: string): Array<{
   id: string; chat_id: string; sender: string; sender_name: string
-  content: string; timestamp: string; is_from_me: number; is_bot_message: number
+  content: string; timestamp: string; is_from_me: number; is_bot_message: number; attachments: string | null
 }> {
   const db = getDatabase()
   if (before) {

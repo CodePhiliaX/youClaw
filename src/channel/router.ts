@@ -92,6 +92,7 @@ export class MessageRouter {
       timestamp: message.timestamp,
       isFromMe: false,
       isBotMessage: false,
+      attachments: message.attachments ? JSON.stringify(message.attachments) : undefined,
     })
 
     logger.info({ agentId: config.id, chatId: message.chatId, requestedSkills }, '路由消息到 agent')
@@ -104,6 +105,7 @@ export class MessageRouter {
         contentForAgent,
         requestedSkills.length > 0 ? requestedSkills : undefined,
         message.browserProfileId,
+        message.attachments,
       )
 
       // 存储 bot 回复

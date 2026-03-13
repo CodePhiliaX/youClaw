@@ -49,6 +49,7 @@ export function Channels() {
               onClick={() => setShowCreate(true)}
               className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
               title={t.channels.addChannel}
+              data-testid="channel-create-btn"
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
@@ -56,6 +57,7 @@ export function Channels() {
               onClick={fetchChannels}
               className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
               title={t.channels.refresh}
+              data-testid="channel-refresh-btn"
             >
               <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
             </button>
@@ -66,6 +68,7 @@ export function Channels() {
             <button
               key={ch.id}
               onClick={() => setSelected(ch.id)}
+              data-testid="channel-item"
               className={cn(
                 'flex items-center gap-3 w-full px-3 py-2.5 text-sm rounded-md text-left transition-colors group',
                 selected === ch.id
@@ -106,7 +109,7 @@ export function Channels() {
             </button>
           ))}
           {channels.length === 0 && !loading && (
-            <div className="text-center text-xs text-muted-foreground py-8">
+            <div className="text-center text-xs text-muted-foreground py-8" data-testid="channel-empty">
               {t.channels.noChannels}
             </div>
           )}
@@ -207,6 +210,7 @@ function CreateChannelForm({
           value={selectedType}
           onChange={(e) => setSelectedType(e.target.value)}
           className="w-full px-3 py-2 text-sm rounded-md bg-muted border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          data-testid="channel-select-type"
         >
           <option value="">{t.channels.selectType}</option>
           {types.map((ct) => (
@@ -225,6 +229,7 @@ function CreateChannelForm({
               onChange={(e) => setId(e.target.value)}
               placeholder={`${selectedType}-main`}
               className="w-full px-3 py-2 text-sm rounded-md bg-muted border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              data-testid="channel-input-id"
             />
             <p className="text-xs text-muted-foreground mt-1">{t.channels.idHint}</p>
           </div>
@@ -236,6 +241,7 @@ function CreateChannelForm({
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               className="w-full px-3 py-2 text-sm rounded-md bg-muted border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              data-testid="channel-input-label"
             />
           </div>
 
@@ -249,6 +255,7 @@ function CreateChannelForm({
                 onChange={(e) => setConfigValues({ ...configValues, [field.key]: e.target.value })}
                 placeholder={field.placeholder}
                 className="w-full px-3 py-2 text-sm rounded-md bg-muted border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                data-testid={`channel-input-config-${field.key}`}
               />
             </div>
           ))}
@@ -256,7 +263,7 @@ function CreateChannelForm({
       )}
 
       {error && (
-        <div className="text-sm text-red-400">{error}</div>
+        <div className="text-sm text-red-400" data-testid="channel-form-error">{error}</div>
       )}
 
       <div className="flex gap-2">
@@ -264,12 +271,14 @@ function CreateChannelForm({
           onClick={handleCreate}
           disabled={creating || !selectedType}
           className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+          data-testid="channel-submit-btn"
         >
           {creating ? t.channels.creating : t.common.create}
         </button>
         <button
           onClick={onCancel}
           className="px-4 py-2 text-sm rounded-md border border-border text-muted-foreground hover:bg-accent/50 transition-colors"
+          data-testid="channel-cancel-btn"
         >
           {t.common.cancel}
         </button>
@@ -293,34 +302,44 @@ function ChannelDetail({
   onDeleted: () => void
 }) {
   const [actionLoading, setActionLoading] = useState('')
+  const [actionError, setActionError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const handleConnect = async () => {
     setActionLoading('connect')
+    setActionError('')
     try {
       await connectChannel(channel.id)
       onUpdated()
-    } catch {} finally {
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err))
+    } finally {
       setActionLoading('')
     }
   }
 
   const handleDisconnect = async () => {
     setActionLoading('disconnect')
+    setActionError('')
     try {
       await disconnectChannel(channel.id)
       onUpdated()
-    } catch {} finally {
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err))
+    } finally {
       setActionLoading('')
     }
   }
 
   const handleDelete = async () => {
     setActionLoading('delete')
+    setActionError('')
     try {
       await deleteChannel(channel.id)
       onDeleted()
-    } catch {} finally {
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err))
+    } finally {
       setActionLoading('')
       setConfirmDelete(false)
     }
@@ -328,10 +347,13 @@ function ChannelDetail({
 
   const handleToggleEnabled = async () => {
     setActionLoading('toggle')
+    setActionError('')
     try {
       await updateChannel(channel.id, { enabled: !channel.enabled })
       onUpdated()
-    } catch {} finally {
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err))
+    } finally {
       setActionLoading('')
     }
   }
@@ -382,6 +404,7 @@ function ChannelDetail({
             onClick={handleDisconnect}
             disabled={!!actionLoading}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10 transition-colors disabled:opacity-50"
+            data-testid="channel-disconnect-btn"
           >
             <PowerOff className="h-3.5 w-3.5" />
             {t.channels.disconnect}
@@ -391,6 +414,7 @@ function ChannelDetail({
             onClick={handleConnect}
             disabled={!!actionLoading || !channel.enabled}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-green-500/30 text-green-400 hover:bg-green-500/10 transition-colors disabled:opacity-50"
+            data-testid="channel-connect-btn"
           >
             <Power className="h-3.5 w-3.5" />
             {t.channels.connect}
@@ -400,6 +424,7 @@ function ChannelDetail({
           onClick={handleToggleEnabled}
           disabled={!!actionLoading}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:bg-accent/50 transition-colors disabled:opacity-50"
+          data-testid="channel-toggle-btn"
         >
           {channel.enabled ? t.channels.disable : t.channels.enable}
         </button>
@@ -407,6 +432,7 @@ function ChannelDetail({
           <button
             onClick={() => setConfirmDelete(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors ml-auto"
+            data-testid="channel-delete-btn"
           >
             <Trash2 className="h-3.5 w-3.5" />
             {t.common.delete}
@@ -418,12 +444,14 @@ function ChannelDetail({
               onClick={handleDelete}
               disabled={!!actionLoading}
               className="px-3 py-1.5 text-xs rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+              data-testid="channel-confirm-delete-btn"
             >
               {t.common.delete}
             </button>
             <button
               onClick={() => setConfirmDelete(false)}
               className="px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:bg-accent/50 transition-colors"
+              data-testid="channel-cancel-delete-btn"
             >
               {t.common.cancel}
             </button>
@@ -431,7 +459,15 @@ function ChannelDetail({
         )}
       </div>
 
-      {/* 错误信息 */}
+      {/* 操作错误 */}
+      {actionError && (
+        <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3 flex items-start gap-3" data-testid="channel-action-error">
+          <AlertTriangle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+          <div className="text-sm text-red-400">{actionError}</div>
+        </div>
+      )}
+
+      {/* 连接错误信息 */}
       {channel.error && (
         <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3 flex items-start gap-3">
           <AlertTriangle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
@@ -502,6 +538,7 @@ function ConfigFieldEditor({
   const [showSecret, setShowSecret] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     setValue(field.secret ? '' : currentValue)
@@ -510,6 +547,7 @@ function ConfigFieldEditor({
   const handleSave = async () => {
     if (!value.trim()) return
     setSaving(true)
+    setSaveError('')
     try {
       await updateChannel(channelId, {
         config: { [field.key]: value.trim() },
@@ -517,8 +555,8 @@ function ConfigFieldEditor({
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
       onSaved()
-    } catch {
-      // 静默
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err))
     } finally {
       setSaving(false)
     }
@@ -549,6 +587,7 @@ function ConfigFieldEditor({
                 : field.placeholder || field.key
             }
             className="w-full px-3 py-2 text-sm rounded-md bg-muted border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring pr-10"
+            data-testid={`channel-input-config-${field.key}`}
           />
           {field.secret && (
             <button
@@ -564,11 +603,15 @@ function ConfigFieldEditor({
           onClick={handleSave}
           disabled={saving || !value.trim()}
           className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 shrink-0"
+          data-testid={`channel-config-save-${field.key}`}
         >
           <Save className="h-3.5 w-3.5" />
           {saving ? t.channels.saving : saved ? t.channels.saved : t.common.save}
         </button>
       </div>
+      {saveError && (
+        <div className="text-xs text-red-400 mt-1" data-testid={`channel-config-error-${field.key}`}>{saveError}</div>
+      )}
     </div>
   )
 }

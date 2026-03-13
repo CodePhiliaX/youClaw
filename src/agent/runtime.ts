@@ -114,6 +114,7 @@ export class AgentRuntime {
         env.AGENT_MODEL,
         params.requestedSkills,
         params.browserProfileId,
+        params.attachments,
       )
 
       // 保存 session
@@ -196,6 +197,7 @@ export class AgentRuntime {
     model: string,
     requestedSkills?: string[],
     browserProfileId?: string,
+    attachments?: Array<{ filename: string; mediaType: string; data: string; size: number }>,
   ): Promise<{ fullText: string; sessionId: string }> {
     const logger = getLogger()
     const abortController = new AbortController()
@@ -264,10 +266,45 @@ export class AgentRuntime {
 
     const queryStartTime = Date.now()
 
-    const q = query({
-      prompt,
-      options: queryOptions as Parameters<typeof query>[0]['options'],
-    })
+    let q
+    if (attachments && attachments.length > 0) {
+      // 构建多模态 content blocks
+      const content: Array<Record<string, unknown>> = [
+        { type: 'text', text: prompt },
+      ]
+      for (const a of attachments) {
+        if (a.mediaType.startsWith('image/')) {
+          content.push({
+            type: 'image',
+            source: { type: 'base64', media_type: a.mediaType, data: a.data },
+          })
+        } else {
+          content.push({
+            type: 'document',
+            source: { type: 'base64', media_type: a.mediaType, data: a.data },
+          })
+        }
+      }
+
+      const userMessage = {
+        type: 'user' as const,
+        message: { role: 'user' as const, content },
+        parent_tool_use_id: null,
+        session_id: existingSessionId || '',
+      }
+
+      async function* singleMessage<T>(msg: T) { yield msg }
+
+      q = query({
+        prompt: singleMessage(userMessage) as Parameters<typeof query>[0]['prompt'],
+        options: queryOptions as Parameters<typeof query>[0]['options'],
+      })
+    } else {
+      q = query({
+        prompt,
+        options: queryOptions as Parameters<typeof query>[0]['options'],
+      })
+    }
 
     // 流式处理 SDK 消息
     let firstResponseLogged = false
