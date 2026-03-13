@@ -61,7 +61,8 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://UPDATER_ENDPOINT_PLACEHOLDER/releases/latest.json"
+        "https://UPDATER_ENDPOINT_PLACEHOLDER/releases/latest.json",
+        "https://github.com/CodePhiliaX/youClaw/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJGNkVEQjU0NTk0REM5MQpSV1NSM0pSRnRlMzJBdWtwUm1oWjdxVjZmS2xHTG1PMHRBZ1l3bThUaXhPZFo4VldBdEpya1U3cwo="
     }

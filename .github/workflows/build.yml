@@ -338,9 +338,13 @@ jobs:
           for f in assets/*; do
             [ ! -f "$f" ] && continue
             NAME=$(basename "$f")
+            # 跳过 tauri-action 生成的 latest.json，用我们自己生成的
+            [ "$NAME" = "latest.json" ] && continue
             echo "Uploading: $NAME"
             ossutil cp "$f" "${OSS_BASE}/${NAME}" -f
-            ossutil cp "$f" "oss://${OSS_BUCKET}/releases/latest/${NAME}" -f
+            # latest 目录去掉版本号，保持固定下载链接
+            LATEST_NAME=$(echo "$NAME" | sed "s/_${VERSION}//")
+            ossutil cp "$f" "oss://${OSS_BUCKET}/releases/latest/${LATEST_NAME}" -f
           done
 
           # 校验签名文件数量
@@ -363,22 +367,28 @@ jobs:
 
             case "$NAME" in
               *_aarch64.app.tar.gz.sig)
+                URL="${CDN_BASE}/You.Claw_aarch64.app.tar.gz"
                 PLATFORMS=$(echo "$PLATFORMS" | jq \
-                  --arg sig "$SIG" \
-                  --arg url "${CDN_BASE}/You.Claw_aarch64.app.tar.gz" \
-                  '. + {"darwin-aarch64": {"signature": $sig, "url": $url}}')
+                  --arg sig "$SIG" --arg url "$URL" \
+                  '. + {"darwin-aarch64": {"signature": $sig, "url": $url}, "darwin-aarch64-app": {"signature": $sig, "url": $url}}')
                 ;;
               *_x64.app.tar.gz.sig)
+                URL="${CDN_BASE}/You.Claw_x64.app.tar.gz"
                 PLATFORMS=$(echo "$PLATFORMS" | jq \
-                  --arg sig "$SIG" \
-                  --arg url "${CDN_BASE}/You.Claw_x64.app.tar.gz" \
-                  '. + {"darwin-x86_64": {"signature": $sig, "url": $url}}')
+                  --arg sig "$SIG" --arg url "$URL" \
+                  '. + {"darwin-x86_64": {"signature": $sig, "url": $url}, "darwin-x86_64-app": {"signature": $sig, "url": $url}}')
                 ;;
-              *_x64-setup.nsis.zip.sig)
+              *_x64-setup.exe.sig)
                 PLATFORMS=$(echo "$PLATFORMS" | jq \
                   --arg sig "$SIG" \
-                  --arg url "${CDN_BASE}/You.Claw_${VERSION}_x64-setup.nsis.zip" \
-                  '. + {"windows-x86_64": {"signature": $sig, "url": $url}}')
+                  --arg url "${CDN_BASE}/You.Claw_${VERSION}_x64-setup.exe" \
+                  '. + {"windows-x86_64": {"signature": $sig, "url": $url}, "windows-x86_64-nsis": {"signature": $sig, "url": $url}}')
+                ;;
+              *_x64_en-US.msi.sig)
+                PLATFORMS=$(echo "$PLATFORMS" | jq \
+                  --arg sig "$SIG" \
+                  --arg url "${CDN_BASE}/You.Claw_${VERSION}_x64_en-US.msi" \
+                  '. + {"windows-x86_64-msi": {"signature": $sig, "url": $url}}')
                 ;;
             esac
           done
