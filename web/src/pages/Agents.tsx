@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAgents, getAgentDocs, updateAgentDoc, createAgent, deleteAgent, getAgentConfig, updateAgentConfig } from '../api/client'
+import { getAgents, getAgentDocs, updateAgentDoc, createAgent, deleteAgent, getAgentConfig, updateAgentConfig, getBrowserProfiles } from '../api/client'
+import type { BrowserProfileDTO } from '../api/client'
 import { useNavigate } from 'react-router-dom'
 import {
   Bot, FolderOpen, MessageSquare, Plus, Trash2,
   FileText, Save, Pencil, X, ChevronRight,
-  Activity, Clock, AlertCircle, Layers,
+  Activity, Clock, AlertCircle, Layers, Globe,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useI18n } from '../i18n'
@@ -76,12 +77,17 @@ export function Agents() {
   // 子 Agent 相关状态
   const [subAgents, setSubAgents] = useState<SubAgentsMap>({})
 
+  // Browser Profile 相关状态
+  const [browserProfiles, setBrowserProfiles] = useState<BrowserProfileDTO[]>([])
+  const [agentBrowserProfile, setAgentBrowserProfile] = useState<string | undefined>(undefined)
+
   const loadAgents = useCallback(() => {
     getAgents().then((list) => setAgents(list as Agent[])).catch(() => {})
   }, [])
 
   useEffect(() => {
     loadAgents()
+    getBrowserProfiles().then(setBrowserProfiles).catch(() => {})
   }, [loadAgents])
 
   // 加载选中 agent 的文档
@@ -95,12 +101,18 @@ export function Agents() {
     }
   }, [selected])
 
-  // 选中 agent 时加载子 Agent 配置
+  // 选中 agent 时加载子 Agent 配置和 browserProfile
   useEffect(() => {
     if (selected) {
       getAgentConfig(selected)
-        .then((config) => setSubAgents((config.agents as SubAgentsMap) ?? {}))
-        .catch(() => setSubAgents({}))
+        .then((config) => {
+          setSubAgents((config.agents as SubAgentsMap) ?? {})
+          setAgentBrowserProfile(config.browserProfile as string | undefined)
+        })
+        .catch(() => {
+          setSubAgents({})
+          setAgentBrowserProfile(undefined)
+        })
     }
   }, [selected])
 
@@ -109,6 +121,13 @@ export function Agents() {
     if (!selected) return
     await updateAgentConfig(selected, { agents: updatedAgents })
     setSubAgents(updatedAgents)
+  }
+
+  // 保存 browserProfile 配置
+  const handleSaveBrowserProfile = async (profileId: string | undefined) => {
+    if (!selected) return
+    setAgentBrowserProfile(profileId)
+    await updateAgentConfig(selected, { browserProfile: profileId ?? null })
   }
 
   const selectedAgent = agents.find((a) => a.id === selected)
@@ -259,6 +278,9 @@ export function Agents() {
             onDelete={() => handleDelete(selectedAgent.id)}
             subAgents={subAgents}
             onSaveSubAgents={handleSaveSubAgents}
+            browserProfiles={browserProfiles}
+            agentBrowserProfile={agentBrowserProfile}
+            onSaveBrowserProfile={handleSaveBrowserProfile}
           />
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -392,6 +414,9 @@ function AgentDetail({
   onDelete: () => void
   subAgents: SubAgentsMap
   onSaveSubAgents: (agents: SubAgentsMap) => Promise<void>
+  browserProfiles: BrowserProfileDTO[]
+  agentBrowserProfile: string | undefined
+  onSaveBrowserProfile: (profileId: string | undefined) => Promise<void>
 }) {
   return (
     <div className="p-6 max-w-3xl space-y-6">
@@ -467,6 +492,30 @@ function AgentDetail({
           } />
         )}
       </div>
+
+      {/* Browser Profile 绑定 */}
+      {browserProfiles.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <Globe className="h-4 w-4" />
+            {t.agents.browserProfile}
+          </h2>
+          <div className="flex items-center gap-3">
+            <select
+              data-testid="agent-browser-profile-select"
+              value={agentBrowserProfile ?? ''}
+              onChange={(e) => onSaveBrowserProfile(e.target.value || undefined)}
+              className="px-3 py-2 text-sm rounded-md bg-muted border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="">{t.agents.browserProfileNone}</option>
+              {browserProfiles.map((p) => (
+                <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
+              ))}
+            </select>
+            <span className="text-xs text-muted-foreground">{t.agents.browserProfileHint}</span>
+          </div>
+        </div>
+      )}
 
       {/* 子 Agent 区 */}
       <SubAgentsSection t={t} subAgents={subAgents} onSave={onSaveSubAgents} />

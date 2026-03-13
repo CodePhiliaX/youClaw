@@ -104,6 +104,9 @@ export const zh: Translations = {
     maxTurnsLabel: '最大轮数',
     noSubAgents: '尚未配置子 Agent。',
     confirmDeleteSub: '确定要删除这个子 Agent 吗？',
+    browserProfile: '浏览器 Profile',
+    browserProfileNone: '不使用',
+    browserProfileHint: '绑定浏览器 Profile 以复用登录状态',
   },
   tasks: {
     title: '定时任务',
@@ -246,6 +249,8 @@ export const zh: Translations = {
     creating: '创建中...',
     launch: '启动浏览器',
     launching: '启动中...',
+    launchSuccess: '浏览器已启动',
+    launchFailed: '启动浏览器失败',
     confirmDelete: '确定要删除这个浏览器 Profile 吗？所有保存的登录数据将丢失。',
     selectProfile: '选择一个 Profile 查看详情',
     created: '创建时间',

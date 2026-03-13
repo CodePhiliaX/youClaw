@@ -33,8 +33,20 @@ export function BrowserProfiles() {
     loadProfiles()
   }
 
+  const [launchingId, setLaunchingId] = useState<string | null>(null)
+  const [launchMessage, setLaunchMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
   const handleLaunch = async (id: string) => {
-    await launchBrowserProfile(id).catch(() => {})
+    setLaunchingId(id)
+    setLaunchMessage(null)
+    try {
+      await launchBrowserProfile(id)
+      setLaunchMessage({ type: 'success', text: t.browser.launchSuccess })
+    } catch {
+      setLaunchMessage({ type: 'error', text: t.browser.launchFailed })
+    } finally {
+      setLaunchingId(null)
+    }
   }
 
   return (
@@ -116,6 +128,8 @@ export function BrowserProfiles() {
             profile={selectedProfile}
             onLaunch={() => handleLaunch(selectedProfile.id)}
             onDelete={() => handleDelete(selectedProfile.id)}
+            isLaunching={launchingId === selectedProfile.id}
+            launchMessage={selectedId === selectedProfile.id ? launchMessage : null}
           />
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -136,10 +150,14 @@ function ProfileDetail({
   profile,
   onLaunch,
   onDelete,
+  isLaunching,
+  launchMessage,
 }: {
   profile: BrowserProfileDTO
   onLaunch: () => void
   onDelete: () => void
+  isLaunching: boolean
+  launchMessage: { type: 'success' | 'error'; text: string } | null
 }) {
   const { t } = useI18n()
 
@@ -151,10 +169,11 @@ function ProfileDetail({
           <button
             data-testid="browser-launch-btn"
             onClick={onLaunch}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            disabled={isLaunching}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             <Play className="h-3.5 w-3.5" />
-            {t.browser.launch}
+            {isLaunching ? t.browser.launching : t.browser.launch}
           </button>
           <button
             data-testid="browser-delete-btn"
@@ -185,12 +204,26 @@ function ProfileDetail({
         </div>
       </div>
 
+      {launchMessage && (
+        <div
+          data-testid="browser-launch-message"
+          className={cn(
+            'text-xs rounded p-2.5 border',
+            launchMessage.type === 'success'
+              ? 'bg-green-500/10 border-green-500/30 text-green-400'
+              : 'bg-red-500/10 border-red-500/30 text-red-400',
+          )}
+        >
+          {launchMessage.text}
+        </div>
+      )}
+
       <div className="text-xs text-muted-foreground bg-accent/20 rounded p-3 border border-border">
         <p className="mb-1">使用方法：</p>
         <p>1. 点击"启动浏览器"打开 headed 浏览器窗口</p>
         <p>2. 在浏览器中手动登录需要的网站</p>
         <p>3. 关闭浏览器，登录状态会自动保存</p>
-        <p>4. 在 Agent 配置中设置 <code className="bg-accent/50 px-1 rounded">browserProfile: "{profile.id}"</code></p>
+        <p>4. 在 Agent 详情页绑定此 Profile，或在聊天时临时选择</p>
         <p>5. Agent 后续使用浏览器时将自动复用登录状态</p>
       </div>
     </div>
@@ -243,7 +276,7 @@ function CreateProfileForm({
           />
         </div>
 
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <p data-testid="browser-form-error" className="text-xs text-red-400">{error}</p>}
 
         <div className="flex gap-2 pt-2">
           <button

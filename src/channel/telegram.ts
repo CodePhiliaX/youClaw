@@ -119,7 +119,12 @@ export class TelegramChannel implements Channel {
           )
           resolve()
         },
-      }).catch(reject)
+      }).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err)
+        logger.error({ err: msg }, 'Telegram bot failed to start')
+        this.bot = null
+        reject(new Error(`Telegram bot failed to start: ${msg}`))
+      })
     })
   }
 

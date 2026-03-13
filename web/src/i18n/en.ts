@@ -102,6 +102,9 @@ export const en = {
     maxTurnsLabel: 'Max Turns',
     noSubAgents: 'No sub agents configured.',
     confirmDeleteSub: 'Delete this sub agent?',
+    browserProfile: 'Browser Profile',
+    browserProfileNone: 'None',
+    browserProfileHint: 'Bind a browser profile to persist login state',
   },
   tasks: {
     title: 'Cron Jobs',
@@ -244,6 +247,8 @@ export const en = {
     creating: 'Creating...',
     launch: 'Launch Browser',
     launching: 'Launching...',
+    launchSuccess: 'Browser launched successfully',
+    launchFailed: 'Failed to launch browser',
     confirmDelete: 'Are you sure you want to delete this browser profile? All saved login data will be lost.',
     selectProfile: 'Select a profile to view details',
     created: 'Created',
