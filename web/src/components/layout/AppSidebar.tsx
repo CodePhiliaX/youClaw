@@ -1,16 +1,26 @@
 import { useState, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
-  Bot, CalendarClock, Brain, Puzzle, Radio,
-  Globe, ScrollText, Settings, PanelLeftClose, PanelLeft,
-  SquarePen, MoreHorizontal, Trash2,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { useI18n } from '@/i18n'
-import { useSidebar } from '@/hooks/useSidebar'
-import { useChatContext } from '@/hooks/useChatContext'
-import { groupChatsByDate } from '@/lib/chat-utils'
-import { isTauri } from '@/api/transport'
+  Bot,
+  CalendarClock,
+  Brain,
+  Puzzle,
+  Radio,
+  Globe,
+  ScrollText,
+  Settings,
+  PanelLeftClose,
+  PanelLeft,
+  SquarePen,
+  MoreHorizontal,
+  Trash2,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n";
+import { useSidebar } from "@/hooks/useSidebar";
+import { useChatContext } from "@/hooks/useChatContext";
+import { groupChatsByDate } from "@/lib/chat-utils";
+import { isTauri } from "@/api/transport";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,24 +56,24 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isTauri) return
-    import('@tauri-apps/api/core').then(({ invoke }) => {
-      invoke<string>('get_platform').then(setPlatform)
-    })
-  }, [])
+    if (!isTauri) return;
+    import("@tauri-apps/api/core").then(({ invoke }) => {
+      invoke<string>("get_platform").then(setPlatform);
+    });
+  }, []);
 
-  const isMac = platform === 'macos'
+  const isMac = platform === "macos";
 
   const navItems = [
-    { to: '/agents', icon: Bot, label: t.nav.agents },
-    { to: '/cron', icon: CalendarClock, label: t.nav.tasks },
-    { to: '/memory', icon: Brain, label: t.nav.memory },
-    { to: '/skills', icon: Puzzle, label: t.nav.skills },
-    { to: '/channels', icon: Radio, label: t.nav.channels },
-    { to: '/browser', icon: Globe, label: t.nav.browser },
-    { to: '/logs', icon: ScrollText, label: t.nav.logs },
-    { to: '/system', icon: Settings, label: t.nav.system },
-  ]
+    { to: "/agents", icon: Bot, label: t.nav.agents },
+    { to: "/cron", icon: CalendarClock, label: t.nav.tasks },
+    { to: "/memory", icon: Brain, label: t.nav.memory },
+    { to: "/skills", icon: Puzzle, label: t.nav.skills },
+    { to: "/channels", icon: Radio, label: t.nav.channels },
+    { to: "/browser", icon: Globe, label: t.nav.browser },
+    { to: "/logs", icon: ScrollText, label: t.nav.logs },
+    { to: "/system", icon: Settings, label: t.nav.system },
+  ];
 
   const handleChatClick = (chatId: string) => {
     if (!isChatRoute) navigate("/");
@@ -127,7 +137,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
               <PanelLeft className="h-4 w-4" />
             </button>
           ) : (
-            <span className="text-md font-semibold tracking-tight whitespace-nowrap ml-1.5 mr-1">
+            <span className="text-md font-semibold tracking-tight whitespace-nowrap ml-1.5 mr-1 text-primary">
               YouClaw
             </span>
           )}
