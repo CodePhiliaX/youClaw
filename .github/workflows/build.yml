@@ -42,7 +42,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Setup Rust
-        uses: dtolnay/rust-action/setup@v1
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Add Rust target (x86_64 cross-compile)
         if: matrix.arch == 'x86_64'
@@ -148,7 +148,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Setup Rust
-        uses: dtolnay/rust-action/setup@v1
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Rust
         uses: actions/cache@v4
@@ -182,6 +182,7 @@ jobs:
           "
 
       - name: Build sidecar
+        shell: bash
         run: |
           mkdir -p src-tauri/bin
           bun build --compile --target=bun-windows-x64 src/index.ts --outfile src-tauri/bin/youclaw-server-x86_64-pc-windows-msvc.exe
@@ -238,7 +239,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Setup Rust
-        uses: dtolnay/rust-action/setup@v1
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install Linux dependencies
         run: |
