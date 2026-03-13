@@ -59,4 +59,16 @@ test.describe('Level 5: Channel 校验', () => {
     const telegram = types.find((t: { type: string }) => t.type === 'telegram')
     expect(telegram).toBeTruthy()
   })
+
+  test('wecom 和 dingtalk 类型存在于 channel types API', async ({ request }) => {
+    const types = await getChannelTypesViaAPI(request)
+
+    const wecom = types.find((t: { type: string }) => t.type === 'wecom')
+    expect(wecom).toBeTruthy()
+    expect(wecom.configFields.length).toBe(5)
+
+    const dingtalk = types.find((t: { type: string }) => t.type === 'dingtalk')
+    expect(dingtalk).toBeTruthy()
+    expect(dingtalk.configFields.length).toBe(2)
+  })
 })

@@ -7,10 +7,14 @@ import {
 // CRUD 测试涉及共享列表状态，串行运行避免 afterEach 互相干扰
 test.describe.configure({ mode: 'serial' })
 
-/** reload 并等待指定 label 的 channel 出现在列表中 */
+/** 点击刷新并等待指定 label 的 channel 出现在列表中 */
 async function reloadAndWaitForChannel(page: import('@playwright/test').Page, label: string) {
-  await page.reload()
-  await page.waitForLoadState('networkidle')
+  // 等待 API 响应并确保包含目标 channel 后再断言 DOM
+  const responsePromise = page.waitForResponse(
+    (r) => r.url().includes('/api/channels') && !r.url().includes('/types') && r.request().method() === 'GET'
+  )
+  await page.getByTestId('channel-refresh-btn').click()
+  await responsePromise
   await expect(page.getByTestId('channel-item').filter({ hasText: label })).toBeVisible({ timeout: 10000 })
 }
 
@@ -150,6 +154,130 @@ test.describe('Level 2: Channel 单个操作', () => {
     const updated = channels.find((c: { id: string }) => c.id === ch.id)
     expect(updated.configuredFields).toContain('appId')
     expect(updated.configuredFields).toContain('appSecret')
+  })
+
+  test('API 创建 wecom channel 后列表中出现', async ({ request }) => {
+    const label = UNIQUE()
+    const ch = await createChannelViaAPI(request, {
+      type: 'wecom',
+      label,
+      config: {
+        corpId: 'fake-corp',
+        corpSecret: 'fake-secret',
+        agentId: '1000001',
+        token: 'fake-token',
+        encodingAESKey: 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG',
+      },
+      enabled: false,
+    })
+
+    const channels = await getChannelsViaAPI(request)
+    const found = channels.find((c: { id: string }) => c.id === ch.id)
+    expect(found).toBeTruthy()
+    expect(found.type).toBe('wecom')
+    expect(found.label).toBe(label)
+  })
+
+  test('API 创建 dingtalk channel 后列表中出现', async ({ request }) => {
+    const label = UNIQUE()
+    const ch = await createChannelViaAPI(request, {
+      type: 'dingtalk',
+      label,
+      config: { appKey: 'fake-key', appSecret: 'fake-secret' },
+      enabled: false,
+    })
+
+    const channels = await getChannelsViaAPI(request)
+    const found = channels.find((c: { id: string }) => c.id === ch.id)
+    expect(found).toBeTruthy()
+    expect(found.type).toBe('dingtalk')
+    expect(found.label).toBe(label)
+  })
+
+  test('API 更新单个 wecom config 字段不丢失其他字段', async ({ request }) => {
+    const ch = await createChannelViaAPI(request, {
+      type: 'wecom',
+      config: {
+        corpId: 'corp1',
+        corpSecret: 'secret1',
+        agentId: '100',
+        token: 'tok1',
+        encodingAESKey: 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG',
+      },
+      enabled: false,
+    })
+
+    // 只更新 corpId
+    const { status } = await updateChannelViaAPI(request, ch.id, {
+      config: { corpId: 'updated-corp' },
+    })
+    expect(status).toBe(200)
+
+    // 验证其他字段未丢失
+    const channels = await getChannelsViaAPI(request)
+    const updated = channels.find((c: { id: string }) => c.id === ch.id)
+    expect(updated.configuredFields).toContain('corpId')
+    expect(updated.configuredFields).toContain('corpSecret')
+    expect(updated.configuredFields).toContain('agentId')
+    expect(updated.configuredFields).toContain('token')
+    expect(updated.configuredFields).toContain('encodingAESKey')
+  })
+
+  test('UI 创建 dingtalk channel', async ({ page }) => {
+    await page.getByTestId('channel-create-btn').click()
+
+    const select = page.getByTestId('channel-select-type')
+    await expect(select).toBeVisible()
+    await select.selectOption('dingtalk')
+
+    await expect(page.getByTestId('channel-input-label')).toBeVisible()
+
+    const label = UNIQUE()
+    await page.getByTestId('channel-input-label').clear()
+    await page.getByTestId('channel-input-label').fill(label)
+
+    // 填 config
+    await page.getByTestId('channel-input-config-appKey').fill('fake-key')
+    await page.getByTestId('channel-input-config-appSecret').fill('fake-secret')
+
+    // 提交
+    const responsePromise = page.waitForResponse(
+      (r) => r.url().includes('/api/channels') && r.request().method() === 'POST' && r.status() === 201
+    )
+    await page.getByTestId('channel-submit-btn').click()
+    await responsePromise
+
+    await expect(page.getByTestId('channel-item').filter({ hasText: label })).toBeVisible({ timeout: 10000 })
+  })
+
+  test('UI 创建 wecom channel', async ({ page }) => {
+    await page.getByTestId('channel-create-btn').click()
+
+    const select = page.getByTestId('channel-select-type')
+    await expect(select).toBeVisible()
+    await select.selectOption('wecom')
+
+    await expect(page.getByTestId('channel-input-label')).toBeVisible()
+
+    const label = UNIQUE()
+    await page.getByTestId('channel-input-label').clear()
+    await page.getByTestId('channel-input-label').fill(label)
+
+    // 填所有 5 个 config 字段
+    await page.getByTestId('channel-input-config-corpId').fill('fake-corp')
+    await page.getByTestId('channel-input-config-corpSecret').fill('fake-secret')
+    await page.getByTestId('channel-input-config-agentId').fill('1000001')
+    await page.getByTestId('channel-input-config-token').fill('fake-token')
+    await page.getByTestId('channel-input-config-encodingAESKey').fill('abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG')
+
+    // 提交
+    const responsePromise = page.waitForResponse(
+      (r) => r.url().includes('/api/channels') && r.request().method() === 'POST' && r.status() === 201
+    )
+    await page.getByTestId('channel-submit-btn').click()
+    await responsePromise
+
+    await expect(page.getByTestId('channel-item').filter({ hasText: label })).toBeVisible({ timeout: 10000 })
   })
 
   test('禁用 channel 切换', async ({ request, page }) => {
