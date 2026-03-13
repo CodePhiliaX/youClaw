@@ -31,9 +31,10 @@ jobs:
             tauri_args: "--target aarch64-apple-darwin"
             platform_label: "macOS Apple Silicon"
           - arch: x86_64
-            runner: macos-13
+            runner: macos-latest
             bun_target: bun-darwin-x64
             sidecar_suffix: x86_64-apple-darwin
+            rust_targets: x86_64-apple-darwin
             tauri_args: "--target x86_64-apple-darwin"
             platform_label: "macOS Intel"
 
@@ -49,6 +50,7 @@ jobs:
         uses: ./.github/actions/setup-build-env
         with:
           sidecar-suffix: ${{ matrix.sidecar_suffix }}
+          rust-targets: ${{ matrix.rust_targets || '' }}
           oss-bucket: ${{ secrets.OSS_BUCKET }}
           oss-endpoint: ${{ secrets.OSS_ENDPOINT }}
 
