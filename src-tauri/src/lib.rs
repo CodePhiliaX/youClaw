@@ -334,8 +334,20 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            if let tauri::RunEvent::Exit = event {
-                kill_sidecar(app);
+            match event {
+                tauri::RunEvent::Exit => {
+                    kill_sidecar(app);
+                }
+                // macOS: 点击 Dock 图标时重新显示窗口
+                tauri::RunEvent::Reopen { has_visible_windows, .. } => {
+                    if !has_visible_windows {
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                        }
+                    }
+                }
+                _ => {}
             }
         });
 }
