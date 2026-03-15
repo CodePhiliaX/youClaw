@@ -68,7 +68,7 @@ export function Agents() {
   // 创建 Agent 表单
   const [newId, setNewId] = useState('')
   const [newName, setNewName] = useState('')
-  const [newModel, setNewModel] = useState('claude-sonnet-4-6')
+  const [newModel, setNewModel] = useState('default')
   const [isCreating, setIsCreating] = useState(false)
 
   // 展开的文档
@@ -165,7 +165,7 @@ export function Agents() {
       setViewMode('detail')
       setNewId('')
       setNewName('')
-      setNewModel('claude-sonnet-4-6')
+      setNewModel('default')
     } catch {
       // 静默处理
     } finally {

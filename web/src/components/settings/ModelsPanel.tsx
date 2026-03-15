@@ -15,7 +15,6 @@ const BUILTIN_MODELS = [
     id: "youclaw-pro",
     name: "YouClaw Pro",
     description: "Most capable built-in model",
-    modelId: "claude-sonnet-4-6",
   },
 ] as const
 
