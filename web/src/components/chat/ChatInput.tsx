@@ -78,7 +78,7 @@ export function ChatInput() {
   };
 
   return (
-    <div className="bg-background px-4 py-3">
+    <div className="bg-background px-5 py-3">
       <PromptInput
         onSubmit={handleSubmit}
         accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv"

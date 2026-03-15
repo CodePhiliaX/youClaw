@@ -49,8 +49,10 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
   return (
       <aside
         className={cn(
-          "shrink-0 flex flex-col border-r border-border bg-muted/30 overflow-hidden",
-          "transition-[width] duration-200 ease-in-out",
+          "shrink-0 flex flex-col overflow-hidden",
+          "bg-muted/30 border-r",
+          "border-[var(--subtle-border)]",
+          "transition-[width] duration-200 ease-[var(--ease-soft)]",
           isCollapsed ? "w-[52px]" : "w-[220px]",
         )}
         aria-expanded={!isCollapsed}
@@ -72,22 +74,25 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
             <button
               type="button"
               onClick={toggle}
-              className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center hover:bg-accent transition-colors"
+              className="w-9 h-9 shrink-0 rounded-[10px] flex items-center justify-center hover:bg-[var(--surface-hover)] transition-all duration-200 ease-[var(--ease-soft)]"
               aria-label={t.sidebar.expand}
             >
               <PanelLeft className="h-4 w-4" />
             </button>
           ) : (
-            <span className="text-md font-semibold tracking-tight whitespace-nowrap ml-1.5 mr-1 text-primary">
-              YouClaw
-            </span>
+            <div className="flex items-center gap-1.5 ml-1.5 mr-1">
+              <img src="/icon.svg" alt="YouClaw" className="h-5 w-5" />
+              <span className="text-md font-semibold tracking-tight whitespace-nowrap text-primary">
+                YouClaw
+              </span>
+            </div>
           )}
           <div className="flex-1 min-w-0" />
           <button
             type="button"
             onClick={toggle}
             className={cn(
-              "w-9 h-9 shrink-0 rounded-lg flex items-center justify-center hover:bg-accent transition-[opacity] duration-200",
+              "w-9 h-9 shrink-0 rounded-[10px] flex items-center justify-center hover:bg-[var(--surface-hover)] transition-all duration-200 ease-[var(--ease-soft)]",
               isCollapsed ? "opacity-0 pointer-events-none" : "opacity-100",
             )}
             aria-label={t.sidebar.collapse}
@@ -98,7 +103,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
         </div>
 
         {/* 页面导航 */}
-        <nav className="space-y-0.5">
+        <nav className="space-y-0.5 px-1.5">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -107,11 +112,12 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
               data-testid={`nav-${item.to === "/" ? "chat" : item.to.slice(1)}`}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center h-9 rounded-lg transition-colors whitespace-nowrap overflow-hidden",
-                  ROW_PX,
+                  "flex items-center h-9 rounded-[10px] whitespace-nowrap overflow-hidden",
+                  "transition-all duration-200 ease-[var(--ease-soft)]",
+                  isCollapsed ? "px-0.5" : "px-1",
                   isActive
                     ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent",
+                    : "text-muted-foreground hover:text-foreground hover:bg-[var(--surface-hover)]",
                 )
               }
               aria-label={item.label}
@@ -136,7 +142,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
 
         {/* 底部 */}
         <div
-          className="border-t border-border py-2 space-y-0.5"
+          className="border-t border-[var(--subtle-border)] py-2 space-y-0.5 px-1.5"
           style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
         >
           {/* 用户信息 / 登录按钮 */}
@@ -145,9 +151,10 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
               type="button"
               onClick={onOpenSettings}
               className={cn(
-                "flex items-center h-9 w-full rounded-lg transition-colors whitespace-nowrap overflow-hidden",
-                ROW_PX,
-                "text-muted-foreground hover:text-foreground hover:bg-accent",
+                "flex items-center h-9 w-full rounded-[10px] whitespace-nowrap overflow-hidden",
+                "transition-all duration-200 ease-[var(--ease-soft)]",
+                "px-1",
+                "text-muted-foreground hover:text-foreground hover:bg-[var(--surface-hover)]",
               )}
             >
               <div className="w-9 h-9 shrink-0 flex items-center justify-center">
@@ -180,9 +187,10 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
               onClick={() => login()}
               disabled={authLoading}
               className={cn(
-                "flex items-center h-9 w-full rounded-lg transition-colors whitespace-nowrap overflow-hidden",
-                ROW_PX,
-                "text-muted-foreground hover:text-foreground hover:bg-accent",
+                "flex items-center h-9 w-full rounded-[10px] whitespace-nowrap overflow-hidden",
+                "transition-all duration-200 ease-[var(--ease-soft)]",
+                "px-1",
+                "text-muted-foreground hover:text-foreground hover:bg-[var(--surface-hover)]",
               )}
             >
               <div className="w-9 h-9 shrink-0 flex items-center justify-center">
@@ -205,9 +213,10 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
               type="button"
               onClick={onOpenSettings}
               className={cn(
-                "flex items-center h-9 w-full rounded-lg transition-colors whitespace-nowrap overflow-hidden",
-                ROW_PX,
-                "text-muted-foreground hover:text-foreground hover:bg-accent",
+                "flex items-center h-9 w-full rounded-[10px] whitespace-nowrap overflow-hidden",
+                "transition-all duration-200 ease-[var(--ease-soft)]",
+                "px-1",
+                "text-muted-foreground hover:text-foreground hover:bg-[var(--surface-hover)]",
               )}
               aria-label={t.settings.title}
             >
@@ -228,7 +237,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
               <button
                 type="button"
                 onClick={() => setLocale(locale === "en" ? "zh" : "en")}
-                className="shrink-0 px-2 py-0.5 rounded border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                className="shrink-0 px-2 py-0.5 rounded-md border border-[var(--subtle-border)] text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-[var(--surface-hover)] transition-all duration-200 ease-[var(--ease-soft)]"
               >
                 {locale === "en" ? "中" : "EN"}
               </button>

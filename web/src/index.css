@@ -23,6 +23,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --radius: var(--radius);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 :root {
@@ -43,6 +44,9 @@
   --input: oklch(0.91 0 0);
   --ring: oklch(0.5 0.2 25);
   --radius: 0.625rem;
+  --subtle-border: oklch(0 0 0 / 0.06);
+  --surface-hover: oklch(0 0 0 / 0.03);
+  --surface-raised: oklch(0.97 0 0);
 }
 
 .dark {
@@ -59,9 +63,12 @@
   --accent: oklch(0.22 0 0);
   --accent-foreground: oklch(0.93 0 0);
   --destructive: oklch(0.55 0.22 30);
-  --border: oklch(0.24 0 0);
+  --border: oklch(0.26 0 0);
   --input: oklch(0.2 0 0);
   --ring: oklch(0.55 0.2 25);
+  --subtle-border: oklch(1 0 0 / 0.06);
+  --surface-hover: oklch(1 0 0 / 0.03);
+  --surface-raised: oklch(0.16 0 0);
 }
 
 * {
