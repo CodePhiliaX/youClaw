@@ -9,7 +9,7 @@ import { Plus, Pencil, Trash2, Check, Settings2, Cloud, Cpu } from "lucide-react
 import { getSettings, updateSettings as apiUpdateSettings, type SettingsDTO, type CustomModelDTO } from "@/api/client"
 import { useAppStore } from "@/stores/app"
 
-// 内置模型定义
+// Built-in model definitions
 const BUILTIN_MODELS = [
   {
     id: "youclaw-pro",
@@ -31,15 +31,15 @@ export function ModelsPanel() {
   const [activeModel, setActiveModel] = useState<ActiveModel>({ provider: "builtin" })
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingModel, setEditingModel] = useState<CustomModelDTO | null>(null)
-  // 表单字段
+  // Form fields
   const [formName, setFormName] = useState("")
   const [formModelId, setFormModelId] = useState("")
   const [formApiKey, setFormApiKey] = useState("")
   const [formBaseUrl, setFormBaseUrl] = useState("")
-  // 表单校验错误（字段被 touch 后才展示）
+  // Form validation errors (shown only after field is touched)
   const [touched, setTouched] = useState<Record<string, boolean>>({})
 
-  // 从后端 API 加载
+  // Load from backend API
   useEffect(() => {
     getSettings().then((settings) => {
       setActiveModel(settings.activeModel)
@@ -47,14 +47,14 @@ export function ModelsPanel() {
     }).catch(console.error)
   }, [])
 
-  // 保存到后端，并同步 modelReady
+  // Save to backend and sync modelReady
   const saveSettings = useCallback(async (partial: Partial<SettingsDTO>) => {
     try {
       const updated = await apiUpdateSettings(partial)
       setActiveModel(updated.activeModel)
       setCustomModels(updated.customModels)
 
-      // 同步 modelReady 到全局 store
+      // Sync modelReady to global store
       const { provider, id } = updated.activeModel
       if (provider === 'builtin' || provider === 'cloud') {
         useAppStore.setState({ modelReady: cloudEnabled })
@@ -69,7 +69,7 @@ export function ModelsPanel() {
     }
   }, [cloudEnabled])
 
-  // 切换 active provider
+  // Switch active provider
   const handleSetActiveProvider = async (provider: "builtin" | "custom") => {
     let newActive: ActiveModel
     if (provider === "builtin") {
@@ -83,19 +83,19 @@ export function ModelsPanel() {
     await saveSettings({ activeModel: newActive })
   }
 
-  // 选择内置模型
+  // Select built-in model
   const handleSelectBuiltin = async (id: string) => {
     setBuiltinModel(id)
   }
 
-  // 设置自定义模型为激活
+  // Set custom model as active
   const handleSetCustomActive = async (id: string) => {
     const newActive: ActiveModel = { provider: "custom", id }
     setActiveModel(newActive)
     await saveSettings({ activeModel: newActive })
   }
 
-  // 表单校验
+  // Form validation
   const formErrors = {
     name: !formName.trim() ? t.settings.validationRequired ?? 'Required' : null,
     modelId: !formModelId.trim()
@@ -116,7 +116,7 @@ export function ModelsPanel() {
 
   const handleBlur = (field: string) => setTouched((prev) => ({ ...prev, [field]: true }))
 
-  // 打开添加 dialog
+  // Open add dialog
   const handleOpenAdd = () => {
     setEditingModel(null)
     setFormName("")
@@ -127,7 +127,7 @@ export function ModelsPanel() {
     setDialogOpen(true)
   }
 
-  // 打开编辑 dialog
+  // Open edit dialog
   const handleOpenEdit = (model: CustomModelDTO) => {
     setEditingModel(model)
     setFormName(model.name)
@@ -138,9 +138,9 @@ export function ModelsPanel() {
     setDialogOpen(true)
   }
 
-  // 保存自定义模型（新建或编辑）
+  // Save custom model (create or edit)
   const handleSaveModel = async () => {
-    // 标记所有字段为已触碰，显示全部错误
+    // Mark all fields as touched to show all errors
     setTouched({ name: true, modelId: true, apiKey: true, baseUrl: true })
     if (hasErrors) return
 
@@ -174,7 +174,7 @@ export function ModelsPanel() {
     setDialogOpen(false)
   }
 
-  // 删除自定义模型
+  // Delete custom model
   const handleDeleteModel = async (id: string) => {
     if (!confirm(t.settings.confirmDeleteModel)) return
     const updated = customModels.filter((m) => m.id !== id)
@@ -189,18 +189,18 @@ export function ModelsPanel() {
     await saveSettings(partial)
   }
 
-  // 判断当前模型是否激活
+  // Check if a custom model is active
   const isCustomActive = (id: string) => activeModel.provider === "custom" && activeModel.id === id
 
   return (
     <div className="space-y-8">
-      {/* Active Model 区 */}
+      {/* Active Model section */}
       <div>
         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
           {t.settings.activeModel}
         </h4>
         <div className={cn("grid gap-3", cloudEnabled ? "grid-cols-2" : "grid-cols-1")}>
-          {/* 内置模型（云服务）卡片 — 离线模式隐藏 */}
+          {/* Built-in model (cloud service) card -- hidden in offline mode */}
           {cloudEnabled && (
             <button
               onClick={() => handleSetActiveProvider("builtin")}
@@ -231,7 +231,7 @@ export function ModelsPanel() {
             </button>
           )}
 
-          {/* 自定义 API 卡片 */}
+          {/* Custom API card */}
           <button
             onClick={() => handleSetActiveProvider("custom")}
             className={cn(
@@ -262,7 +262,7 @@ export function ModelsPanel() {
         </div>
       </div>
 
-      {/* 内置模型列表 — 离线模式隐藏 */}
+      {/* Built-in model list -- hidden in offline mode */}
       {cloudEnabled && (
         <div>
           <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
@@ -314,7 +314,7 @@ export function ModelsPanel() {
         </div>
       )}
 
-      {/* 自定义模型列表 */}
+      {/* Custom model list */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
@@ -395,7 +395,7 @@ export function ModelsPanel() {
         )}
       </div>
 
-      {/* 添加/编辑 Dialog */}
+      {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="w-[90vw] max-w-2xl p-6">
           <h2 className="text-lg font-semibold mb-4">

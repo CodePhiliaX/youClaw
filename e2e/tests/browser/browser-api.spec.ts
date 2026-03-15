@@ -4,7 +4,7 @@ import {
   cleanupE2EProfiles,
 } from './helpers'
 
-const API_BASE = 'http://localhost:3000'
+const API_BASE = 'http://localhost:23107'
 
 test.describe('Browser Profiles: API 测试', () => {
   test.afterEach(async ({ request }) => {

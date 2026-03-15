@@ -6,7 +6,7 @@ export type Theme = "dark" | "light" | "system"
 export function applyThemeToDOM(theme: Theme): void {
   const body = document.body
 
-  // 切换时禁用所有 transition，避免颜色渐变不同步
+  // Disable all transitions during switch to prevent color gradient desync
   document.documentElement.style.setProperty("--disable-transitions", "1")
   const style = document.createElement("style")
   style.textContent = "*, *::before, *::after { transition-duration: 0s !important; }"
@@ -21,7 +21,7 @@ export function applyThemeToDOM(theme: Theme): void {
     body.classList.remove("dark")
   }
 
-  // 下一帧恢复 transition
+  // Restore transitions on next frame
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       document.head.removeChild(style)
@@ -30,7 +30,7 @@ export function applyThemeToDOM(theme: Theme): void {
   })
 }
 
-// 初始化主题的 hook（在 App 根组件使用）
+// Theme initialization hook (used in App root component)
 export function useTheme(): void {
   const theme = useAppStore((s) => s.theme)
 
@@ -38,7 +38,7 @@ export function useTheme(): void {
     applyThemeToDOM(theme)
   }, [theme])
 
-  // 监听系统主题变化
+  // Listen for system theme changes
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)")
     const handler = () => {

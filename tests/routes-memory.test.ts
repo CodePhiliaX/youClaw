@@ -2,7 +2,7 @@ import { describe, test, expect, mock } from 'bun:test'
 import { createMemoryRoutes } from '../src/routes/memory.ts'
 
 describe('memory routes', () => {
-  test('GET /agents/:id/memory agent 不存在时返回 404', async () => {
+  test('GET /agents/:id/memory returns 404 when agent does not exist', async () => {
     const app = createMemoryRoutes(
       {
         getMemory: () => '',
@@ -17,11 +17,11 @@ describe('memory routes', () => {
     expect(res.status).toBe(404)
   })
 
-  test('GET/PUT /agents/:id/memory 读写 MEMORY.md', async () => {
+  test('GET/PUT /agents/:id/memory reads and writes MEMORY.md', async () => {
     const updateMemory = mock(() => {})
     const app = createMemoryRoutes(
       {
-        getMemory: () => '已有记忆',
+        getMemory: () => 'existing memory',
         updateMemory,
         getDailyLogDates: () => [],
         getDailyLog: () => '',
@@ -30,19 +30,19 @@ describe('memory routes', () => {
     )
 
     const getRes = await app.request('/agents/agent-1/memory')
-    expect(await getRes.json()).toEqual({ content: '已有记忆' })
+    expect(await getRes.json()).toEqual({ content: 'existing memory' })
 
     const putRes = await app.request('/agents/agent-1/memory', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: '新记忆' }),
+      body: JSON.stringify({ content: 'new memory' }),
     })
 
     expect(putRes.status).toBe(200)
-    expect(updateMemory).toHaveBeenCalledWith('agent-1', '新记忆')
+    expect(updateMemory).toHaveBeenCalledWith('agent-1', 'new memory')
   })
 
-  test('GET 日志列表和单日日志内容', async () => {
+  test('GET log list and single day log content', async () => {
     const app = createMemoryRoutes(
       {
         getMemory: () => '',

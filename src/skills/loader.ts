@@ -20,15 +20,15 @@ export class SkillsLoader {
   }
 
   /**
-   * 加载所有可用 skills，按三级优先级覆盖（同名高优先级覆盖低优先级）
-   * 1. Agent 工作空间: agents/<id>/skills/
-   * 2. 项目级: skills/
-   * 3. 用户级: ~/.youclaw/skills/
+   * Load all available skills with three-tier priority override (higher priority overrides lower for same name).
+   * 1. Agent workspace: agents/<id>/skills/
+   * 2. Project-level: skills/
+   * 3. User-level: ~/.youclaw/skills/
    *
-   * 支持缓存，传入 forceReload=true 强制重载
+   * Supports caching; pass forceReload=true to force reload.
    */
   loadAllSkills(forceReload?: boolean): Skill[] {
-    // 有缓存且不强制重载时，直接返回缓存
+    // Return cache if available and not forcing reload
     if (!forceReload && this.cache.size > 0) {
       return Array.from(this.cache.values())
     }
@@ -37,15 +37,15 @@ export class SkillsLoader {
     const paths = getPaths()
     const skillMap = new Map<string, Skill>()
 
-    // 3. 用户级（最低优先级，先加载）
+    // 3. User-level (lowest priority, loaded first)
     const userSkillsDir = resolve(homedir(), '.youclaw', 'skills')
     this.loadSkillsFromDir(userSkillsDir, 'user', skillMap)
 
-    // 2. 项目级（builtin）
+    // 2. Project-level (builtin)
     const projectSkillsDir = paths.skills
     this.loadSkillsFromDir(projectSkillsDir, 'builtin', skillMap)
 
-    // 1. Agent 工作空间级（最高优先级，最后加载覆盖）
+    // 1. Agent workspace-level (highest priority, loaded last to override)
     const agentsDir = paths.agents
     if (existsSync(agentsDir)) {
       const agentEntries = readdirSync(agentsDir)
@@ -61,7 +61,7 @@ export class SkillsLoader {
       }
     }
 
-    // 读取用户启用/停用设置，合并到每个 skill
+    // Read user enable/disable settings and merge into each skill
     const settings = getSkillSettings()
     for (const [name, skill] of skillMap) {
       const setting = settings[name]
@@ -69,33 +69,33 @@ export class SkillsLoader {
       skill.usable = skill.eligible && skill.enabled
     }
 
-    // 更新缓存
+    // Update cache
     this.cache = skillMap
     this.lastLoadTime = Date.now()
 
     const skills = Array.from(skillMap.values())
-    logger.debug({ count: skills.length }, 'Skills 加载完成')
+    logger.debug({ count: skills.length }, 'Skills loaded')
     return skills
   }
 
   /**
-   * 根据 agent.yaml 的 skills 字段过滤加载的 skills
-   * 如果 agent 未指定 skills 字段，返回所有合格 skills
+   * Filter loaded skills based on agent.yaml skills field.
+   * Returns all skills if agent does not specify a skills field.
    */
   loadSkillsForAgent(agentConfig: AgentConfig): Skill[] {
     const allSkills = this.loadAllSkills()
 
-    // 如果 agent 未指定 skills，返回所有 skills
+    // If agent does not specify skills, return all skills
     if (!agentConfig.skills || agentConfig.skills.length === 0) {
       return allSkills
     }
 
-    // 只返回 agent 指定的 skills
+    // Return only the skills specified by the agent
     return allSkills.filter((skill) => agentConfig.skills!.includes(skill.name))
   }
 
   /**
-   * 设置 skill 的启用/停用状态，并刷新缓存
+   * Set a skill's enabled/disabled state and refresh the cache.
    */
   setSkillEnabled(name: string, enabled: boolean): Skill | null {
     dbSetSkillEnabled(name, enabled)
@@ -104,27 +104,27 @@ export class SkillsLoader {
   }
 
   /**
-   * 获取特定 agent 的 skills 视图
+   * Get the skills view for a specific agent.
    */
   getAgentSkillsView(agentConfig: AgentConfig): AgentSkillsView {
     const allSkills = this.loadAllSkills()
 
-    // available: 该 agent 可用的所有 skills
+    // available: all skills accessible to this agent
     const available = allSkills
 
-    // enabled: 已启用的（在 agent.yaml skills 列表中）
+    // enabled: skills listed in agent.yaml skills field
     const enabled = agentConfig.skills && agentConfig.skills.length > 0
       ? allSkills.filter((s) => agentConfig.skills!.includes(s.name))
       : allSkills
 
-    // eligible: 通过资格检查的
+    // eligible: skills that passed eligibility checks
     const eligible = enabled.filter((s) => s.eligible)
 
     return { available, enabled, eligible }
   }
 
   /**
-   * 清缓存并重载所有 skills
+   * Clear cache and reload all skills.
    */
   refresh(): Skill[] {
     this.cache.clear()
@@ -133,7 +133,7 @@ export class SkillsLoader {
   }
 
   /**
-   * 获取缓存统计
+   * Get cache statistics.
    */
   getCacheStats(): { skillCount: number; lastLoadTime: number; cached: boolean } {
     return {
@@ -144,23 +144,23 @@ export class SkillsLoader {
   }
 
   /**
-   * 获取当前配置
+   * Get current configuration.
    */
   getConfig(): SkillsConfig {
     return { ...this.config }
   }
 
   /**
-   * 对 skills 列表应用优先级感知的 prompt 限制
-   * 1. 按优先级分三组：critical / normal / low
-   * 2. Critical: 仅截断单个内容，不受数量和总量限制
-   * 3. Normal + Low: 先 normal 后 low，依次应用数量限制和总字符限制（减去 critical 占用）
-   * 4. 返回顺序：critical → normal → low
+   * Apply priority-aware prompt limits to a skills list.
+   * 1. Group by priority: critical / normal / low
+   * 2. Critical: only truncate individual content, exempt from count and total limits
+   * 3. Normal + Low: normal first then low, apply count and total char limits (minus critical usage)
+   * 4. Return order: critical -> normal -> low
    */
   applyPromptLimits(skills: Skill[]): Skill[] {
     const { maxSingleSkillChars, maxSkillCount, maxTotalChars } = this.config
 
-    // 按优先级分组
+    // Group by priority
     const critical: Skill[] = []
     const normal: Skill[] = []
     const low: Skill[] = []
@@ -172,22 +172,22 @@ export class SkillsLoader {
       else normal.push(skill)
     }
 
-    // Critical: 仅截断单个内容，不受数量和总量限制
+    // Critical: only truncate individual content, exempt from count and total limits
     const truncate = (skill: Skill): Skill => {
       if (skill.content.length <= maxSingleSkillChars) return skill
       return {
         ...skill,
-        content: skill.content.slice(0, maxSingleSkillChars) + '\n...[内容已截断]',
+        content: skill.content.slice(0, maxSingleSkillChars) + '\n...[content truncated]',
       }
     }
 
     const limitedCritical = critical.map(truncate)
 
-    // 计算 critical 占用的配额
+    // Calculate quota used by critical skills
     const criticalCount = limitedCritical.length
     const criticalChars = limitedCritical.reduce((sum, s) => sum + s.content.length, 0)
 
-    // Normal + Low: 合并后依次应用限制（减去 critical 占用）
+    // Normal + Low: merge and apply limits sequentially (minus critical usage)
     const rest = [...normal, ...low].map(truncate)
     const remainingCount = Math.max(0, maxSkillCount - criticalCount)
     const remainingChars = Math.max(0, maxTotalChars - criticalChars)
@@ -205,8 +205,8 @@ export class SkillsLoader {
   }
 
   /**
-   * 从指定目录加载 skills
-   * 每个子目录下寻找 SKILL.md
+   * Load skills from a given directory.
+   * Looks for SKILL.md in each subdirectory.
    */
   private loadSkillsFromDir(dir: string, source: Skill['source'], skillMap: Map<string, Skill>): void {
     const logger = getLogger()
@@ -217,7 +217,7 @@ export class SkillsLoader {
     try {
       dirEntries = readdirSync(dir)
     } catch {
-      logger.debug({ dir }, '无法读取 skills 目录')
+      logger.debug({ dir }, 'Unable to read skills directory')
       return
     }
 
@@ -237,14 +237,14 @@ export class SkillsLoader {
         const { frontmatter, content } = parseFrontmatter(raw)
         const { eligible, errors, detail } = checkEligibility(frontmatter)
 
-        // 读取 .registry.json 元数据（如有）
+        // Read .registry.json metadata (if present)
         let registryMeta: SkillRegistryMeta | undefined
         const registryFile = resolve(skillDir, '.registry.json')
         if (existsSync(registryFile)) {
           try {
             registryMeta = JSON.parse(readFileSync(registryFile, 'utf-8'))
           } catch {
-            // 解析失败忽略
+            // Ignore parse failures
           }
         }
 
@@ -258,19 +258,19 @@ export class SkillsLoader {
           eligibilityErrors: errors,
           eligibilityDetail: detail,
           loadedAt: Date.now(),
-          enabled: true,  // 默认启用，后续由 settings 覆盖
+          enabled: true,  // Default enabled, overridden by settings later
           usable: eligible,
           registryMeta,
         }
 
-        // 高优先级覆盖低优先级
+        // Higher priority overrides lower priority
         skillMap.set(skill.name, skill)
 
-        logger.debug({ name: skill.name, source, eligible }, 'Skill 已加载')
+        logger.debug({ name: skill.name, source, eligible }, 'Skill loaded')
       } catch (err) {
         logger.warn(
           { skillDir, error: err instanceof Error ? err.message : String(err) },
-          '加载 skill 失败',
+          'Failed to load skill',
         )
       }
     }

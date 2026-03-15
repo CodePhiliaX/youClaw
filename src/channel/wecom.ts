@@ -16,10 +16,10 @@ interface AccessToken {
   fetchedAt: number
 }
 
-// ===== 纯函数（方便单元测试）=====
+// ===== Pure functions (for unit testing) =====
 
 /**
- * SHA1 签名校验
+ * SHA1 signature verification
  */
 export function generateSignature(token: string, timestamp: string, nonce: string, encrypt: string): string {
   const arr = [token, timestamp, nonce, encrypt].sort()
@@ -27,7 +27,7 @@ export function generateSignature(token: string, timestamp: string, nonce: strin
 }
 
 /**
- * AES-256-CBC 解密企业微信消息
+ * AES-256-CBC decrypt WeCom message
  */
 export function decryptMessage(encodingAESKey: string, encryptedMsg: string): { message: string; corpId: string } {
   const aesKey = Buffer.from(encodingAESKey + '=', 'base64')
@@ -38,11 +38,11 @@ export function decryptMessage(encodingAESKey: string, encryptedMsg: string): { 
 
   const decrypted = Buffer.concat([decipher.update(encryptedMsg, 'base64'), decipher.final()])
 
-  // 去除 PKCS#7 padding
+  // Remove PKCS#7 padding
   const padLen = decrypted[decrypted.length - 1]!
   const content = decrypted.subarray(0, decrypted.length - padLen)
 
-  // 格式：16 bytes random + 4 bytes msg_len (big endian) + msg + corpId
+  // Format: 16 bytes random + 4 bytes msg_len (big endian) + msg + corpId
   const msgLen = content.readUInt32BE(16)
   const message = content.subarray(20, 20 + msgLen).toString('utf-8')
   const corpId = content.subarray(20 + msgLen).toString('utf-8')
@@ -51,7 +51,7 @@ export function decryptMessage(encodingAESKey: string, encryptedMsg: string): { 
 }
 
 /**
- * AES-256-CBC 加密回复消息
+ * AES-256-CBC encrypt reply message
  */
 export function encryptMessage(encodingAESKey: string, corpId: string, content: string): string {
   const aesKey = Buffer.from(encodingAESKey + '=', 'base64')
@@ -79,7 +79,7 @@ export function encryptMessage(encodingAESKey: string, corpId: string, content: 
 }
 
 /**
- * 用正则从 XML 中提取关键字段
+ * Extract key fields from XML using regex
  */
 export function extractTextFromXml(xml: string): {
   msgType: string
@@ -107,7 +107,7 @@ export function extractTextFromXml(xml: string): {
 }
 
 /**
- * 文本分片
+ * Split text into chunks
  */
 export function chunkText(text: string, limit: number): string[] {
   if (text.length <= limit) return [text]
@@ -152,18 +152,18 @@ export class WeComChannel implements Channel {
   async connect(): Promise<void> {
     const logger = getLogger()
 
-    // 获取 access_token
+    // Obtain access_token
     await this.refreshToken()
 
-    // 调度 token 自动刷新
+    // Schedule automatic token refresh
     this.scheduleTokenRefresh()
 
     this._connected = true
-    logger.info('企业微信 Channel 已连接（等待 webhook 回调）')
+    logger.info('WeCom Channel connected (waiting for webhook callbacks)')
   }
 
   /**
-   * 处理 GET 回调验证
+   * Handle GET callback verification
    */
   handleWebhookVerification(params: {
     msg_signature: string
@@ -173,23 +173,23 @@ export class WeComChannel implements Channel {
   }): { success: boolean; echostr?: string; error?: string } {
     const { msg_signature, timestamp, nonce, echostr } = params
 
-    // 校验签名
+    // Verify signature
     const expectedSig = generateSignature(this.token, timestamp, nonce, echostr)
     if (expectedSig !== msg_signature) {
-      return { success: false, error: '签名校验失败' }
+      return { success: false, error: 'Signature verification failed' }
     }
 
-    // 解密 echostr
+    // Decrypt echostr
     try {
       const { message } = decryptMessage(this.encodingAESKey, echostr)
       return { success: true, echostr: message }
     } catch (err) {
-      return { success: false, error: `解密 echostr 失败: ${err instanceof Error ? err.message : String(err)}` }
+      return { success: false, error: `Failed to decrypt echostr: ${err instanceof Error ? err.message : String(err)}` }
     }
   }
 
   /**
-   * 处理 POST 消息回调
+   * Handle POST message callback
    */
   handleWebhookMessage(
     params: { msg_signature: string; timestamp: string; nonce: string },
@@ -197,29 +197,29 @@ export class WeComChannel implements Channel {
   ): { success: boolean; error?: string } {
     const logger = getLogger()
 
-    // 从外层 XML 提取 Encrypt 字段
+    // Extract Encrypt field from outer XML
     const outerEncrypt = extractTextFromXml(body).encrypt
     if (!outerEncrypt) {
-      return { success: false, error: 'XML 中无 Encrypt 字段' }
+      return { success: false, error: 'No Encrypt field in XML' }
     }
 
-    // 校验签名
+    // Verify signature
     const { msg_signature, timestamp, nonce } = params
     const expectedSig = generateSignature(this.token, timestamp, nonce, outerEncrypt)
     if (expectedSig !== msg_signature) {
-      return { success: false, error: '签名校验失败' }
+      return { success: false, error: 'Signature verification failed' }
     }
 
-    // 解密消息
+    // Decrypt message
     try {
       const { message } = decryptMessage(this.encodingAESKey, outerEncrypt)
 
-      // 从解密后的 XML 提取消息内容
+      // Extract message content from decrypted XML
       const parsed = extractTextFromXml(message)
 
-      // 只处理文本消息
+      // Only process text messages
       if (parsed.msgType !== 'text') {
-        logger.debug({ msgType: parsed.msgType }, '企业微信：跳过非文本消息')
+        logger.debug({ msgType: parsed.msgType }, 'WeCom: skipping non-text message')
         return { success: true }
       }
 
@@ -241,11 +241,11 @@ export class WeComChannel implements Channel {
       }
 
       this.opts.onMessage(inbound)
-      logger.debug({ chatId }, '企业微信消息已接收')
+      logger.debug({ chatId }, 'WeCom message received')
       return { success: true }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err)
-      logger.error({ error: errMsg }, '企业微信消息解密失败')
+      logger.error({ error: errMsg }, 'WeCom message decryption failed')
       return { success: false, error: errMsg }
     }
   }
@@ -254,7 +254,7 @@ export class WeComChannel implements Channel {
     const logger = getLogger()
 
     try {
-      // 确保 token 有效
+      // Ensure token is valid
       if (!this.accessToken || this.isTokenExpired()) {
         await this.refreshToken()
       }
@@ -279,13 +279,13 @@ export class WeComChannel implements Channel {
 
         if (!res.ok) {
           const errText = await res.text().catch(() => '')
-          logger.error({ chatId, status: res.status, body: errText }, '企业微信消息发送失败')
+          logger.error({ chatId, status: res.status, body: errText }, 'WeCom message send failed')
         }
       }
 
-      logger.debug({ chatId, length: text.length }, '企业微信消息已发送')
+      logger.debug({ chatId, length: text.length }, 'WeCom message sent')
     } catch (err) {
-      logger.error({ chatId, error: err }, '企业微信消息发送异常')
+      logger.error({ chatId, error: err }, 'WeCom message send error')
     }
   }
 
@@ -303,13 +303,13 @@ export class WeComChannel implements Channel {
       this.tokenRefreshTimer = null
     }
     this._connected = false
-    getLogger().info('企业微信 Channel 已断开')
+    getLogger().info('WeCom channel disconnected')
   }
 
   private isTokenExpired(): boolean {
     if (!this.accessToken) return true
     const elapsed = Date.now() - this.accessToken.fetchedAt
-    // 提前 5 分钟视为过期
+    // Consider expired 5 minutes early
     return elapsed >= (this.accessToken.expires_in - 300) * 1000
   }
 
@@ -324,12 +324,12 @@ export class WeComChannel implements Channel {
         )
 
         if (!res.ok) {
-          throw new Error(`Token 请求失败: ${res.status} ${res.statusText}`)
+          throw new Error(`Token request failed: ${res.status} ${res.statusText}`)
         }
 
         const data = (await res.json()) as { access_token: string; expires_in: number; errcode?: number; errmsg?: string }
         if (data.errcode && data.errcode !== 0) {
-          throw new Error(`企业微信 API 错误: ${data.errcode} ${data.errmsg}`)
+          throw new Error(`WeCom API error: ${data.errcode} ${data.errmsg}`)
         }
 
         this.accessToken = {
@@ -338,17 +338,17 @@ export class WeComChannel implements Channel {
           fetchedAt: Date.now(),
         }
 
-        logger.debug({ expiresIn: data.expires_in }, '企业微信 access_token 已刷新')
+        logger.debug({ expiresIn: data.expires_in }, 'WeCom access_token refreshed')
         return
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
         const delay = 5000 * Math.pow(2, i)
-        logger.warn({ attempt: i + 1, delay, error: lastError.message }, '企业微信 token 刷新失败，重试中')
+        logger.warn({ attempt: i + 1, delay, error: lastError.message }, 'WeCom token refresh failed, retrying')
         if (i < 2) await new Promise((r) => setTimeout(r, delay))
       }
     }
 
-    throw new Error(`企业微信 token 刷新失败（3 次重试）: ${lastError?.message}`)
+    throw new Error(`WeCom token refresh failed (3 retries): ${lastError?.message}`)
   }
 
   private scheduleTokenRefresh(): void {
@@ -356,14 +356,14 @@ export class WeComChannel implements Channel {
 
     if (!this.accessToken) return
 
-    // 过期前 5 分钟刷新
+    // Refresh 5 minutes before expiry
     const refreshIn = Math.max((this.accessToken.expires_in - 300) * 1000, 60000)
     this.tokenRefreshTimer = setTimeout(async () => {
       try {
         await this.refreshToken()
         this.scheduleTokenRefresh()
       } catch (err) {
-        getLogger().error({ error: err instanceof Error ? err.message : String(err) }, '企业微信 token 自动刷新失败')
+        getLogger().error({ error: err instanceof Error ? err.message : String(err) }, 'WeCom token auto-refresh failed')
       }
     }, refreshIn)
   }

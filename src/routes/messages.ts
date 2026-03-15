@@ -11,7 +11,7 @@ import { ALLOWED_MEDIA_TYPES, MAX_FILE_SIZE, MAX_FILES } from '../types/attachme
 export function createMessagesRoutes(agentManager: AgentManager, agentQueue: AgentQueue, router: MessageRouter) {
   const messages = new Hono()
 
-  // POST /api/agents/:id/message — 发消息给 agent
+  // POST /api/agents/:id/message — send a message to an agent
   messages.post('/agents/:id/message', bodyLimit({ maxSize: 75 * 1024 * 1024 }), async (c) => {
     const agentId = c.req.param('id')
 
@@ -60,12 +60,12 @@ export function createMessagesRoutes(agentManager: AgentManager, agentQueue: Age
     return c.json({ chatId, status: 'processing' })
   })
 
-  // GET /api/chats — 所有对话列表
+  // GET /api/chats — list all conversations
   messages.get('/chats', (c) => {
     return c.json(getChats())
   })
 
-  // GET /api/chats/:chatId/messages — 消息历史
+  // GET /api/chats/:chatId/messages — message history
   messages.get('/chats/:chatId/messages', (c) => {
     const chatId = c.req.param('chatId')
     const limit = Number(c.req.query('limit') ?? '50')
@@ -79,7 +79,7 @@ export function createMessagesRoutes(agentManager: AgentManager, agentQueue: Age
     return c.json(parsed.reverse())
   })
 
-  // PATCH /api/chats/:chatId — 修改对话头像/标题
+  // PATCH /api/chats/:chatId — update conversation avatar/title
   messages.patch('/chats/:chatId', async (c) => {
     const chatId = c.req.param('chatId')
     const body = await c.req.json<{ name?: string; avatar?: string }>()
@@ -87,7 +87,7 @@ export function createMessagesRoutes(agentManager: AgentManager, agentQueue: Age
     return c.json({ ok: true })
   })
 
-  // DELETE /api/chats/:chatId — 删除对话及其消息
+  // DELETE /api/chats/:chatId — delete a conversation and its messages
   messages.delete('/chats/:chatId', (c) => {
     const chatId = c.req.param('chatId')
     deleteChat(chatId)

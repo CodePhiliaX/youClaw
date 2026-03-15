@@ -88,7 +88,7 @@ body {
   min-height: 100vh;
 }
 
-/* 非 Mac 平台自定义滚动条（Mac 保留原生效果） */
+/* Custom scrollbar for non-Mac platforms (Mac keeps native behavior) */
 .custom-scrollbar ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

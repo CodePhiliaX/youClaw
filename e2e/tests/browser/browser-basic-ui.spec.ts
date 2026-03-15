@@ -16,9 +16,9 @@ test.describe('Browser Profiles: 页面加载与基本 UI', () => {
 
   test('无 Profile 时显示空状态', async ({ page, request }) => {
     // 清理所有 profiles（包括非 E2E 的）确保空状态
-    const profiles = await (await request.get('http://localhost:3000/api/browser-profiles')).json() as Array<{ id: string }>
+    const profiles = await (await request.get('http://localhost:23107/api/browser-profiles')).json() as Array<{ id: string }>
     for (const p of profiles) {
-      await request.delete(`http://localhost:3000/api/browser-profiles/${p.id}`).catch(() => {})
+      await request.delete(`http://localhost:23107/api/browser-profiles/${p.id}`).catch(() => {})
     }
     await page.reload()
     await page.waitForLoadState('networkidle')

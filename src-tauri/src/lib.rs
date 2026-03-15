@@ -20,24 +20,34 @@ struct SidecarEvent {
     message: String,
 }
 
-/// Find an available port by binding to port 0
-fn find_available_port() -> Result<u16, String> {
-    let listener = TcpListener::bind("127.0.0.1:0")
-        .map_err(|e| format!("Failed to find available port: {}", e))?;
-    let port = listener.local_addr()
-        .map_err(|e| format!("Failed to get local addr: {}", e))?
-        .port();
-    drop(listener);
-    Ok(port)
-}
-
 /// Spawn the sidecar backend
 fn spawn_sidecar(app: &AppHandle) -> Result<u16, String> {
     let state = app.state::<SidecarState>();
 
-    // Allocate a random available port
-    let port = find_available_port()?;
-    log::info!("Allocated random port {} for sidecar", port);
+    // 读取用户配置的端口，未配置则使用默认 23107
+    let port: u16 = app.store("settings.json")
+        .ok()
+        .and_then(|store| store.get("preferredPort"))
+        .and_then(|v| v.as_str().map(String::from))
+        .and_then(|p| p.parse::<u16>().ok())
+        .filter(|p| *p >= 1024)
+        .unwrap_or(23107);
+
+    // 检测端口是否可用
+    match TcpListener::bind(format!("127.0.0.1:{}", port)) {
+        Ok(listener) => {
+            drop(listener);
+            log::info!("Using port {}", port);
+        }
+        Err(_) => {
+            log::warn!("Port {} is in use", port);
+            let _ = app.emit("sidecar-event", SidecarEvent {
+                status: "port-conflict".into(),
+                message: format!("Port {} is already in use", port),
+            });
+            return Err(format!("Port {} is already in use", port));
+        }
+    }
 
     // Model config (API Key, Base URL, Model ID) is now managed by the backend
     // via Settings API (SQLite kv_state), no longer injected from Tauri Store.
@@ -205,6 +215,27 @@ async fn restart_sidecar(app: AppHandle) -> Result<(), String> {
     wait_for_health(port, 30).await
 }
 
+#[tauri::command]
+async fn set_preferred_port(app: AppHandle, port: Option<String>) -> Result<(), String> {
+    let store = app.store("settings.json")
+        .map_err(|e| format!("Failed to open store: {}", e))?;
+
+    match port {
+        Some(p) => {
+            let port_num: u16 = p.parse().map_err(|_| "Invalid port number".to_string())?;
+            if port_num < 1024 {
+                return Err("Port must be between 1024 and 65535".to_string());
+            }
+            store.set("preferredPort", serde_json::Value::String(p));
+        }
+        None => {
+            let _ = store.delete("preferredPort");
+        }
+    }
+    let _ = store.save();
+    Ok(())
+}
+
 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -222,6 +253,7 @@ pub fn run() {
             get_version,
             get_platform,
             restart_sidecar,
+            set_preferred_port,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -302,7 +334,7 @@ pub fn run() {
                 }
                 #[cfg(debug_assertions)]
                 {
-                    // Dev 模式：读 .env 中的 PORT，同步写入 store 供前端使用
+                    // Dev mode: read PORT from .env and write it to store for frontend use
                     port = std::fs::read_to_string(
                         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.env")
                     )
@@ -313,7 +345,7 @@ pub fn run() {
                             .and_then(|l| l.strip_prefix("PORT="))
                             .and_then(|v| v.trim().parse::<u16>().ok())
                     })
-                    .unwrap_or(3000);
+                    .unwrap_or(23107);
 
                     if let Ok(store) = app_handle.store("settings.json") {
                         let _ = store.set("port", serde_json::Value::String(port.to_string()));

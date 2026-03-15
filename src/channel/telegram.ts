@@ -24,7 +24,7 @@ export class TelegramChannel implements Channel {
     const logger = getLogger()
     this.bot = new Bot(this.botToken)
 
-    // /chatid — 回复当前 chat ID
+    // /chatid — reply with current chat ID
     this.bot.command('chatid', (ctx) => {
       const chatId = ctx.chat.id
       const chatType = ctx.chat.type
@@ -39,18 +39,18 @@ export class TelegramChannel implements Channel {
       )
     })
 
-    // /ping — 健康检查
+    // /ping — health check
     this.bot.command('ping', (ctx) => {
       ctx.reply('YouClaw is online.')
     })
 
-    // 文本消息处理
+    // Text message handler
     this.bot.on('message:text', async (ctx) => {
-      // 只拦截已注册的 Telegram 内建命令，其余 / 消息放行（可能是 skill 调用）
+      // Only intercept registered Telegram built-in commands; other / messages pass through (may be skill invocations)
       const builtinCommands = new Set(['chatid', 'ping'])
       if (ctx.message.text.startsWith('/')) {
         const firstWord = ctx.message.text.split(/\s/)[0]!
-        const cmd = firstWord.slice(1).toLowerCase().split('@')[0]! // 处理 /chatid@bot_name 格式
+        const cmd = firstWord.slice(1).toLowerCase().split('@')[0]! // handle /chatid@bot_name format
         if (builtinCommands.has(cmd)) return
       }
 
@@ -66,7 +66,7 @@ export class TelegramChannel implements Channel {
       const msgId = ctx.message.message_id.toString()
       const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup'
 
-      // 处理 @mention：如果 bot 被 @ 提及，将 @bot_username 替换为 @YouClaw
+      // Handle @mention: if bot is mentioned, replace @bot_username with @YouClaw
       const botUsername = ctx.me?.username?.toLowerCase()
       if (botUsername) {
         const entities = ctx.message.entities || []
@@ -80,7 +80,7 @@ export class TelegramChannel implements Channel {
           return false
         })
         if (isBotMentioned) {
-          // 将 @bot_username 替换为 @YouClaw 以便统一触发格式
+          // Replace @bot_username with @YouClaw for unified trigger format
           const regex = new RegExp(`@${botUsername}`, 'gi')
           content = content.replace(regex, '@YouClaw')
         }
@@ -104,12 +104,12 @@ export class TelegramChannel implements Channel {
       )
     })
 
-    // 错误处理
+    // Error handler
     this.bot.catch((err) => {
       logger.error({ err: err.message }, 'Telegram bot error')
     })
 
-    // 以 Long Polling 模式启动
+    // Start in long polling mode
     return new Promise<void>((resolve, reject) => {
       this.bot!.start({
         onStart: (botInfo) => {
@@ -138,7 +138,7 @@ export class TelegramChannel implements Channel {
     try {
       const numericId = chatId.replace(/^tg:/, '')
 
-      // Telegram 限制每条消息最多 4096 字符，超长消息需要分片
+      // Telegram limits each message to 4096 characters; longer messages need chunking
       if (text.length <= TELEGRAM_MAX_LENGTH) {
         await this.bot.api.sendMessage(numericId, text, {
           parse_mode: 'Markdown',
@@ -172,8 +172,8 @@ export class TelegramChannel implements Channel {
       try {
         await this.bot.stop()
       } catch (err) {
-        // grammy 的 stop() 内部会调用 getUpdates 确认 offset，
-        // 如果 token 无效会抛出异常，这里安全忽略
+        // grammy's stop() internally calls getUpdates to confirm offset,
+        // which may throw if token is invalid; safe to ignore
         logger.debug({ err: err instanceof Error ? err.message : String(err) }, 'Telegram bot stop error (ignored)')
       }
       this.bot = null

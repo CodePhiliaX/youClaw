@@ -5,7 +5,7 @@ import type { SystemStatus } from '../api/system'
 import { cn } from '../lib/utils'
 import { useI18n } from '../i18n'
 
-// --- 工具函数 ---
+// --- Utility functions ---
 
 function formatUptime(seconds: number): string {
   const h = Math.floor(seconds / 3600)
@@ -26,7 +26,7 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleString()
 }
 
-// --- SSE 日志事件类型 ---
+// --- SSE log event types ---
 
 interface LogEntry {
   id: number
@@ -35,7 +35,7 @@ interface LogEntry {
   content: string
 }
 
-// --- 组件 ---
+// --- Components ---
 
 function StatusCard({
   icon: Icon,
@@ -83,7 +83,7 @@ export function System() {
   const logsEndRef = useRef<HTMLDivElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
 
-  // 拉取系统状态
+  // Fetch system status
   const fetchStatus = useCallback(() => {
     getSystemStatus().then(setStatus).catch(() => {})
   }, [])
@@ -94,7 +94,7 @@ export function System() {
     return () => clearInterval(interval)
   }, [fetchStatus])
 
-  // 连接 SSE 日志流
+  // Connect to SSE log stream
   useEffect(() => {
     const es = new EventSource('/api/stream/system')
     eventSourceRef.current = es
@@ -112,7 +112,7 @@ export function System() {
         }
         setLogs((prev) => {
           const next = [...prev, entry]
-          // 保留最近 200 条
+          // Keep last 200 entries
           return next.length > 200 ? next.slice(-200) : next
         })
       } catch {
@@ -128,7 +128,7 @@ export function System() {
     es.addEventListener('connected', handleEvent)
 
     es.onerror = () => {
-      // EventSource 自动重连
+      // EventSource auto-reconnects
     }
 
     return () => {
@@ -137,7 +137,7 @@ export function System() {
     }
   }, [])
 
-  // 自动滚动到最新日志
+  // Auto-scroll to latest log
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [logs])
@@ -153,7 +153,7 @@ export function System() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* 顶部: 状态卡片 */}
+      {/* Top: Status cards */}
       <div className="p-4 pb-2 border-b border-border shrink-0" data-testid="system-status">
         <h1 className="text-lg font-semibold mb-3">{t.system.title}</h1>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -198,7 +198,7 @@ export function System() {
         </div>
       </div>
 
-      {/* 中间: 实时日志流 */}
+      {/* Middle: Live log stream */}
       <div className="flex-1 flex flex-col min-h-0 p-4 pb-2">
         <h2 className="text-sm font-semibold text-muted-foreground mb-2">{t.system.liveEvents}</h2>
         <div className="flex-1 overflow-y-auto rounded-lg border border-border bg-zinc-950 font-mono text-xs p-3">
@@ -234,7 +234,7 @@ export function System() {
         </div>
       </div>
 
-      {/* 底部: 系统信息 */}
+      {/* Bottom: System info */}
       <div className="p-4 pt-2 border-t border-border shrink-0">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
           <InfoItem icon={Cpu} label={t.system.platform} value={status.platform} />

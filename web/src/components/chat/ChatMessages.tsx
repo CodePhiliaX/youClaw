@@ -31,7 +31,7 @@ export function ChatMessages() {
             : <AssistantMessage key={msg.id} message={msg} />
         )}
 
-        {/* Streaming 中的 tool_use */}
+        {/* Streaming tool_use */}
         {pendingToolUse.length > 0 && (
           <AIMessage from="assistant">
             <div className="flex gap-3 py-3">
@@ -48,7 +48,7 @@ export function ChatMessages() {
           </AIMessage>
         )}
 
-        {/* Streaming 文本 */}
+        {/* Streaming text */}
         {streamingText && (
           <AIMessage from="assistant">
             <div className="flex gap-3 py-3">
@@ -68,7 +68,7 @@ export function ChatMessages() {
           </AIMessage>
         )}
 
-        {/* Thinking 状态 */}
+        {/* Thinking state */}
         {isProcessing && !streamingText && pendingToolUse.length === 0 && (
           <div className="flex gap-3 py-3">
             <Avatar className="h-8 w-8 mt-0.5">
@@ -90,7 +90,7 @@ export function ChatMessages() {
   )
 }
 
-/** 当消息数量变化或开始处理时，自动滚动到底部 */
+/** Auto-scroll to bottom when message count changes or processing starts */
 function ScrollOnChange({ messageCount, isProcessing }: { messageCount: number; isProcessing: boolean }) {
   const { scrollToBottom } = useStickToBottomContext()
 

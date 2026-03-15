@@ -18,26 +18,26 @@ interface AccessToken {
   fetchedAt: number
 }
 
-// ===== 纯函数（方便单元测试）=====
+// ===== Pure functions (for unit testing) =====
 
 /**
- * 提取钉钉消息文本内容
+ * Extract text content from a DingTalk message
  */
 export function extractDingTalkTextContent(content: string): string {
   return content.trim()
 }
 
 /**
- * 去除 @机器人 提及
+ * Strip @bot mentions
  */
 export function stripDingTalkAtMention(content: string): string {
-  // 钉钉 @机器人 格式通常为 @机器人名
-  // atUsers 信息在 payload 中，此处去除所有 @xxx 开头的提及
+  // DingTalk @bot format is typically @botname
+  // atUsers info is in the payload; strip all @xxx mentions here
   return content.replace(/@\S+/g, '').trim()
 }
 
 /**
- * 文本分片
+ * Split text into chunks
  */
 export function chunkText(text: string, limit: number): string[] {
   if (text.length <= limit) return [text]
@@ -49,7 +49,7 @@ export function chunkText(text: string, limit: number): string[] {
 }
 
 /**
- * 检查 token 是否仍在有效期内
+ * Check whether the token is still within its validity period
  */
 export function isTokenValid(token: AccessToken | null, bufferMs: number = 300000): boolean {
   if (!token) return false
@@ -82,13 +82,13 @@ export class DingTalkChannel implements Channel {
   async connect(): Promise<void> {
     const logger = getLogger()
 
-    // 1. 获取 access_token
+    // 1. Get access_token
     await this.refreshToken()
 
-    // 2. 调度 token 自动刷新
+    // 2. Schedule automatic token refresh
     this.scheduleTokenRefresh()
 
-    // 3. 创建 Stream 客户端
+    // 3. Create Stream client
     if (this.opts._streamClient) {
       this.streamClient = this.opts._streamClient
     } else {
@@ -102,31 +102,31 @@ export class DingTalkChannel implements Channel {
         try {
           this.handleRobotMessage(res)
         } catch (err) {
-          logger.error({ error: err }, '处理钉钉机器人消息失败')
+          logger.error({ error: err }, 'Failed to process DingTalk robot message')
         }
-        // 确认消息已接收
+        // Acknowledge message received
         return { status: EventAck.SUCCESS }
       })
 
       this.streamClient = client
     }
 
-    // 4. 启动 stream
+    // 4. Start stream
     await this.streamClient.connect()
     await new Promise<void>((r) => setTimeout(r, 1000))
 
-    // 5. 订阅 EventBus
+    // 5. Subscribe to EventBus
     if (this.eventBus) {
       this.unsubscribeEvents = this.eventBus.subscribe(
         { types: ['complete', 'error'] },
         (_event) => {
-          // 钉钉不需要特殊的完成清理
+          // DingTalk doesn't need special completion cleanup
         },
       )
     }
 
     this._connected = true
-    logger.info('钉钉 Stream 连接已建立')
+    logger.info('DingTalk Stream connection established')
   }
 
   private handleRobotMessage(res: any): void {
@@ -139,7 +139,7 @@ export class DingTalkChannel implements Channel {
     let content = extractDingTalkTextContent(text)
     const isGroup = data.conversationType === '2'
 
-    // 群聊去除 @bot
+    // Strip @bot in group chat
     if (isGroup) {
       content = stripDingTalkAtMention(content)
     }
@@ -165,14 +165,14 @@ export class DingTalkChannel implements Channel {
     }
 
     this.opts.onMessage(inbound)
-    logger.debug({ chatId }, '钉钉消息已接收')
+    logger.debug({ chatId }, 'DingTalk message received')
   }
 
   async sendMessage(chatId: string, text: string): Promise<void> {
     const logger = getLogger()
 
     try {
-      // 确保 token 有效
+      // Ensure token is valid
       if (!isTokenValid(this.accessToken)) {
         await this.refreshToken()
       }
@@ -187,14 +187,14 @@ export class DingTalkChannel implements Channel {
           const conversationId = chatId.slice('dingtalk:group:'.length)
           await this.sendGroupMessage(conversationId, chunk)
         } else {
-          logger.warn({ chatId }, '钉钉: 未知的 chatId 格式')
+          logger.warn({ chatId }, 'DingTalk: unknown chatId format')
           return
         }
       }
 
-      logger.debug({ chatId, length: text.length }, '钉钉消息已发送')
+      logger.debug({ chatId, length: text.length }, 'DingTalk message sent')
     } catch (err) {
-      logger.error({ chatId, error: err }, '钉钉消息发送异常')
+      logger.error({ chatId, error: err }, 'DingTalk message send error')
     }
   }
 
@@ -215,7 +215,7 @@ export class DingTalkChannel implements Channel {
 
     if (!res.ok) {
       const errText = await res.text().catch(() => '')
-      getLogger().error({ userId, status: res.status, body: errText }, '钉钉 1:1 消息发送失败')
+      getLogger().error({ userId, status: res.status, body: errText }, 'DingTalk 1:1 message send failed')
     }
   }
 
@@ -236,7 +236,7 @@ export class DingTalkChannel implements Channel {
 
     if (!res.ok) {
       const errText = await res.text().catch(() => '')
-      getLogger().error({ conversationId, status: res.status, body: errText }, '钉钉群聊消息发送失败')
+      getLogger().error({ conversationId, status: res.status, body: errText }, 'DingTalk group message send failed')
     }
   }
 
@@ -263,7 +263,7 @@ export class DingTalkChannel implements Channel {
 
     if (this.streamClient) {
       try {
-        // DWClient 没有显式的 close 方法，置空即可
+        // DWClient has no explicit close method; set to null
         this.streamClient = null
       } catch {
         // ignore close errors
@@ -271,7 +271,7 @@ export class DingTalkChannel implements Channel {
     }
 
     this._connected = false
-    logger.info('钉钉 Channel 已断开')
+    logger.info('DingTalk channel disconnected')
   }
 
   private async refreshToken(): Promise<void> {
@@ -287,7 +287,7 @@ export class DingTalkChannel implements Channel {
         })
 
         if (!res.ok) {
-          throw new Error(`Token 请求失败: ${res.status} ${res.statusText}`)
+          throw new Error(`Token request failed: ${res.status} ${res.statusText}`)
         }
 
         const data = (await res.json()) as { accessToken: string; expireIn: number }
@@ -297,17 +297,17 @@ export class DingTalkChannel implements Channel {
           fetchedAt: Date.now(),
         }
 
-        logger.debug({ expiresIn: data.expireIn }, '钉钉 access_token 已刷新')
+        logger.debug({ expiresIn: data.expireIn }, 'DingTalk access_token refreshed')
         return
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
         const delay = 5000 * Math.pow(2, i)
-        logger.warn({ attempt: i + 1, delay, error: lastError.message }, '钉钉 token 刷新失败，重试中')
+        logger.warn({ attempt: i + 1, delay, error: lastError.message }, 'DingTalk token refresh failed, retrying')
         if (i < 2) await new Promise((r) => setTimeout(r, delay))
       }
     }
 
-    throw new Error(`钉钉 token 刷新失败（3 次重试）: ${lastError?.message}`)
+    throw new Error(`DingTalk token refresh failed after 3 retries: ${lastError?.message}`)
   }
 
   private scheduleTokenRefresh(): void {
@@ -315,14 +315,14 @@ export class DingTalkChannel implements Channel {
 
     if (!this.accessToken) return
 
-    // 过期前 5 分钟刷新
+    // Refresh 5 minutes before expiry
     const refreshIn = Math.max((this.accessToken.expires_in - 300) * 1000, 60000)
     this.tokenRefreshTimer = setTimeout(async () => {
       try {
         await this.refreshToken()
         this.scheduleTokenRefresh()
       } catch (err) {
-        getLogger().error({ error: err instanceof Error ? err.message : String(err) }, '钉钉 token 自动刷新失败')
+        getLogger().error({ error: err instanceof Error ? err.message : String(err) }, 'DingTalk token auto-refresh failed')
       }
     }, refreshIn)
   }

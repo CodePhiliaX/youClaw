@@ -19,8 +19,8 @@ export default defineConfig({
 
           // 直接 pipe 到后端，不经过 http-proxy 的缓冲
           const proxyReq = http.request(
-            `http://localhost:3000${req.url}`,
-            { method: 'GET', headers: { ...req.headers, host: 'localhost:3000' } },
+            `http://localhost:23107${req.url}`,
+            { method: 'GET', headers: { ...req.headers, host: 'localhost:23107' } },
             (proxyRes) => {
               res.writeHead(proxyRes.statusCode ?? 200, {
                 ...proxyRes.headers,
@@ -51,7 +51,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:23107',
         changeOrigin: true,
       },
     },

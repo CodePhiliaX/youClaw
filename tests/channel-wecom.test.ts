@@ -10,18 +10,18 @@ import {
 // ---------------------------------------------------------------------------
 
 describe('generateSignature', () => {
-  test('生成正确的 SHA1 签名', () => {
+  test('generates correct SHA1 signature', () => {
     const sig = generateSignature('token123', '1234567890', 'nonce1', 'encrypt_data')
     expect(sig).toMatch(/^[0-9a-f]{40}$/)
   })
 
-  test('不同排序产生相同签名', () => {
+  test('different sort order produces the same signature', () => {
     const sig1 = generateSignature('a', 'b', 'c', 'd')
     const sig2 = generateSignature('a', 'b', 'c', 'd')
     expect(sig1).toBe(sig2)
   })
 
-  test('不同输入产生不同签名', () => {
+  test('different inputs produce different signatures', () => {
     const sig1 = generateSignature('token1', '123', 'nonce', 'enc')
     const sig2 = generateSignature('token2', '123', 'nonce', 'enc')
     expect(sig1).not.toBe(sig2)
@@ -29,27 +29,27 @@ describe('generateSignature', () => {
 })
 
 describe('decryptMessage / encryptMessage', () => {
-  // 43 字符的 encodingAESKey（base64 去掉尾部 = 后 43 字符）
+  // 43-character encodingAESKey (base64 without trailing '=', 43 chars)
   const encodingAESKey = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG'
   const corpId = 'wx1234567890'
 
-  test('加解密往返测试', () => {
-    const original = 'Hello, 企业微信!'
+  test('encrypt-decrypt round trip', () => {
+    const original = 'Hello, WeCom!'
     const encrypted = encryptMessage(encodingAESKey, corpId, original)
     const { message, corpId: decryptedCorpId } = decryptMessage(encodingAESKey, encrypted)
     expect(message).toBe(original)
     expect(decryptedCorpId).toBe(corpId)
   })
 
-  test('空消息加解密', () => {
+  test('empty message encrypt-decrypt', () => {
     const original = ''
     const encrypted = encryptMessage(encodingAESKey, corpId, original)
     const { message } = decryptMessage(encodingAESKey, encrypted)
     expect(message).toBe(original)
   })
 
-  test('长消息加解密', () => {
-    const original = '测试'.repeat(500)
+  test('long message encrypt-decrypt', () => {
+    const original = 'test'.repeat(500)
     const encrypted = encryptMessage(encodingAESKey, corpId, original)
     const { message } = decryptMessage(encodingAESKey, encrypted)
     expect(message).toBe(original)
@@ -57,7 +57,7 @@ describe('decryptMessage / encryptMessage', () => {
 })
 
 describe('extractTextFromXml', () => {
-  test('提取文本消息', () => {
+  test('extracts text message', () => {
     const xml = `<xml>
       <MsgType><![CDATA[text]]></MsgType>
       <Content><![CDATA[hello world]]></Content>
@@ -73,21 +73,21 @@ describe('extractTextFromXml', () => {
     expect(result.msgId).toBe('12345')
   })
 
-  test('图片消息', () => {
+  test('image message', () => {
     const xml = `<xml><MsgType><![CDATA[image]]></MsgType><Content></Content></xml>`
     const result = extractTextFromXml(xml)
     expect(result.msgType).toBe('image')
     expect(result.content).toBe('')
   })
 
-  test('空内容', () => {
+  test('empty content', () => {
     const xml = '<xml></xml>'
     const result = extractTextFromXml(xml)
     expect(result.msgType).toBe('')
     expect(result.content).toBe('')
   })
 
-  test('提取 Encrypt 字段', () => {
+  test('extracts Encrypt field', () => {
     const xml = '<xml><Encrypt><![CDATA[encrypted_data]]></Encrypt></xml>'
     const result = extractTextFromXml(xml)
     expect(result.encrypt).toBe('encrypted_data')
@@ -95,19 +95,19 @@ describe('extractTextFromXml', () => {
 })
 
 describe('chunkText', () => {
-  test('短文本返回单个分片', () => {
+  test('short text returns a single chunk', () => {
     expect(chunkText('hello', 10)).toEqual(['hello'])
   })
 
-  test('正确拆分', () => {
+  test('splits correctly', () => {
     expect(chunkText('abcdefghij', 3)).toEqual(['abc', 'def', 'ghi', 'j'])
   })
 
-  test('恰好整除', () => {
+  test('evenly divisible', () => {
     expect(chunkText('abcdef', 3)).toEqual(['abc', 'def'])
   })
 
-  test('空字符串', () => {
+  test('empty string', () => {
     expect(chunkText('', 10)).toEqual([''])
   })
 })
@@ -123,7 +123,7 @@ function createMockFetch() {
     const urlStr = url.toString()
     calls.push({ url: urlStr, init })
 
-    // token 请求
+    // token request
     if (urlStr.includes('gettoken')) {
       return new Response(JSON.stringify({ access_token: 'test_token', expires_in: 7200, errcode: 0 }), {
         status: 200,
@@ -131,7 +131,7 @@ function createMockFetch() {
       })
     }
 
-    // 发送消息
+    // send message
     if (urlStr.includes('message/send')) {
       return new Response(JSON.stringify({ errcode: 0, errmsg: 'ok' }), {
         status: 200,
@@ -149,14 +149,14 @@ describe('WeComChannel', () => {
   const encodingAESKey = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG'
 
   describe('sendMessage', () => {
-    test('正确的 API URL 和 access_token 参数', async () => {
+    test('correct API URL and access_token parameter', async () => {
       const { fetch: mockFetch, calls } = createMockFetch()
       const channel = new WeComChannel('corp1', 'secret1', '1000001', 'token', encodingAESKey, {
         onMessage: mock(() => {}),
         _fetchFn: mockFetch,
       })
 
-      // 手动设置 token
+      // manually set token
       ;(channel as any).accessToken = { access_token: 'test_token', expires_in: 7200, fetchedAt: Date.now() }
 
       await channel.sendMessage('wecom:user123', 'hello')
@@ -172,7 +172,7 @@ describe('WeComChannel', () => {
       expect(body.text.content).toBe('hello')
     })
 
-    test('2048 字符分片', async () => {
+    test('2048 character chunking', async () => {
       const { fetch: mockFetch, calls } = createMockFetch()
       const channel = new WeComChannel('corp1', 'secret1', '1000001', 'token', encodingAESKey, {
         onMessage: mock(() => {}),
@@ -188,14 +188,14 @@ describe('WeComChannel', () => {
       expect(msgCalls.length).toBe(2)
     })
 
-    test('过期 token 自动刷新', async () => {
+    test('auto-refreshes expired token', async () => {
       const { fetch: mockFetch, calls } = createMockFetch()
       const channel = new WeComChannel('corp1', 'secret1', '1000001', 'token', encodingAESKey, {
         onMessage: mock(() => {}),
         _fetchFn: mockFetch,
       })
 
-      // 设置过期 token
+      // set expired token
       ;(channel as any).accessToken = { access_token: 'old_token', expires_in: 7200, fetchedAt: Date.now() - 8000000 }
 
       await channel.sendMessage('wecom:user1', 'hello')
@@ -206,14 +206,14 @@ describe('WeComChannel', () => {
   })
 
   describe('handleWebhookVerification', () => {
-    test('合法签名返回解密 echostr', async () => {
+    test('valid signature returns decrypted echostr', async () => {
       const { fetch: mockFetch } = createMockFetch()
       const channel = new WeComChannel('corp1', 'secret1', '1000001', 'testtoken', encodingAESKey, {
         onMessage: mock(() => {}),
         _fetchFn: mockFetch,
       })
 
-      // 用 encryptMessage 生成 echostr
+      // generate echostr using encryptMessage
       const { encryptMessage: enc } = await import('../src/channel/wecom.ts')
       const echostr = enc(encodingAESKey, 'corp1', 'echo_test_123')
 
@@ -232,7 +232,7 @@ describe('WeComChannel', () => {
       expect(result.echostr).toBe('echo_test_123')
     })
 
-    test('非法签名拒绝', () => {
+    test('invalid signature is rejected', () => {
       const { fetch: mockFetch } = createMockFetch()
       const channel = new WeComChannel('corp1', 'secret1', '1000001', 'testtoken', encodingAESKey, {
         onMessage: mock(() => {}),
@@ -247,12 +247,12 @@ describe('WeComChannel', () => {
       })
 
       expect(result.success).toBe(false)
-      expect(result.error).toContain('签名')
+      expect(result.error).toContain('Signature')
     })
   })
 
   describe('handleWebhookMessage', () => {
-    test('解密并路由文本消息到 onMessage', () => {
+    test('decrypts and routes text message to onMessage', () => {
       const { fetch: mockFetch } = createMockFetch()
       const messages: any[] = []
       const channel = new WeComChannel('corp1', 'secret1', '1000001', 'testtoken', encodingAESKey, {
@@ -260,7 +260,7 @@ describe('WeComChannel', () => {
         _fetchFn: mockFetch,
       })
 
-      // 构造加密的消息 XML
+      // construct encrypted message XML
       const innerXml = `<xml>
         <MsgType><![CDATA[text]]></MsgType>
         <Content><![CDATA[test message]]></Content>
@@ -288,7 +288,7 @@ describe('WeComChannel', () => {
       expect(messages[0].channel).toBe('wecom')
     })
 
-    test('忽略非文本消息', () => {
+    test('ignores non-text messages', () => {
       const { fetch: mockFetch } = createMockFetch()
       const messages: any[] = []
       const channel = new WeComChannel('corp1', 'secret1', '1000001', 'testtoken', encodingAESKey, {
@@ -313,7 +313,7 @@ describe('WeComChannel', () => {
       expect(messages.length).toBe(0)
     })
 
-    test('签名校验失败拒绝', () => {
+    test('rejects on signature verification failure', () => {
       const { fetch: mockFetch } = createMockFetch()
       const channel = new WeComChannel('corp1', 'secret1', '1000001', 'testtoken', encodingAESKey, {
         onMessage: mock(() => {}),
@@ -329,12 +329,12 @@ describe('WeComChannel', () => {
       )
 
       expect(result.success).toBe(false)
-      expect(result.error).toContain('签名')
+      expect(result.error).toContain('Signature')
     })
   })
 
   describe('ownsChatId', () => {
-    test('wecom: 前缀返回 true', () => {
+    test('wecom: prefix returns true', () => {
       const { fetch: mockFetch } = createMockFetch()
       const channel = new WeComChannel('c', 's', 'a', 't', encodingAESKey, {
         onMessage: mock(() => {}),
@@ -344,7 +344,7 @@ describe('WeComChannel', () => {
       expect(channel.ownsChatId('wecom:user1')).toBe(true)
     })
 
-    test('非 wecom: 前缀返回 false', () => {
+    test('non-wecom: prefix returns false', () => {
       const { fetch: mockFetch } = createMockFetch()
       const channel = new WeComChannel('c', 's', 'a', 't', encodingAESKey, {
         onMessage: mock(() => {}),
@@ -358,7 +358,7 @@ describe('WeComChannel', () => {
   })
 
   describe('isConnected', () => {
-    test('初始状态为 false', () => {
+    test('initial state is false', () => {
       const { fetch: mockFetch } = createMockFetch()
       const channel = new WeComChannel('c', 's', 'a', 't', encodingAESKey, {
         onMessage: mock(() => {}),
@@ -370,14 +370,14 @@ describe('WeComChannel', () => {
   })
 
   describe('disconnect', () => {
-    test('清理 timer 并设置 connected = false', async () => {
+    test('clears timer and sets connected to false', async () => {
       const { fetch: mockFetch } = createMockFetch()
       const channel = new WeComChannel('c', 's', 'a', 't', encodingAESKey, {
         onMessage: mock(() => {}),
         _fetchFn: mockFetch,
       })
 
-      // 手动设置一些状态
+      // manually set some state
       ;(channel as any)._connected = true
       ;(channel as any).tokenRefreshTimer = setTimeout(() => {}, 100000)
 

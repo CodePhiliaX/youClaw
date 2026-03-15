@@ -30,10 +30,10 @@ export class RegistryManager {
     this.loadRecommendedList()
   }
 
-  /** 读取推荐列表，合并本地安装状态 */
+  /** Get recommended list, merged with local installation status */
   getRecommended(): RecommendedSkill[] {
     const allSkills = this.skillsLoader.loadAllSkills()
-    // 已安装的 slug 集合（通过 registryMeta 或目录名匹配）
+    // Set of installed slugs (matched by registryMeta or directory name)
     const installedSlugs = new Set<string>()
     for (const skill of allSkills) {
       if (skill.registryMeta?.slug) {
@@ -41,7 +41,7 @@ export class RegistryManager {
       }
     }
 
-    // 同时检查用户 skills 目录下是否有对应 slug 的目录
+    // Also check if a directory for the slug exists in user skills directory
     const userSkillsDir = resolve(homedir(), '.youclaw', 'skills')
     for (const entry of this.recommended) {
       if (!installedSlugs.has(entry.slug)) {
@@ -58,42 +58,42 @@ export class RegistryManager {
     }))
   }
 
-  /** 从 ClawHub 下载 ZIP 并安装到 ~/.youclaw/skills/<slug>/ */
+  /** Download ZIP from ClawHub and install to ~/.youclaw/skills/<slug>/ */
   async installSkill(slug: string): Promise<void> {
     const logger = getLogger()
     const entry = this.recommended.find((e) => e.slug === slug)
     if (!entry) {
-      throw new Error(`未知的推荐技能: ${slug}`)
+      throw new Error(`Unknown recommended skill: ${slug}`)
     }
 
     const userSkillsDir = resolve(homedir(), '.youclaw', 'skills')
     const targetDir = resolve(userSkillsDir, slug)
 
     if (existsSync(resolve(targetDir, 'SKILL.md'))) {
-      throw new Error(`技能 "${slug}" 已安装`)
+      throw new Error(`Skill "${slug}" is already installed`)
     }
 
-    // 下载 ZIP
+    // Download ZIP
     const url = `${CLAWHUB_DOWNLOAD_URL}?slug=${encodeURIComponent(slug)}`
-    logger.info({ slug, url }, '正在从 ClawHub 下载技能')
+    logger.info({ slug, url }, 'Downloading skill from ClawHub')
 
     let response = await fetch(url)
 
-    // 处理 429 限流：读 retry-after，等待重试 1 次
+    // Handle 429 rate limit: read retry-after, wait and retry once
     if (response.status === 429) {
       const retryAfter = parseInt(response.headers.get('retry-after') || '5', 10)
-      logger.warn({ slug, retryAfter }, 'ClawHub 限流，等待重试')
+      logger.warn({ slug, retryAfter }, 'ClawHub rate limited, waiting to retry')
       await new Promise((r) => setTimeout(r, retryAfter * 1000))
       response = await fetch(url)
     }
 
     if (!response.ok) {
-      throw new Error(`下载失败: HTTP ${response.status} ${response.statusText}`)
+      throw new Error(`Download failed: HTTP ${response.status} ${response.statusText}`)
     }
 
     const zipBuffer = await response.arrayBuffer()
 
-    // 解压并安装
+    // Unzip and install
     mkdirSync(targetDir, { recursive: true })
 
     try {
@@ -103,16 +103,16 @@ export class RegistryManager {
       let hasSkillMd = false
 
       for (const [filePath, content] of Object.entries(files)) {
-        // 跳过目录条目（以 / 结尾且内容为空）
+        // Skip directory entries (ending with / and empty content)
         if (filePath.endsWith('/') && content.length === 0) continue
 
-        // 去掉可能的顶层目录前缀（如 slug/）
+        // Strip possible top-level directory prefix (e.g. slug/)
         let relativePath = filePath
         const firstSlash = filePath.indexOf('/')
         if (firstSlash !== -1) {
-          // 检查是否所有文件都有相同的顶层目录
+          // Check if all files share the same top-level directory
           relativePath = filePath.slice(firstSlash + 1)
-          if (!relativePath) continue // 顶层目录本身
+          if (!relativePath) continue // Top-level directory itself
         }
 
         if (relativePath === 'SKILL.md' || relativePath.endsWith('/SKILL.md')) {
@@ -125,15 +125,15 @@ export class RegistryManager {
         writeFileSync(destPath, content)
       }
 
-      // 如果没有找到 SKILL.md，可能文件直接在根目录
+      // If SKILL.md not found, files may be directly in root directory
       if (!hasSkillMd) {
-        // 再检查一下是否直接解压到了 targetDir
+        // Double-check if extracted directly to targetDir
         if (!existsSync(resolve(targetDir, 'SKILL.md'))) {
-          throw new Error('ZIP 包中未找到 SKILL.md')
+          throw new Error('SKILL.md not found in ZIP archive')
         }
       }
 
-      // 写入 .registry.json 元数据
+      // Write .registry.json metadata
       const meta: SkillRegistryMeta = {
         source: 'clawhub',
         slug,
@@ -142,45 +142,45 @@ export class RegistryManager {
       }
       writeFileSync(resolve(targetDir, '.registry.json'), JSON.stringify(meta, null, 2))
 
-      // 刷新 skills 缓存
+      // Refresh skills cache
       this.skillsLoader.refresh()
-      logger.info({ slug, targetDir }, '技能安装完成')
+      logger.info({ slug, targetDir }, 'Skill installed')
     } catch (err) {
-      // 清理失败的安装
+      // Clean up failed installation
       const { rmSync } = await import('node:fs')
       rmSync(targetDir, { recursive: true, force: true })
       throw err
     }
   }
 
-  /** 卸载技能 */
+  /** Uninstall a skill */
   async uninstallSkill(slug: string): Promise<void> {
     const logger = getLogger()
     const userSkillsDir = resolve(homedir(), '.youclaw', 'skills')
     const targetDir = resolve(userSkillsDir, slug)
 
     if (!existsSync(targetDir)) {
-      throw new Error(`技能 "${slug}" 未安装`)
+      throw new Error(`Skill "${slug}" is not installed`)
     }
 
     const { rmSync } = await import('node:fs')
     rmSync(targetDir, { recursive: true, force: true })
 
     this.skillsLoader.refresh()
-    logger.info({ slug }, '技能已卸载')
+    logger.info({ slug }, 'Skill uninstalled')
   }
 
-  /** 加载推荐列表（启动时缓存） */
+  /** Load recommended list (cached at startup) */
   private loadRecommendedList(): void {
     const logger = getLogger()
     try {
-      // 使用 Bun.file + import.meta.resolve 确保编译后也能读取嵌入的文件
+      // Use import.meta.url to ensure embedded file is readable after compilation
       const filePath = new URL('./recommended-skills.json', import.meta.url).pathname
       const raw = readFileSync(filePath, 'utf-8')
       this.recommended = JSON.parse(raw)
-      logger.debug({ count: this.recommended.length }, '推荐技能列表已加载')
+      logger.debug({ count: this.recommended.length }, 'Recommended skills list loaded')
     } catch (err) {
-      logger.warn({ error: err instanceof Error ? err.message : String(err) }, '加载推荐技能列表失败')
+      logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'Failed to load recommended skills list')
       this.recommended = []
     }
   }

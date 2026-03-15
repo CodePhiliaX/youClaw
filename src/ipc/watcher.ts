@@ -3,7 +3,7 @@ import { resolve, join } from 'node:path'
 import { getLogger } from '../logger/index.ts'
 import { getPaths } from '../config/index.ts'
 
-// ===== IPC 文件消息类型 =====
+// ===== IPC File Message Types =====
 
 interface ScheduleTaskMessage {
   type: 'schedule_task'
@@ -35,7 +35,7 @@ interface CancelTaskMessage {
 
 type IpcMessage = ScheduleTaskMessage | PauseTaskMessage | ResumeTaskMessage | CancelTaskMessage
 
-// ===== 依赖接口 =====
+// ===== Dependency Interface =====
 
 export interface IpcDeps {
   onScheduleTask: (data: {
@@ -66,42 +66,42 @@ export class IpcWatcher {
     this.ipcDir = resolve(paths.data, 'ipc')
   }
 
-  /** 启动 IPC 文件轮询（每 3 秒） */
+  /** Start IPC file polling (every 3 seconds) */
   start(): void {
     const logger = getLogger()
     if (this.intervalId) return
 
-    // 确保 IPC 根目录存在
+    // Ensure IPC root directory exists
     mkdirSync(this.ipcDir, { recursive: true })
 
-    logger.info({ ipcDir: this.ipcDir }, 'IPC Watcher 已启动，每 3 秒轮询')
+    logger.info({ ipcDir: this.ipcDir }, 'IPC Watcher started, polling every 3 seconds')
 
-    // 立即执行一次
+    // Execute immediately
     this.tick().catch((err) => {
-      logger.error({ error: String(err) }, 'IPC tick 失败')
+      logger.error({ error: String(err) }, 'IPC tick failed')
     })
 
     this.intervalId = setInterval(() => {
       this.tick().catch((err) => {
-        logger.error({ error: String(err) }, 'IPC tick 失败')
+        logger.error({ error: String(err) }, 'IPC tick failed')
       })
     }, 3_000)
   }
 
-  /** 停止轮询 */
+  /** Stop polling */
   stop(): void {
     if (this.intervalId) {
       clearInterval(this.intervalId)
       this.intervalId = null
-      getLogger().info('IPC Watcher 已停止')
+      getLogger().info('IPC Watcher stopped')
     }
   }
 
-  /** 扫描所有 agent 的 IPC 目录，处理 JSON 文件 */
+  /** Scan all agent IPC directories and process JSON files */
   private async tick(): Promise<void> {
     if (!existsSync(this.ipcDir)) return
 
-    // 扫描 data/ipc/ 下的所有 agent 目录
+    // Scan all agent directories under data/ipc/
     let agentDirs: string[]
     try {
       agentDirs = readdirSync(this.ipcDir, { withFileTypes: true })
@@ -119,7 +119,7 @@ export class IpcWatcher {
       try {
         files = readdirSync(tasksDir)
           .filter((f) => f.endsWith('.json'))
-          .sort() // 按文件名排序（时间戳前缀保证顺序）
+          .sort() // Sort by filename (timestamp prefix ensures order)
       } catch {
         continue
       }
@@ -131,7 +131,7 @@ export class IpcWatcher {
     }
   }
 
-  /** 处理单个 IPC JSON 文件 */
+  /** Process a single IPC JSON file */
   private async processFile(filePath: string, agentId: string): Promise<void> {
     const logger = getLogger()
 
@@ -139,7 +139,7 @@ export class IpcWatcher {
     try {
       raw = readFileSync(filePath, 'utf-8')
     } catch (err) {
-      logger.warn({ filePath, error: String(err) }, 'IPC 文件读取失败')
+      logger.warn({ filePath, error: String(err) }, 'IPC file read failed')
       this.moveToErrors(filePath, `read_error: ${String(err)}`)
       return
     }
@@ -148,28 +148,28 @@ export class IpcWatcher {
     try {
       message = JSON.parse(raw) as IpcMessage
     } catch (err) {
-      logger.warn({ filePath, error: String(err) }, 'IPC 文件 JSON 解析失败')
+      logger.warn({ filePath, error: String(err) }, 'IPC file JSON parse failed')
       this.moveToErrors(filePath, `parse_error: ${String(err)}`)
       return
     }
 
     try {
       this.dispatch(message, agentId)
-      // 处理成功，删除文件
+      // Successfully processed, delete file
       unlinkSync(filePath)
-      logger.info({ filePath, type: message.type, agentId }, 'IPC 消息已处理')
+      logger.info({ filePath, type: message.type, agentId }, 'IPC message processed')
     } catch (err) {
-      logger.error({ filePath, type: message.type, error: String(err) }, 'IPC 消息处理失败')
+      logger.error({ filePath, type: message.type, error: String(err) }, 'IPC message processing failed')
       this.moveToErrors(filePath, `dispatch_error: ${String(err)}`)
     }
   }
 
-  /** 根据消息类型分发到对应的回调 */
+  /** Dispatch to the appropriate callback based on message type */
   private dispatch(message: IpcMessage, agentId: string): void {
     switch (message.type) {
       case 'schedule_task': {
         if (!message.prompt || !message.schedule_type || !message.schedule_value || !message.chatId) {
-          throw new Error('schedule_task 缺少必要字段: prompt, schedule_type, schedule_value, chatId')
+          throw new Error('schedule_task missing required fields: prompt, schedule_type, schedule_value, chatId')
         }
         this.deps.onScheduleTask({
           prompt: message.prompt,
@@ -187,32 +187,32 @@ export class IpcWatcher {
       }
       case 'pause_task': {
         if (!message.taskId) {
-          throw new Error('pause_task 缺少必要字段: taskId')
+          throw new Error('pause_task missing required field: taskId')
         }
         this.deps.onPauseTask(message.taskId)
         break
       }
       case 'resume_task': {
         if (!message.taskId) {
-          throw new Error('resume_task 缺少必要字段: taskId')
+          throw new Error('resume_task missing required field: taskId')
         }
         this.deps.onResumeTask(message.taskId)
         break
       }
       case 'cancel_task': {
         if (!message.taskId) {
-          throw new Error('cancel_task 缺少必要字段: taskId')
+          throw new Error('cancel_task missing required field: taskId')
         }
         this.deps.onCancelTask(message.taskId)
         break
       }
       default: {
-        throw new Error(`未知 IPC 消息类型: ${(message as { type: string }).type}`)
+        throw new Error(`Unknown IPC message type: ${(message as { type: string }).type}`)
       }
     }
   }
 
-  /** 将处理失败的文件移到 errors 目录 */
+  /** Move failed files to the errors directory */
   private moveToErrors(filePath: string, reason: string): void {
     const logger = getLogger()
     const errorsDir = resolve(this.ipcDir, 'errors')
@@ -223,7 +223,7 @@ export class IpcWatcher {
       const fileName = filePath.split('/').pop() ?? 'unknown.json'
       const errorPath = join(errorsDir, `${Date.now()}-${fileName}`)
 
-      // 读取原文件内容，加上错误信息一起写入 errors 目录
+      // Read original file content and write it with error info to the errors directory
       let content = ''
       try {
         content = readFileSync(filePath, 'utf-8')
@@ -234,29 +234,29 @@ export class IpcWatcher {
       const errorContent = JSON.stringify({ _error: reason, _originalFile: fileName, _content: content }, null, 2)
       writeFileSync(errorPath, errorContent)
 
-      // 删除原文件
+      // Delete original file
       try {
         unlinkSync(filePath)
       } catch {
-        // 如果删除失败，忽略（可能已被删除）
+        // Ignore deletion failure (file may already be deleted)
       }
 
-      logger.info({ errorPath, reason }, 'IPC 错误文件已保存')
+      logger.info({ errorPath, reason }, 'IPC error file saved')
     } catch (err) {
-      logger.error({ filePath, error: String(err) }, '移动 IPC 错误文件失败，直接删除')
+      logger.error({ filePath, error: String(err) }, 'Failed to move IPC error file, deleting directly')
       try {
         unlinkSync(filePath)
       } catch {
-        // 忽略
+        // ignore
       }
     }
   }
 }
 
-// ===== 任务快照写入 =====
+// ===== Task Snapshot Writer =====
 
-/** 将指定 agent 的当前任务列表写入 current_tasks.json */
-/** 从数据库刷新指定 agent 的任务快照 */
+/** Write the specified agent's current task list to current_tasks.json */
+/** Refresh the specified agent's task snapshot from database */
 export function refreshTasksSnapshot(agentId: string, getAllTasks: () => Array<{
   id: string
   agent_id: string

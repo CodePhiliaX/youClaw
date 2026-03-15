@@ -13,11 +13,11 @@ export interface SearchResult {
 }
 
 /**
- * 基于 SQLite FTS5 的记忆全文搜索索引
+ * Full-text search index for memory based on SQLite FTS5
  */
 export class MemoryIndexer {
   /**
-   * 初始化 FTS5 虚拟表
+   * Initialize FTS5 virtual table
    */
   initTable(): void {
     const db = getDatabase()
@@ -26,17 +26,17 @@ export class MemoryIndexer {
         agent_id, file_type, file_path, content, tokenize='unicode61'
       )
     `)
-    getLogger().debug('memory_fts 表已初始化')
+    getLogger().debug('memory_fts table initialized')
   }
 
   /**
-   * 全量重建索引（启动时调用）
+   * Full index rebuild (called on startup)
    */
   rebuildIndex(): void {
     const db = getDatabase()
     const agentsDir = getPaths().agents
 
-    // 清空现有索引
+    // Clear existing index
     db.exec('DELETE FROM memory_fts')
 
     if (!existsSync(agentsDir)) return
@@ -50,11 +50,11 @@ export class MemoryIndexer {
       count += this.indexAgentMemory(agentId)
     }
 
-    getLogger().info({ count }, '记忆索引全量重建完成')
+    getLogger().info({ count }, 'memory index full rebuild complete')
   }
 
   /**
-   * 索引单个 agent 的所有记忆文件
+   * Index all memory files for a single agent
    */
   private indexAgentMemory(agentId: string): number {
     const agentsDir = getPaths().agents
@@ -63,7 +63,7 @@ export class MemoryIndexer {
 
     let count = 0
 
-    // 索引 MEMORY.md
+    // Index MEMORY.md
     const memoryFile = resolve(memoryDir, 'MEMORY.md')
     if (existsSync(memoryFile)) {
       const content = readFileSync(memoryFile, 'utf-8')
@@ -73,7 +73,7 @@ export class MemoryIndexer {
       }
     }
 
-    // 索引 logs/
+    // Index logs/
     const logsDir = resolve(memoryDir, 'logs')
     if (existsSync(logsDir)) {
       const logFiles = readdirSync(logsDir).filter((f) => f.endsWith('.md'))
@@ -87,7 +87,7 @@ export class MemoryIndexer {
       }
     }
 
-    // 索引 conversations/
+    // Index conversations/
     const convDir = resolve(memoryDir, 'conversations')
     if (existsSync(convDir)) {
       const convFiles = readdirSync(convDir).filter((f) => f.endsWith('.md'))
@@ -105,20 +105,20 @@ export class MemoryIndexer {
   }
 
   /**
-   * 增量索引单个文件（先删旧记录再插入）
+   * Incrementally index a single file (delete old records then insert)
    */
   indexFile(agentId: string, fileType: string, filePath: string, content: string): void {
     const db = getDatabase()
-    // 先删除该文件的旧索引
+    // Delete old index for this file
     db.prepare('DELETE FROM memory_fts WHERE file_path = ?').run(filePath)
-    // 插入新索引
+    // Insert new index
     db.prepare(
       'INSERT INTO memory_fts (agent_id, file_type, file_path, content) VALUES (?, ?, ?, ?)'
     ).run(agentId, fileType, filePath, content)
   }
 
   /**
-   * 删除文件索引
+   * Delete file index
    */
   removeFile(filePath: string): void {
     const db = getDatabase()
@@ -126,13 +126,13 @@ export class MemoryIndexer {
   }
 
   /**
-   * 全文搜索
+   * Full-text search
    */
   search(queryStr: string, options?: { agentId?: string; fileType?: string; limit?: number }): SearchResult[] {
     const db = getDatabase()
     const limit = options?.limit ?? 20
 
-    // 构建 FTS5 查询：每个词用引号包裹，AND 连接
+    // Build FTS5 query: wrap each term in quotes, connect with AND
     const tokens = queryStr.trim().split(/\s+/).filter(Boolean)
     if (tokens.length === 0) return []
 
@@ -172,7 +172,7 @@ export class MemoryIndexer {
         rank: r.rank,
       }))
     } catch (err) {
-      getLogger().warn({ query: queryStr, error: err instanceof Error ? err.message : String(err) }, '记忆搜索失败')
+      getLogger().warn({ query: queryStr, error: err instanceof Error ? err.message : String(err) }, 'Memory search failed')
       return []
     }
   }

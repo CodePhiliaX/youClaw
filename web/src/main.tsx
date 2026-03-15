@@ -7,12 +7,12 @@ import { useAppStore } from './stores/app'
 import './index.css'
 import 'streamdown/styles.css'
 
-// 非 Mac 平台加 class，用于 CSS 覆盖原生滚动条
+// Add class for non-Mac platforms to override native scrollbar via CSS
 if (navigator.platform && !navigator.platform.startsWith('Mac')) {
   document.documentElement.classList.add('custom-scrollbar')
 }
 
-// 预加载后端端口配置（Tauri 模式从 store 读取），等待完成后再渲染
+// Preload backend port config (read from store in Tauri mode), wait before rendering
 initBaseUrl()
   .then(() => useAppStore.getState().hydrate())
   .then(() => {

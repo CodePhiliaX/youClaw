@@ -4,7 +4,7 @@ import { createSystemRoutes } from '../src/routes/system.ts'
 import { EventBus } from '../src/events/bus.ts'
 
 describe('system routes', () => {
-  test('GET /status 返回聚合后的系统状态', async () => {
+  test('GET /status returns aggregated system status', async () => {
     const app = createSystemRoutes(
       {
         getAgents: () => [
@@ -42,7 +42,7 @@ describe('system routes', () => {
     expect(body.agents).toEqual({ total: 2, active: 1 })
     expect(body.platform).toBe(process.platform)
     expect(body.nodeVersion.startsWith('bun ')).toBe(true)
-    // mock router 返回空 channels，所以 telegram.connected 为 false
+    // mock router returns empty channels, so telegram.connected is false
     expect(body.telegram.connected).toBe(false)
     expect(body.database.path.endsWith('youclaw.db')).toBe(true)
     expect(body.database.sizeBytes).toBeGreaterThanOrEqual(0)

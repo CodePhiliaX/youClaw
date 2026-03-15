@@ -1,6 +1,6 @@
 import { test, expect, UNIQUE, createProfileViaAPI, getProfilesViaAPI, deleteProfileViaAPI, cleanupE2EProfiles } from './helpers'
 
-const API_BASE = 'http://localhost:3000'
+const API_BASE = 'http://localhost:23107'
 
 test.describe('Browser Profiles: Chat 集成', () => {
   test.afterEach(async ({ request }) => {

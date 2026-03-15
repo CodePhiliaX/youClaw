@@ -37,7 +37,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const chat = useChat(agentId);
 
-  // 启动时异步加载上次的 agentId
+  // Async load last agentId on startup
   useEffect(() => {
     getItem(LAST_AGENT_KEY).then((saved) => {
       if (saved) setAgentId(saved);
@@ -45,21 +45,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // 加载 agents
+  // Load agents
   useEffect(() => {
     getAgents()
       .then((list) => setAgents(list.map((a) => ({ id: a.id, name: a.name }))))
       .catch(() => {});
   }, []);
 
-  // 加载浏览器 Profiles
+  // Load browser profiles
   useEffect(() => {
     getBrowserProfiles()
       .then(setBrowserProfiles)
       .catch(() => {});
   }, []);
 
-  // 加载聊天列表
+  // Load chat list
   const refreshChats = useCallback(() => {
     getChats()
       .then(setChatList)
@@ -70,7 +70,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     refreshChats();
   }, [chat.chatId, chat.messages.length, refreshChats]);
 
-  // 持久化 agentId
+  // Persist agentId
   useEffect(() => {
     if (ready) setItem(LAST_AGENT_KEY, agentId);
   }, [agentId, ready]);

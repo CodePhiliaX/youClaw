@@ -1,4 +1,4 @@
-// 统一存储层：Tauri → Store (settings.json)，Web → localStorage
+// Unified storage layer: Tauri -> Store (settings.json), Web -> localStorage
 
 import { isTauri } from "@/api/transport"
 
@@ -28,7 +28,7 @@ export async function setItem(key: string, value: string): Promise<void> {
       const store = await getTauriStore()
       await store.set(key, value)
       await store.save()
-    } catch { /* Tauri Store 不可用时静默降级 */ }
+    } catch { /* Silent fallback when Tauri Store is unavailable */ }
     return
   }
   localStorage.setItem(STORAGE_PREFIX + key, value)
@@ -40,7 +40,7 @@ export async function removeItem(key: string): Promise<void> {
       const store = await getTauriStore()
       await store.delete(key)
       await store.save()
-    } catch { /* Tauri Store 不可用时静默降级 */ }
+    } catch { /* Silent fallback when Tauri Store is unavailable */ }
     return
   }
   localStorage.removeItem(STORAGE_PREFIX + key)

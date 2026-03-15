@@ -21,9 +21,9 @@ export function Login() {
   return (
     <div className="h-screen w-screen flex bg-gradient-to-br from-background to-muted/30">
 
-      {/* 左侧 Hero 区域 - 仅大屏显示 */}
+      {/* Left hero area - large screens only */}
       <section className="hidden lg:flex flex-1 flex-col p-12 relative border-r border-border/50 bg-gradient-to-br from-background via-primary/5 to-background">
-        {/* 装饰元素 */}
+        {/* Decorative elements */}
         <div className="absolute top-20 right-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl" />
         <div className="absolute bottom-20 left-10 w-48 h-48 bg-muted/40 rounded-full blur-3xl" />
 
@@ -36,11 +36,11 @@ export function Login() {
           </p>
         </header>
 
-        {/* 功能卡片展示 */}
+        {/* Feature cards */}
         <div className="flex-grow flex items-center justify-center py-10 relative z-10">
           <div className="relative w-full max-w-sm">
             <div className="animate-[float_6s_ease-in-out_infinite]">
-              {/* 智能调度卡片 */}
+              {/* Smart scheduling card */}
               <div className="bg-card p-5 rounded-2xl shadow-lg border border-border/50 flex items-center gap-4 mb-5 translate-x-12">
                 <div className="bg-primary/10 p-3 rounded-xl text-primary shrink-0">
                   <Calendar className="h-5 w-5" />
@@ -51,7 +51,7 @@ export function Login() {
                 </div>
               </div>
 
-              {/* 即时对话卡片 */}
+              {/* Instant chat card */}
               <div className="bg-card p-5 rounded-2xl shadow-lg border border-border/50 flex items-center gap-4 mb-5 -translate-x-4">
                 <div className="bg-blue-500/10 p-3 rounded-xl text-blue-500 shrink-0">
                   <MessageSquare className="h-5 w-5" />
@@ -62,7 +62,7 @@ export function Login() {
                 </div>
               </div>
 
-              {/* 无缝集成卡片 */}
+              {/* Seamless integration card */}
               <div className="bg-card p-5 rounded-2xl shadow-lg border border-border/50 flex items-center gap-4 translate-x-8">
                 <div className="bg-green-500/10 p-3 rounded-xl text-green-500 shrink-0">
                   <ShieldCheck className="h-5 w-5" />
@@ -81,9 +81,9 @@ export function Login() {
         </footer>
       </section>
 
-      {/* 右侧登录区域 */}
+      {/* Right: Login area */}
       <section className="w-full lg:w-[420px] flex flex-col items-center justify-between p-8 md:p-12 bg-card">
-        {/* 顶部品牌 */}
+        {/* Top: Branding */}
         <div className="w-full text-center mt-8">
           <div className="inline-block transition-transform hover:scale-105 duration-300">
             <img
@@ -96,14 +96,14 @@ export function Login() {
           <p className="text-muted-foreground text-sm mt-1">{t.login.subtitle}</p>
         </div>
 
-        {/* 登录操作区 */}
+        {/* Login actions */}
         <div className="w-full max-w-sm space-y-6">
           <div className="text-center">
             <p className="text-muted-foreground mb-8 text-sm">
               {t.account.loginHint}
             </p>
 
-            {/* 主登录按钮 */}
+            {/* Primary login button */}
             <Button
               size="lg"
               onClick={() => login()}
@@ -128,7 +128,7 @@ export function Login() {
             </p>
           </div>
 
-          {/* 语言切换 */}
+          {/* Language toggle */}
           <div className="pt-6 border-t border-border/50 text-center">
             <button
               type="button"
@@ -140,7 +140,7 @@ export function Login() {
           </div>
         </div>
 
-        {/* 版本信息 */}
+        {/* Version info */}
         <div className="w-full text-center">
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
             {isTauri ? version : t.settings.webVersion}
@@ -148,7 +148,7 @@ export function Login() {
         </div>
       </section>
 
-      {/* 浮动动画关键帧 */}
+      {/* Float animation keyframes */}
       <style>{`
         @keyframes float {
           0%, 100% { transform: translateY(0); }

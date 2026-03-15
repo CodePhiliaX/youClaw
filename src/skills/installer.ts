@@ -5,62 +5,62 @@ import { getLogger } from '../logger/index.ts'
 import type { Skill } from './types.ts'
 
 /**
- * SkillsInstaller：管理 skill 的安装和卸载
+ * SkillsInstaller: manages skill installation and uninstallation.
  *
- * 支持：
- * - 从本地路径复制 skill
- * - 从远程 URL 下载 skill
- * - 卸载 skill（删除目录 + 执行 teardown）
- * - 依赖和冲突检查
+ * Supports:
+ * - Copy skill from local path
+ * - Download skill from remote URL
+ * - Uninstall skill (delete directory + run teardown)
+ * - Dependency and conflict checks
  */
 export class SkillsInstaller {
   /**
-   * 从本地路径安装 skill 到目标目录
+   * Install a skill from a local path to the target directory.
    */
   async installFromLocal(sourcePath: string, targetDir: string): Promise<void> {
     const logger = getLogger()
 
     if (!existsSync(sourcePath)) {
-      throw new Error(`源路径不存在: ${sourcePath}`)
+      throw new Error(`Source path does not exist: ${sourcePath}`)
     }
 
     const skillName = basename(sourcePath)
     const destPath = resolve(targetDir, skillName)
 
     if (existsSync(destPath)) {
-      throw new Error(`Skill "${skillName}" 已存在于目标目录`)
+      throw new Error(`Skill "${skillName}" already exists in target directory`)
     }
 
-    // 创建目标目录
+    // Create target directory
     mkdirSync(destPath, { recursive: true })
 
-    // 复制文件
+    // Copy files
     try {
       execSync(`cp -r "${sourcePath}/"* "${destPath}/"`, { encoding: 'utf-8', timeout: 30_000 })
     } catch (err) {
-      // 清理失败的安装
+      // Clean up failed installation
       rmSync(destPath, { recursive: true, force: true })
-      throw new Error(`复制 skill 文件失败: ${err instanceof Error ? err.message : String(err)}`)
+      throw new Error(`Failed to copy skill files: ${err instanceof Error ? err.message : String(err)}`)
     }
 
-    logger.info({ skillName, sourcePath, destPath }, 'Skill 从本地安装完成')
+    logger.info({ skillName, sourcePath, destPath }, 'Skill installed from local path')
   }
 
   /**
-   * 从远程 URL 安装 skill
+   * Install a skill from a remote URL.
    */
   async installFromUrl(url: string, targetDir: string): Promise<void> {
     const logger = getLogger()
 
-    // 创建临时目录下载
+    // Create temp directory for download
     const tmpDir = resolve(targetDir, `.tmp-${Date.now()}`)
     mkdirSync(tmpDir, { recursive: true })
 
     try {
-      // 使用 curl 下载
+      // Download using curl
       execSync(`curl -sL "${url}" -o "${tmpDir}/SKILL.md"`, { encoding: 'utf-8', timeout: 30_000 })
 
-      // 读取下载的文件，解析 frontmatter 获取名称
+      // Read downloaded file and parse frontmatter for name
       const { parseFrontmatter } = await import('./frontmatter.ts')
       const content = readFileSync(resolve(tmpDir, 'SKILL.md'), 'utf-8')
       const { frontmatter } = parseFrontmatter(content)
@@ -68,32 +68,32 @@ export class SkillsInstaller {
 
       const destPath = resolve(targetDir, skillName)
       if (existsSync(destPath)) {
-        throw new Error(`Skill "${skillName}" 已存在于目标目录`)
+        throw new Error(`Skill "${skillName}" already exists in target directory`)
       }
 
-      // 移动到最终位置
+      // Move to final location
       mkdirSync(destPath, { recursive: true })
       execSync(`mv "${tmpDir}/SKILL.md" "${destPath}/SKILL.md"`, { encoding: 'utf-8' })
 
-      logger.info({ skillName, url, destPath }, 'Skill 从远程 URL 安装完成')
+      logger.info({ skillName, url, destPath }, 'Skill installed from remote URL')
     } finally {
-      // 清理临时目录
+      // Clean up temp directory
       rmSync(tmpDir, { recursive: true, force: true })
     }
   }
 
   /**
-   * 卸载 skill
+   * Uninstall a skill.
    */
   async uninstall(skillName: string, targetDir: string): Promise<void> {
     const logger = getLogger()
     const skillDir = resolve(targetDir, skillName)
 
     if (!existsSync(skillDir)) {
-      throw new Error(`Skill "${skillName}" 不存在`)
+      throw new Error(`Skill "${skillName}" does not exist`)
     }
 
-    // 尝试读取 frontmatter 执行 teardown
+    // Try to read frontmatter and run teardown
     try {
       const skillFile = resolve(skillDir, 'SKILL.md')
       if (existsSync(skillFile)) {
@@ -102,44 +102,44 @@ export class SkillsInstaller {
         const { frontmatter } = parseFrontmatter(content)
 
         if (frontmatter.teardown) {
-          logger.info({ skillName, teardown: frontmatter.teardown }, '执行 teardown 命令')
+          logger.info({ skillName, teardown: frontmatter.teardown }, 'Running teardown command')
           try {
             execSync(frontmatter.teardown, { encoding: 'utf-8', timeout: 30_000 })
           } catch (err) {
-            logger.warn({ skillName, error: err instanceof Error ? err.message : String(err) }, 'teardown 命令执行失败')
+            logger.warn({ skillName, error: err instanceof Error ? err.message : String(err) }, 'Teardown command failed')
           }
         }
       }
     } catch {
-      // teardown 失败不阻止卸载
+      // Teardown failure does not block uninstallation
     }
 
-    // 删除 skill 目录
+    // Delete skill directory
     rmSync(skillDir, { recursive: true, force: true })
-    logger.info({ skillName }, 'Skill 已卸载')
+    logger.info({ skillName }, 'Skill uninstalled')
   }
 
   /**
-   * 检查依赖和冲突
+   * Check dependencies and conflicts.
    */
   checkCompatibility(skill: Skill, installedSkills: Skill[]): { ok: boolean; issues: string[] } {
     const issues: string[] = []
     const installedNames = new Set(installedSkills.map((s) => s.name))
 
-    // 检查依赖
+    // Check dependencies
     if (skill.frontmatter.requires) {
       for (const dep of skill.frontmatter.requires) {
         if (!installedNames.has(dep)) {
-          issues.push(`缺少依赖 skill: ${dep}`)
+          issues.push(`Missing required skill: ${dep}`)
         }
       }
     }
 
-    // 检查冲突
+    // Check conflicts
     if (skill.frontmatter.conflicts) {
       for (const conflict of skill.frontmatter.conflicts) {
         if (installedNames.has(conflict)) {
-          issues.push(`与已安装的 skill "${conflict}" 冲突`)
+          issues.push(`Conflicts with installed skill "${conflict}"`)
         }
       }
     }

@@ -53,7 +53,7 @@ export function BrowserProfiles() {
 
   return (
     <div className="flex h-full">
-      {/* 左面板 — Profile 列表 */}
+      {/* Left panel — Profile list */}
       <SidePanel>
         <div className="h-12 shrink-0 px-3 border-b border-[var(--subtle-border)] flex items-center justify-between">
           <h2 className="font-semibold text-sm">{t.browser.title}</h2>
@@ -109,7 +109,7 @@ export function BrowserProfiles() {
         </div>
       </SidePanel>
 
-      {/* 右面板 */}
+      {/* Right panel */}
       <div className="flex-1 overflow-y-auto">
         {showCreate ? (
           <CreateProfileForm
@@ -140,7 +140,7 @@ export function BrowserProfiles() {
   )
 }
 
-// ===== Profile 详情 =====
+// ===== Profile details =====
 
 function ProfileDetail({
   profile,
@@ -215,18 +215,18 @@ function ProfileDetail({
       )}
 
       <div className="text-xs text-muted-foreground bg-accent/20 rounded p-3 border border-border">
-        <p className="mb-1">使用方法：</p>
-        <p>1. 点击"启动浏览器"打开 headed 浏览器窗口</p>
-        <p>2. 在浏览器中手动登录需要的网站</p>
-        <p>3. 关闭浏览器，登录状态会自动保存</p>
-        <p>4. 在 Agent 详情页绑定此 Profile，或在聊天时临时选择</p>
-        <p>5. Agent 后续使用浏览器时将自动复用登录状态</p>
+        <p className="mb-1">Usage:</p>
+        <p>1. Click "Launch Browser" to open a headed browser window</p>
+        <p>2. Manually log in to the required websites in the browser</p>
+        <p>3. Close the browser; login state is saved automatically</p>
+        <p>4. Bind this Profile in Agent details, or select it during chat</p>
+        <p>5. The Agent will automatically reuse the saved login state</p>
       </div>
     </div>
   )
 }
 
-// ===== 创建表单 =====
+// ===== Create form =====
 
 function CreateProfileForm({
   onCreated,

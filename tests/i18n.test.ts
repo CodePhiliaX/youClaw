@@ -1,14 +1,15 @@
 /**
- * i18n 翻译完整性测试
+ * i18n translation completeness tests
  *
- * 验证中英文翻译 key 完全一致，特别是新增的 tasks 相关 key
+ * Verify that Chinese and English translation keys are fully consistent,
+ * especially the newly added tasks-related keys
  */
 
 import { describe, test, expect } from 'bun:test'
 import { en } from '../web/src/i18n/en.ts'
 import { zh } from '../web/src/i18n/zh.ts'
 
-/** 递归提取所有 key 路径 */
+/** Recursively extract all key paths */
 function getKeys(obj: Record<string, any>, prefix = ''): string[] {
   const keys: string[] = []
   for (const key of Object.keys(obj)) {
@@ -22,14 +23,14 @@ function getKeys(obj: Record<string, any>, prefix = ''): string[] {
   return keys.sort()
 }
 
-describe('i18n 翻译完整性', () => {
-  test('en 和 zh 的所有 key 完全一致', () => {
+describe('i18n translation completeness', () => {
+  test('all keys in en and zh are identical', () => {
     const enKeys = getKeys(en)
     const zhKeys = getKeys(zh)
     expect(enKeys).toEqual(zhKeys)
   })
 
-  test('en 中不存在空字符串值', () => {
+  test('no empty string values in en', () => {
     const checkEmpty = (obj: Record<string, any>, path = ''): string[] => {
       const empties: string[] = []
       for (const [key, val] of Object.entries(obj)) {
@@ -46,7 +47,7 @@ describe('i18n 翻译完整性', () => {
     expect(empties).toEqual([])
   })
 
-  test('zh 中不存在空字符串值', () => {
+  test('no empty string values in zh', () => {
     const checkEmpty = (obj: Record<string, any>, path = ''): string[] => {
       const empties: string[] = []
       for (const [key, val] of Object.entries(obj)) {
@@ -64,7 +65,7 @@ describe('i18n 翻译完整性', () => {
   })
 })
 
-describe('i18n — tasks 新增 key 存在', () => {
+describe('i18n — newly added tasks keys exist', () => {
   const requiredTaskKeys = [
     'editTitle',
     'name',
@@ -84,19 +85,19 @@ describe('i18n — tasks 新增 key 存在', () => {
   ]
 
   for (const key of requiredTaskKeys) {
-    test(`en.tasks.${key} 存在`, () => {
+    test(`en.tasks.${key} exists`, () => {
       expect((en.tasks as any)[key]).toBeDefined()
       expect((en.tasks as any)[key]).not.toBe('')
     })
 
-    test(`zh.tasks.${key} 存在`, () => {
+    test(`zh.tasks.${key} exists`, () => {
       expect((zh.tasks as any)[key]).toBeDefined()
       expect((zh.tasks as any)[key]).not.toBe('')
     })
   }
 })
 
-describe('i18n — 原有 key 未被破坏', () => {
+describe('i18n — original keys are not broken', () => {
   const coreTaskKeys = [
     'title', 'createTask', 'noTasks', 'noTasksHint', 'runNow',
     'pause', 'resume', 'prompt', 'taskId', 'created', 'lastRun',
@@ -107,11 +108,11 @@ describe('i18n — 原有 key 未被破坏', () => {
   ]
 
   for (const key of coreTaskKeys) {
-    test(`en.tasks.${key} 仍然存在`, () => {
+    test(`en.tasks.${key} still exists`, () => {
       expect((en.tasks as any)[key]).toBeDefined()
     })
 
-    test(`zh.tasks.${key} 仍然存在`, () => {
+    test(`zh.tasks.${key} still exists`, () => {
       expect((zh.tasks as any)[key]).toBeDefined()
     })
   }

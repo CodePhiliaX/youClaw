@@ -42,7 +42,7 @@ function AddAttachmentButton() {
   );
 }
 
-// 输入框中的附件预览（textarea 上方）
+// Attachment previews in the input box (above textarea)
 function AttachmentPreviews() {
   const attachments = usePromptInputAttachments();
   if (attachments.files.length === 0) return null;
@@ -89,7 +89,7 @@ export function ChatInput() {
       return;
     }
 
-    // 将 data URL 转为 Attachment 对象
+    // Convert data URLs to Attachment objects
     const attachments = msg.files
       .map((f) => {
         const match = f.url.match(/^data:([^;]+);base64,(.+)$/s);

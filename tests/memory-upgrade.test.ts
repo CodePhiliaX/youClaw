@@ -42,7 +42,7 @@ function cleanup() {
   for (const agentId of createdAgentIds) {
     rmSync(resolve(getPaths().agents, agentId), { recursive: true, force: true })
   }
-  // 清理全局 memory
+  // Clean up global memory
   const globalDir = resolve(getPaths().agents, '_global')
   if (existsSync(globalDir)) {
     rmSync(globalDir, { recursive: true, force: true })
@@ -50,40 +50,40 @@ function cleanup() {
   createdAgentIds.clear()
 }
 
-describe('全局 Memory', () => {
+describe('Global Memory', () => {
   beforeEach(cleanup)
   afterEach(cleanup)
 
-  test('getGlobalMemory 在文件不存在时返回空字符串', () => {
+  test('getGlobalMemory returns empty string when file does not exist', () => {
     expect(memoryManager.getGlobalMemory()).toBe('')
   })
 
-  test('updateGlobalMemory 写入并读取全局记忆', async () => {
-    memoryManager.updateGlobalMemory('全局信息：系统偏好')
+  test('updateGlobalMemory writes and reads global memory', async () => {
+    memoryManager.updateGlobalMemory('Global info: system preferences')
 
     const globalDir = resolve(getPaths().agents, '_global', 'memory')
     await waitFor(() => existsSync(resolve(globalDir, 'MEMORY.md')))
 
-    expect(memoryManager.getGlobalMemory()).toBe('全局信息：系统偏好')
+    expect(memoryManager.getGlobalMemory()).toBe('Global info: system preferences')
   })
 
-  test('getMemoryContext 包含 global_memory 段', () => {
+  test('getMemoryContext includes global_memory section', () => {
     const agentId = createAgentId('global-ctx')
     mkdirSync(getAgentMemoryDir(agentId), { recursive: true })
-    writeFileSync(getMemoryFile(agentId), '个人记忆')
-    memoryManager.updateGlobalMemory('全局共享信息')
+    writeFileSync(getMemoryFile(agentId), 'Personal memory')
+    memoryManager.updateGlobalMemory('Global shared info')
 
     const context = memoryManager.getMemoryContext(agentId)
     expect(context).toContain('<global_memory>')
-    expect(context).toContain('全局共享信息')
+    expect(context).toContain('Global shared info')
     expect(context).toContain('<long_term>')
-    expect(context).toContain('个人记忆')
+    expect(context).toContain('Personal memory')
   })
 
-  test('getMemoryContext 在无全局记忆时不包含 global_memory 段', () => {
+  test('getMemoryContext does not include global_memory section when no global memory exists', () => {
     const agentId = createAgentId('no-global')
     mkdirSync(getAgentMemoryDir(agentId), { recursive: true })
-    writeFileSync(getMemoryFile(agentId), '个人记忆')
+    writeFileSync(getMemoryFile(agentId), 'Personal memory')
 
     const context = memoryManager.getMemoryContext(agentId)
     expect(context).not.toContain('<global_memory>')
@@ -91,11 +91,11 @@ describe('全局 Memory', () => {
   })
 })
 
-describe('日志截断', () => {
+describe('Log Truncation', () => {
   beforeEach(cleanup)
   afterEach(cleanup)
 
-  test('appendDailyLog 截断超长消息', async () => {
+  test('appendDailyLog truncates overly long messages', async () => {
     const agentId = createAgentId('truncate')
     const longMessage = 'A'.repeat(1000)
     const longReply = 'B'.repeat(1000)
@@ -107,25 +107,25 @@ describe('日志截断', () => {
     await waitFor(() => existsSync(logPath))
 
     const content = readFileSync(logPath, 'utf-8')
-    // 用户消息应被截断到 300（min(300, 500)）
+    // User message should be truncated to 300 (min(300, 500))
     expect(content).toContain('... *(1000 chars total)*')
-    // 不应包含完整的 1000 个字符
+    // Should not contain the full 1000 characters
     expect(content).not.toContain('A'.repeat(500))
   })
 })
 
-describe('日志清理', () => {
+describe('Log Cleanup', () => {
   beforeEach(cleanup)
   afterEach(cleanup)
 
-  test('pruneOldLogs 删除超期日志', () => {
+  test('pruneOldLogs deletes expired logs', () => {
     const agentId = createAgentId('prune')
     mkdirSync(getLogsDir(agentId), { recursive: true })
 
-    // 创建旧日志和新日志
-    writeFileSync(resolve(getLogsDir(agentId), '2020-01-01.md'), '# 旧日志')
-    writeFileSync(resolve(getLogsDir(agentId), '2020-01-15.md'), '# 旧日志2')
-    writeFileSync(resolve(getLogsDir(agentId), '2099-12-31.md'), '# 新日志')
+    // Create old and new logs
+    writeFileSync(resolve(getLogsDir(agentId), '2020-01-01.md'), '# Old log')
+    writeFileSync(resolve(getLogsDir(agentId), '2020-01-15.md'), '# Old log 2')
+    writeFileSync(resolve(getLogsDir(agentId), '2099-12-31.md'), '# New log')
 
     const deleted = memoryManager.pruneOldLogs(agentId, 30)
     expect(deleted).toBe(2)
@@ -133,17 +133,17 @@ describe('日志清理', () => {
     expect(existsSync(resolve(getLogsDir(agentId), '2099-12-31.md'))).toBe(true)
   })
 
-  test('pruneOldLogs 空目录返回 0', () => {
+  test('pruneOldLogs returns 0 for empty directory', () => {
     const agentId = createAgentId('prune-empty')
     expect(memoryManager.pruneOldLogs(agentId, 30)).toBe(0)
   })
 })
 
-describe('recentDays 配置', () => {
+describe('recentDays Configuration', () => {
   beforeEach(cleanup)
   afterEach(cleanup)
 
-  test('getMemoryContext 遵守 recentDays 参数', () => {
+  test('getMemoryContext respects recentDays parameter', () => {
     const agentId = createAgentId('recent-days')
     mkdirSync(getLogsDir(agentId), { recursive: true })
     writeFileSync(getMemoryFile(agentId), '')
@@ -152,7 +152,7 @@ describe('recentDays 配置', () => {
     writeFileSync(resolve(getLogsDir(agentId), '2026-03-08.md'), '# 2026-03-08\nlog-08')
     writeFileSync(resolve(getLogsDir(agentId), '2026-03-07.md'), '# 2026-03-07\nold')
 
-    // 只取最近 2 天
+    // Only get the most recent 2 days
     const context = memoryManager.getMemoryContext(agentId, { recentDays: 2 })
     expect(context).toContain('log-10')
     expect(context).toContain('log-09')
@@ -161,11 +161,11 @@ describe('recentDays 配置', () => {
   })
 })
 
-describe('对话存档', () => {
+describe('Conversation Archive', () => {
   beforeEach(cleanup)
   afterEach(cleanup)
 
-  test('saveConversationArchive 写入并读取', () => {
+  test('saveConversationArchive writes and reads', () => {
     const agentId = createAgentId('archive')
     const filename = '2026-03-11-test-conversation.md'
     const content = '# Test\n\n**Chat**: web:123\n\n## User\nHello'
@@ -175,7 +175,7 @@ describe('对话存档', () => {
     expect(memoryManager.getConversationArchive(agentId, filename)).toBe(content)
   })
 
-  test('getConversationArchives 返回列表', () => {
+  test('getConversationArchives returns list', () => {
     const agentId = createAgentId('archive-list')
     const convDir = resolve(getAgentMemoryDir(agentId), 'conversations')
     mkdirSync(convDir, { recursive: true })
@@ -188,7 +188,7 @@ describe('对话存档', () => {
     expect(archives[1]!.date).toBe('2026-03-10')
   })
 
-  test('getConversationArchive 阻止路径遍历', () => {
+  test('getConversationArchive prevents path traversal', () => {
     const agentId = createAgentId('archive-security')
     expect(memoryManager.getConversationArchive(agentId, '../../../etc/passwd')).toBe('')
     expect(memoryManager.getConversationArchive(agentId, 'foo/../../bar.md')).toBe('')
@@ -199,104 +199,104 @@ describe('ConversationArchiver', () => {
   beforeEach(cleanup)
   afterEach(cleanup)
 
-  test('parseTranscript 解析 JSONL', () => {
+  test('parseTranscript parses JSONL', () => {
     const raw = [
-      JSON.stringify({ type: 'user', content: '你好' }),
-      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: '你好！我是助手。' }] } }),
-      JSON.stringify({ type: 'user', content: '天气怎样？' }),
+      JSON.stringify({ type: 'user', content: 'Hello' }),
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Hello! I am an assistant.' }] } }),
+      JSON.stringify({ type: 'user', content: 'How is the weather?' }),
     ].join('\n')
 
     const entries = archiver.parseTranscript(raw)
     expect(entries).toHaveLength(3)
     expect(entries[0]!.role).toBe('user')
-    expect(entries[0]!.content).toBe('你好')
+    expect(entries[0]!.content).toBe('Hello')
     expect(entries[1]!.role).toBe('assistant')
-    expect(entries[1]!.content).toBe('你好！我是助手。')
+    expect(entries[1]!.content).toBe('Hello! I am an assistant.')
     expect(entries[2]!.role).toBe('user')
   })
 
-  test('parseTranscript 处理空行和无效 JSON', () => {
+  test('parseTranscript handles empty lines and invalid JSON', () => {
     const raw = '\n\ninvalid json\n' + JSON.stringify({ type: 'user', content: 'test' }) + '\n'
     const entries = archiver.parseTranscript(raw)
     expect(entries).toHaveLength(1)
     expect(entries[0]!.content).toBe('test')
   })
 
-  test('archive 创建 markdown 归档文件', async () => {
+  test('archive creates a markdown archive file', async () => {
     const agentId = createAgentId('archiver')
     const transcriptContent = [
-      JSON.stringify({ type: 'user', content: '什么是 TypeScript？' }),
-      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'TypeScript 是 JavaScript 的超集。' }] } }),
+      JSON.stringify({ type: 'user', content: 'What is TypeScript?' }),
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'TypeScript is a superset of JavaScript.' }] } }),
     ].join('\n')
 
-    // 写入临时 transcript 文件
+    // Write temporary transcript file
     const tmpPath = `/tmp/transcript-${Date.now()}.jsonl`
     writeFileSync(tmpPath, transcriptContent)
 
     const filename = await archiver.archive(agentId, tmpPath, 'web:chat-1')
     expect(filename).toBeTruthy()
-    expect(filename).toContain('什么是-typescript')
+    expect(filename).toContain('what-is-typescript')
 
     const content = memoryManager.getConversationArchive(agentId, filename!)
-    expect(content).toContain('# 什么是 TypeScript？')
+    expect(content).toContain('# What is TypeScript?')
     expect(content).toContain('**Chat**: web:chat-1')
-    expect(content).toContain('TypeScript 是 JavaScript 的超集。')
+    expect(content).toContain('TypeScript is a superset of JavaScript.')
 
-    // 清理
+    // Cleanup
     rmSync(tmpPath, { force: true })
   })
 })
 
-describe('快照', () => {
+describe('Snapshot', () => {
   beforeEach(cleanup)
   afterEach(cleanup)
 
-  test('exportSnapshot 包含全局和个人记忆', () => {
+  test('exportSnapshot includes global and personal memory', () => {
     const agentId = createAgentId('snapshot')
     mkdirSync(getAgentMemoryDir(agentId), { recursive: true })
-    writeFileSync(getMemoryFile(agentId), '## 用户偏好\n喜欢 TypeScript')
-    memoryManager.updateGlobalMemory('全局配置')
+    writeFileSync(getMemoryFile(agentId), '## User Preferences\nLikes TypeScript')
+    memoryManager.updateGlobalMemory('Global config')
 
     const snapshot = memoryManager.exportSnapshot(agentId)
     expect(snapshot).toContain('# Memory Snapshot')
-    expect(snapshot).toContain('全局配置')
-    expect(snapshot).toContain('喜欢 TypeScript')
+    expect(snapshot).toContain('Global config')
+    expect(snapshot).toContain('Likes TypeScript')
   })
 
-  test('saveSnapshot 和 getSnapshot', () => {
+  test('saveSnapshot and getSnapshot', () => {
     const agentId = createAgentId('snapshot-save')
     mkdirSync(getAgentMemoryDir(agentId), { recursive: true })
-    writeFileSync(getMemoryFile(agentId), '测试记忆')
+    writeFileSync(getMemoryFile(agentId), 'Test memory')
 
     memoryManager.saveSnapshot(agentId)
     const snapshot = memoryManager.getSnapshot(agentId)
-    expect(snapshot).toContain('测试记忆')
+    expect(snapshot).toContain('Test memory')
   })
 
-  test('restoreFromSnapshot 当 MEMORY.md 为空时恢复', () => {
+  test('restoreFromSnapshot restores when MEMORY.md is empty', () => {
     const agentId = createAgentId('snapshot-restore')
     mkdirSync(getAgentMemoryDir(agentId), { recursive: true })
 
-    // 手动写入快照
+    // Manually write snapshot
     const snapshotPath = resolve(getAgentMemoryDir(agentId), 'MEMORY_SNAPSHOT.md')
-    writeFileSync(snapshotPath, '# Memory Snapshot\n\n## Long-term Memory\n\n## 用户偏好\n喜欢 Rust\n\n## Recent Logs')
+    writeFileSync(snapshotPath, '# Memory Snapshot\n\n## Long-term Memory\n\n## User Preferences\nLikes Rust\n\n## Recent Logs')
 
     const restored = memoryManager.restoreFromSnapshot(agentId)
     expect(restored).toBe(true)
-    expect(memoryManager.getMemory(agentId)).toContain('喜欢 Rust')
+    expect(memoryManager.getMemory(agentId)).toContain('Likes Rust')
   })
 
-  test('restoreFromSnapshot 当 MEMORY.md 有内容时不恢复', () => {
+  test('restoreFromSnapshot does not restore when MEMORY.md has content', () => {
     const agentId = createAgentId('snapshot-no-restore')
     mkdirSync(getAgentMemoryDir(agentId), { recursive: true })
-    writeFileSync(getMemoryFile(agentId), '已有内容')
+    writeFileSync(getMemoryFile(agentId), 'Existing content')
 
     const snapshotPath = resolve(getAgentMemoryDir(agentId), 'MEMORY_SNAPSHOT.md')
-    writeFileSync(snapshotPath, '# Memory Snapshot\n\n## Long-term Memory\n\n旧内容')
+    writeFileSync(snapshotPath, '# Memory Snapshot\n\n## Long-term Memory\n\nOld content')
 
     const restored = memoryManager.restoreFromSnapshot(agentId)
     expect(restored).toBe(false)
-    expect(memoryManager.getMemory(agentId)).toBe('已有内容')
+    expect(memoryManager.getMemory(agentId)).toBe('Existing content')
   })
 })
 
@@ -309,13 +309,13 @@ describe('MemoryIndexer', () => {
   })
   afterEach(cleanup)
 
-  test('initTable + rebuildIndex 不报错', () => {
+  test('initTable + rebuildIndex does not throw', () => {
     expect(() => indexer.rebuildIndex()).not.toThrow()
   })
 
-  test('indexFile + search 返回结果', () => {
+  test('indexFile + search returns results', () => {
     const agentId = createAgentId('indexer')
-    indexer.indexFile(agentId, 'memory', '/tmp/test.md', '用户喜欢 TypeScript 和 Rust')
+    indexer.indexFile(agentId, 'memory', '/tmp/test.md', 'User likes TypeScript and Rust')
 
     const results = indexer.search('TypeScript')
     expect(results.length).toBeGreaterThanOrEqual(1)
@@ -323,12 +323,12 @@ describe('MemoryIndexer', () => {
     expect(results[0]!.snippet).toContain('TypeScript')
   })
 
-  test('search 空查询返回空', () => {
+  test('search returns empty for empty query', () => {
     expect(indexer.search('')).toEqual([])
     expect(indexer.search('   ')).toEqual([])
   })
 
-  test('removeFile 删除索引', () => {
+  test('removeFile deletes index', () => {
     const agentId = createAgentId('indexer-rm')
     indexer.indexFile(agentId, 'memory', '/tmp/remove-test.md', 'content to be removed from index')
 
@@ -342,11 +342,11 @@ describe('MemoryIndexer', () => {
     expect(found).toBeUndefined()
   })
 
-  test('search 支持 agentId 过滤', () => {
+  test('search supports agentId filtering', () => {
     const agent1 = createAgentId('filter-1')
     const agent2 = createAgentId('filter-2')
-    indexer.indexFile(agent1, 'memory', '/tmp/a1.md', 'Bun 运行时')
-    indexer.indexFile(agent2, 'memory', '/tmp/a2.md', 'Bun 测试框架')
+    indexer.indexFile(agent1, 'memory', '/tmp/a1.md', 'Bun runtime')
+    indexer.indexFile(agent2, 'memory', '/tmp/a2.md', 'Bun test framework')
 
     const all = indexer.search('Bun')
     expect(all.length).toBeGreaterThanOrEqual(2)

@@ -53,10 +53,10 @@ export function Chat() {
     }
   }, [searchOpen]);
 
-  // 编辑模式激活时聚焦 input
+  // Focus input when edit mode activates
   useEffect(() => {
     if (editingChatId) {
-      // 等待 DOM 渲染完成后聚焦
+      // Focus after DOM rendering completes
       requestAnimationFrame(() => {
         editInputRef.current?.focus();
         editInputRef.current?.select();
@@ -85,7 +85,7 @@ export function Chat() {
 
   const handleStartEditName = (cid: string, currentName: string) => {
     setEditingName(currentName);
-    // 等 DropdownMenu 关闭动画完成后再激活编辑
+    // Wait for DropdownMenu close animation before activating edit
     setTimeout(() => setEditingChatId(cid), 100);
   };
 
@@ -102,7 +102,7 @@ export function Chat() {
 
   return (
     <div className="flex h-full">
-      {/* 左侧：对话列表 */}
+      {/* Left side: Chat list */}
       <SidePanel>
         <div className="h-12 shrink-0 px-3 border-b border-[var(--subtle-border)] flex items-center justify-between">
           <h2 className="font-semibold text-sm">{t.nav.chat}</h2>
@@ -131,7 +131,7 @@ export function Chat() {
           </div>
         </div>
 
-        {/* 搜索（展开/收起） */}
+        {/* Search (expand/collapse) */}
         <div
           className={cn(
             "overflow-hidden transition-all duration-200 ease-[var(--ease-soft)]",
@@ -164,7 +164,7 @@ export function Chat() {
           </div>
         </div>
 
-        {/* 对话列表 */}
+        {/* Chat list */}
         <div className="flex-1 overflow-y-auto p-2 space-y-0.5" role="listbox">
           {chatGroups.length === 0 && (
             <p className="text-xs text-muted-foreground px-2.5 py-4 text-center">
@@ -191,7 +191,7 @@ export function Chat() {
                   )}
                   onClick={() => chatCtx.loadChat(chat.chat_id)}
                 >
-                  {/* 头像：作为 Popover 的锚点 */}
+                  {/* Avatar: Popover anchor */}
                   <Popover
                     open={avatarPickerChatId === chat.chat_id}
                     onOpenChange={(open) => !open && setAvatarPickerChatId(null)}
@@ -306,11 +306,11 @@ export function Chat() {
         </div>
       </SidePanel>
 
-      {/* 右侧：聊天内容 */}
+      {/* Right: Chat content */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
         {isNewChat ? <ChatWelcome /> : <ChatMessages />}
 
-        {/* ChatInput 始终渲染，通过位置动画从居中移到底部 */}
+        {/* ChatInput always rendered, animated from center to bottom */}
         <div
           className={
             isNewChat
@@ -319,7 +319,7 @@ export function Chat() {
           }
         >
           <div className="max-w-3xl mx-auto">
-            {/* 欢迎提示文字，发送后淡出 */}
+            {/* Welcome text, fades out after send */}
             <div
               className={
                 isNewChat
@@ -344,7 +344,7 @@ export function Chat() {
         </div>
       </div>
 
-      {/* 删除确认对话框 */}
+      {/* Delete confirmation dialog */}
       <AlertDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}

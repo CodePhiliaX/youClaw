@@ -28,7 +28,7 @@ function createSkill(overrides: Partial<Skill> = {}): Skill {
 describe('SkillsInstaller.checkCompatibility', () => {
   const installer = new SkillsInstaller()
 
-  test('无依赖无冲突时通过', () => {
+  test('passes when no dependencies and no conflicts', () => {
     const skill = createSkill()
     const installed = [createSkill({ name: 'other-skill', frontmatter: { name: 'other-skill', description: 'Other' } })]
 
@@ -37,7 +37,7 @@ describe('SkillsInstaller.checkCompatibility', () => {
     expect(result.issues).toEqual([])
   })
 
-  test('requires 依赖已安装时通过', () => {
+  test('passes when required dependencies are installed', () => {
     const skill = createSkill({
       frontmatter: { name: 'test-skill', description: 'Test', requires: ['dep-a', 'dep-b'] },
     })
@@ -50,7 +50,7 @@ describe('SkillsInstaller.checkCompatibility', () => {
     expect(result.ok).toBe(true)
   })
 
-  test('requires 依赖缺失时报错', () => {
+  test('reports error when required dependencies are missing', () => {
     const skill = createSkill({
       frontmatter: { name: 'test-skill', description: 'Test', requires: ['dep-a', 'dep-missing'] },
     })
@@ -64,7 +64,7 @@ describe('SkillsInstaller.checkCompatibility', () => {
     expect(result.issues[0]).toContain('dep-missing')
   })
 
-  test('conflicts 冲突检测', () => {
+  test('conflicts detection', () => {
     const skill = createSkill({
       frontmatter: { name: 'test-skill', description: 'Test', conflicts: ['conflicting-skill'] },
     })
@@ -76,10 +76,10 @@ describe('SkillsInstaller.checkCompatibility', () => {
     expect(result.ok).toBe(false)
     expect(result.issues.length).toBe(1)
     expect(result.issues[0]).toContain('conflicting-skill')
-    expect(result.issues[0]).toContain('冲突')
+    expect(result.issues[0]).toContain('Conflicts')
   })
 
-  test('无已安装 skill 时，有依赖的 skill 报错', () => {
+  test('skill with dependencies reports error when no skills are installed', () => {
     const skill = createSkill({
       frontmatter: { name: 'test-skill', description: 'Test', requires: ['needed'] },
     })
@@ -89,7 +89,7 @@ describe('SkillsInstaller.checkCompatibility', () => {
     expect(result.issues[0]).toContain('needed')
   })
 
-  test('无已安装 skill 时，有冲突声明的 skill 通过', () => {
+  test('skill with conflict declarations passes when no skills are installed', () => {
     const skill = createSkill({
       frontmatter: { name: 'test-skill', description: 'Test', conflicts: ['absent-conflict'] },
     })
@@ -98,7 +98,7 @@ describe('SkillsInstaller.checkCompatibility', () => {
     expect(result.ok).toBe(true)
   })
 
-  test('同时有依赖和冲突问题时报告所有问题', () => {
+  test('reports all issues when both dependency and conflict problems exist', () => {
     const skill = createSkill({
       frontmatter: {
         name: 'test-skill',
@@ -119,14 +119,14 @@ describe('SkillsInstaller.checkCompatibility', () => {
   })
 })
 
-// SkillsLoader.getAgentSkillsView 测试
+// SkillsLoader.getAgentSkillsView tests
 import './setup-light.ts'
 import { SkillsLoader } from '../src/skills/loader.ts'
 
 describe('SkillsLoader.getAgentSkillsView', () => {
-  test('无 skills 字段时返回所有可用 skills', () => {
+  test('returns all available skills when no skills field is specified', () => {
     const loader = new SkillsLoader()
-    // loadAllSkills 返回的都是 available
+    // All skills returned by loadAllSkills are available
     const allSkills = loader.loadAllSkills()
 
     const view = loader.getAgentSkillsView({
@@ -136,20 +136,20 @@ describe('SkillsLoader.getAgentSkillsView', () => {
       workspaceDir: '/tmp',
     } as any)
 
-    // available 和 enabled 都应该是全量
+    // available and enabled should both contain all skills
     expect(view.available).toEqual(allSkills)
     expect(view.enabled).toEqual(allSkills)
-    // eligible 是 enabled 中 eligible=true 的
+    // eligible contains only those from enabled where eligible=true
     for (const s of view.eligible) {
       expect(s.eligible).toBe(true)
     }
   })
 
-  test('有 skills 字段时 enabled 只包含指定的', () => {
+  test('enabled only contains specified skills when skills field is present', () => {
     const loader = new SkillsLoader()
     const allSkills = loader.loadAllSkills()
-    // 如果没有任何 skill 被加载，这个测试意义不大
-    // 但至少验证逻辑不报错
+    // If no skills are loaded, this test has limited value
+    // But at least verify the logic doesn't throw errors
     const view = loader.getAgentSkillsView({
       id: 'test',
       name: 'Test',
@@ -159,7 +159,7 @@ describe('SkillsLoader.getAgentSkillsView', () => {
     } as any)
 
     expect(view.available).toEqual(allSkills)
-    expect(view.enabled).toEqual([]) // nonexistent 匹配不到
+    expect(view.enabled).toEqual([]) // nonexistent matches nothing
     expect(view.eligible).toEqual([])
   })
 })

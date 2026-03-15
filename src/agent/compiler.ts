@@ -8,7 +8,7 @@ import { resolveMcpServers } from './mcp-utils.ts'
 import type { PromptBuilder } from './prompt-builder.ts'
 import type { AgentEntry, AgentRef, AgentDefinition } from './schema.ts'
 
-// SDK 期望的子 Agent 定义格式
+// SDK-expected sub-agent definition format
 interface SDKAgentDefinition {
   description: string
   prompt?: string
@@ -20,17 +20,17 @@ interface SDKAgentDefinition {
 }
 
 /**
- * AgentCompiler：将 agent.yaml 中的 ref 引用编译为 SDK 期望的扁平 AgentDefinition
+ * AgentCompiler: compiles ref references in agent.yaml into flat SDK AgentDefinitions
  *
- * 支持两种子 Agent 定义方式：
- * 1. 内联定义（原有方式）：直接写 description + prompt + tools
- * 2. ref 引用（新增）：通过 ref 字段引用顶层 agent 的完整配置
+ * Supports two sub-agent definition methods:
+ * 1. Inline definition (original): directly specify description + prompt + tools
+ * 2. Ref reference (new): reference a top-level agent's full config via the ref field
  */
 export class AgentCompiler {
   constructor(private promptBuilder: PromptBuilder) {}
 
   /**
-   * 解析 agents 字段中的所有 entry，编译为 SDK AgentDefinition
+   * Resolve all entries in the agents field, compile to SDK AgentDefinition
    */
   resolve(
     agents: Record<string, AgentEntry>,
@@ -43,7 +43,7 @@ export class AgentCompiler {
       if (this.isRefEntry(entry)) {
         result[name] = this.compileRef(entry as AgentRef, resolving)
       } else {
-        // 内联定义，直接传递
+        // Inline definition, pass through directly
         result[name] = entry as SDKAgentDefinition
       }
     }
@@ -52,34 +52,34 @@ export class AgentCompiler {
   }
 
   /**
-   * 判断 entry 是否为 ref 引用
+   * Check whether an entry is a ref reference
    */
   private isRefEntry(entry: AgentEntry): entry is AgentRef {
     return 'ref' in entry && typeof (entry as AgentRef).ref === 'string'
   }
 
   /**
-   * 编译单个 ref 引用为 SDK AgentDefinition
+   * Compile a single ref reference into an SDK AgentDefinition
    */
   private compileRef(ref: AgentRef, resolving: Set<string>): SDKAgentDefinition {
     const logger = getLogger()
     const targetId = ref.ref
 
-    // 循环检测
+    // Circular reference detection
     if (resolving.has(targetId)) {
       const chain = [...resolving, targetId].join(' → ')
-      throw new Error(`检测到循环引用: ${chain}`)
+      throw new Error(`Circular reference detected: ${chain}`)
     }
     resolving.add(targetId)
 
     try {
-      // 加载目标 agent.yaml
+      // Load target agent.yaml
       const paths = getPaths()
       const agentDir = resolve(paths.agents, targetId)
       const configPath = resolve(agentDir, 'agent.yaml')
 
       if (!existsSync(configPath)) {
-        throw new Error(`ref 引用的 agent "${targetId}" 不存在: ${configPath}`)
+        throw new Error(`Referenced agent "${targetId}" does not exist: ${configPath}`)
       }
 
       const rawYaml = readFileSync(configPath, 'utf-8')
@@ -92,23 +92,23 @@ export class AgentCompiler {
       })
 
       if (!result.success) {
-        throw new Error(`ref 引用的 agent "${targetId}" 配置校验失败: ${JSON.stringify(result.error.issues)}`)
+        throw new Error(`Referenced agent "${targetId}" config validation failed: ${JSON.stringify(result.error.issues)}`)
       }
 
       const targetConfig = result.data
 
-      // 使用 PromptBuilder 编译 prompt
+      // Build prompt using PromptBuilder
       const systemPrompt = this.promptBuilder.build(agentDir, {
         ...targetConfig,
         workspaceDir: agentDir,
       })
 
-      // 构建 SDK AgentDefinition
+      // Build SDK AgentDefinition
       const definition: SDKAgentDefinition = {
         description: ref.description ?? targetConfig.name,
       }
 
-      // 编译 prompt：目标 agent 的完整 system prompt + ref 追加的 prompt
+      // Compile prompt: target agent full system prompt + ref appended prompt
       let finalPrompt = systemPrompt
       if (ref.prompt) {
         finalPrompt += '\n\n' + ref.prompt
@@ -117,7 +117,7 @@ export class AgentCompiler {
         definition.prompt = finalPrompt
       }
 
-      // 工具配置：ref 覆盖 > 目标配置
+      // Tool config: ref overrides > target config
       if (ref.tools) {
         definition.tools = ref.tools
       } else if (targetConfig.allowedTools) {
@@ -130,35 +130,35 @@ export class AgentCompiler {
         definition.disallowedTools = targetConfig.disallowedTools
       }
 
-      // model: ref 覆盖 > 目标配置
+      // model: ref overrides > target config
       if (ref.model) {
         definition.model = ref.model
       } else if (targetConfig.model) {
         definition.model = targetConfig.model
       }
 
-      // maxTurns: ref 覆盖 > 目标配置
+      // maxTurns: ref overrides > target config
       if (ref.maxTurns) {
         definition.maxTurns = ref.maxTurns
       } else if (targetConfig.maxTurns) {
         definition.maxTurns = targetConfig.maxTurns
       }
 
-      // MCP 服务器
+      // MCP servers
       if (targetConfig.mcpServers) {
         definition.mcpServers = resolveMcpServers(targetConfig.mcpServers)
       }
 
-      // 递归解析目标 agent 的子 agents
+      // Recursively resolve target agent sub-agents
       if (targetConfig.agents) {
         const nestedAgents = this.resolve(targetConfig.agents, targetId)
-        // SDK 不支持嵌套 agents 定义，这里只记录日志
+        // SDK does not support nested agents definitions, log only
         if (Object.keys(nestedAgents).length > 0) {
-          logger.debug({ targetId, nestedCount: Object.keys(nestedAgents).length }, 'ref 引用的 agent 包含子 agents（忽略嵌套）')
+          logger.debug({ targetId, nestedCount: Object.keys(nestedAgents).length }, 'Referenced agent contains sub-agents (nested ignored)')
         }
       }
 
-      logger.info({ targetId, hasPrompt: !!definition.prompt, hasTools: !!definition.tools }, 'ref 引用编译完成')
+      logger.info({ targetId, hasPrompt: !!definition.prompt, hasTools: !!definition.tools }, 'Ref reference compiled')
       return definition
     } finally {
       resolving.delete(targetId)

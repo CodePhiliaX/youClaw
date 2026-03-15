@@ -44,8 +44,8 @@ export class AgentManager {
   }
 
   /**
-   * 确保默认 agent 和全局记忆目录存在
-   * 以 agent.yaml 为哨兵文件，不存在则从内置模板初始化
+   * Ensure default agent and global memory directory exist
+   * Uses agent.yaml as sentinel file; initializes from built-in templates if missing
    */
   ensureDefaultAgent(): void {
     const logger = getLogger()
@@ -54,7 +54,7 @@ export class AgentManager {
     const globalDir = resolve(paths.agents, '_global')
 
     if (!existsSync(resolve(defaultDir, 'agent.yaml'))) {
-      logger.info('初始化默认 agent 模板...')
+      logger.info('Initializing default agent template...')
       mkdirSync(defaultDir, { recursive: true })
       mkdirSync(resolve(defaultDir, 'memory'), { recursive: true })
       mkdirSync(resolve(defaultDir, 'skills'), { recursive: true })
@@ -74,19 +74,19 @@ export class AgentManager {
   }
 
   /**
-   * 从 agents/ 目录加载所有 agent
-   * 扫描每个子目录的 agent.yaml，使用 Zod 校验配置并创建 AgentRuntime
+   * Load all agents from the agents/ directory
+   * Scans each subdirectory for agent.yaml, validates config with Zod, and creates AgentRuntime
    */
   async loadAgents(): Promise<void> {
     const logger = getLogger()
     const paths = getPaths()
     const agentsDir = paths.agents
 
-    // 确保默认 agent 存在
+    // Ensure default agent exists
     this.ensureDefaultAgent()
 
     if (!existsSync(agentsDir)) {
-      logger.warn({ agentsDir }, 'agents 目录不存在')
+      logger.warn({ agentsDir }, 'Agents directory does not exist')
       return
     }
 
@@ -99,7 +99,7 @@ export class AgentManager {
       const configPath = resolve(agentDir, 'agent.yaml')
 
       if (!existsSync(configPath)) {
-        logger.debug({ agentDir }, '跳过无 agent.yaml 的目录')
+        logger.debug({ agentDir }, 'Skipping directory without agent.yaml')
         continue
       }
 
@@ -107,7 +107,7 @@ export class AgentManager {
         const rawYaml = readFileSync(configPath, 'utf-8')
         const parsed = parseYaml(rawYaml) as Record<string, unknown>
 
-        // 使用 Zod 校验配置
+        // Validate config with Zod
         const result = AgentConfigSchema.safeParse({
           ...parsed,
           id: parsed.id ?? entry.name,
@@ -115,7 +115,7 @@ export class AgentManager {
         })
 
         if (!result.success) {
-          logger.error({ agentDir, errors: result.error.issues }, 'agent.yaml 配置校验失败')
+          logger.error({ agentDir, errors: result.error.issues }, 'agent.yaml config validation failed')
           continue
         }
 
@@ -124,7 +124,7 @@ export class AgentManager {
           workspaceDir: agentDir,
         }
 
-        // 向后兼容：旧 telegram.chatIds 自动迁移为 bindings
+        // Backward compatibility: auto-migrate legacy telegram.chatIds to bindings
         if (config.telegram?.chatIds && !config.bindings) {
           config.bindings = [{
             channel: 'telegram',
@@ -133,12 +133,12 @@ export class AgentManager {
           }]
         }
 
-        // 加载 hooks
+        // Load hooks
         if (this.hooksManager && config.hooks) {
           await this.hooksManager.loadHooks(config.id, agentDir, config.hooks)
         }
 
-        // 注册安全策略为内置 hook
+        // Register security policy as built-in hook
         if (this.hooksManager && config.security) {
           const { createSecurityHook } = await import('./security.ts')
           const securityHandler = createSecurityHook(config.security)
@@ -167,25 +167,25 @@ export class AgentManager {
           },
         })
 
-        logger.info({ agentId: config.id, name: config.name }, 'Agent 已加载')
+        logger.info({ agentId: config.id, name: config.name }, 'Agent loaded')
       } catch (err) {
-        logger.error({ agentDir, error: err instanceof Error ? err.message : String(err) }, '加载 agent 失败')
+        logger.error({ agentDir, error: err instanceof Error ? err.message : String(err) }, 'Failed to load agent')
       }
     }
 
-    // 构建路由表
+    // Build route table
     if (this.agentRouter) {
       this.agentRouter.buildRouteTable(this.agents)
     }
 
-    logger.info({ count: this.agents.size }, '所有 agent 加载完成')
+    logger.info({ count: this.agents.size }, 'All agents loaded')
   }
 
   /**
-   * 清空已加载的 agent 并重新从磁盘加载
+   * Clear loaded agents and reload from disk
    */
   async reloadAgents(): Promise<void> {
-    // 清理 hooks
+    // Clean up hooks
     if (this.hooksManager) {
       for (const agentId of this.agents.keys()) {
         this.hooksManager.unloadHooks(agentId)
@@ -196,10 +196,10 @@ export class AgentManager {
   }
 
   /**
-   * 根据 chatId 找到对应的 agent
+   * Resolve the agent for a given chatId
    */
   resolveAgent(chatId: string): AgentInstance | undefined {
-    // 优先使用 AgentRouter（如果已初始化）
+    // Prefer AgentRouter if initialized
     if (this.agentRouter) {
       const channel = inferChannelType(chatId)
       return this.agentRouter.resolve({
@@ -208,7 +208,7 @@ export class AgentManager {
       })
     }
 
-    // 回退到旧逻辑
+    // Fall back to legacy logic
     for (const managed of this.agents.values()) {
       const chatIds = managed.config.telegram?.chatIds
       if (chatIds && chatIds.includes(chatId)) {
@@ -219,21 +219,21 @@ export class AgentManager {
   }
 
   /**
-   * 获取所有 agent 配置列表
+   * Get all agent configs
    */
   getAgents(): AgentConfig[] {
     return Array.from(this.agents.values()).map((m) => m.config)
   }
 
   /**
-   * 获取单个 agent
+   * Get a single agent by ID
    */
   getAgent(agentId: string): AgentInstance | undefined {
     return this.agents.get(agentId)
   }
 
   /**
-   * 获取默认 agent
+   * Get the default agent
    */
   getDefaultAgent(): AgentInstance | undefined {
     const defaultAgent = this.agents.get('default')
@@ -243,14 +243,14 @@ export class AgentManager {
   }
 
   /**
-   * 获取 AgentRouter（供 API 路由使用）
+   * Get the AgentRouter (for API routing)
    */
   getRouter(): AgentRouter | null {
     return this.agentRouter
   }
 
   /**
-   * 获取内部 agents Map（供 AgentRouter 使用）
+   * Get the internal agents Map (for AgentRouter)
    */
   getAgentsMap(): Map<string, AgentInstance> {
     return this.agents

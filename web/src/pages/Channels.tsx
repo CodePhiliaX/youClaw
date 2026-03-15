@@ -41,7 +41,7 @@ export function Channels() {
 
   return (
     <div className="flex h-full">
-      {/* 左侧：Channel 列表 */}
+      {/* Left: Channel list */}
       <SidePanel>
         <div className="h-12 shrink-0 px-3 border-b border-border flex items-center justify-between">
           <h2 className="font-semibold text-sm">{t.channels.title}</h2>
@@ -117,7 +117,7 @@ export function Channels() {
         </div>
       </SidePanel>
 
-      {/* 右侧：详情 / 创建 */}
+      {/* Right: Details / Create */}
       <div className="flex-1 overflow-y-auto">
         {showCreate ? (
           <CreateChannelForm
@@ -153,7 +153,7 @@ export function Channels() {
   )
 }
 
-// === 创建 Channel 表单 ===
+// === Create Channel form ===
 function CreateChannelForm({
   t,
   types,
@@ -204,7 +204,7 @@ function CreateChannelForm({
     <div className="p-6 max-w-2xl space-y-5">
       <h1 className="text-xl font-semibold">{t.channels.addChannel}</h1>
 
-      {/* 选择类型 */}
+      {/* Select type */}
       <div>
         <label className="text-xs font-medium mb-1.5 block">{t.channels.channelType}</label>
         <select
@@ -246,7 +246,7 @@ function CreateChannelForm({
             />
           </div>
 
-          {/* 配置字段 */}
+          {/* Config fields */}
           {typeInfo.configFields.map((field) => (
             <div key={field.key}>
               <label className="text-xs font-medium mb-1.5 block">{field.label}</label>
@@ -288,7 +288,7 @@ function CreateChannelForm({
   )
 }
 
-// === Channel 详情视图 ===
+// === Channel detail view ===
 function ChannelDetail({
   t,
   channel,
@@ -383,7 +383,7 @@ function ChannelDetail({
 
   return (
     <div className="p-6 max-w-2xl space-y-6">
-      {/* 头部 */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div
@@ -458,7 +458,7 @@ function ChannelDetail({
         </div>
       </div>
 
-      {/* 操作按钮 */}
+      {/* Action buttons */}
       <div className="flex gap-2 flex-wrap">
         {channel.connected ? (
           <button
@@ -520,7 +520,7 @@ function ChannelDetail({
         )}
       </div>
 
-      {/* 操作错误 */}
+      {/* Action error */}
       {actionError && (
         <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3 flex items-start gap-3" data-testid="channel-action-error">
           <AlertTriangle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
@@ -528,7 +528,7 @@ function ChannelDetail({
         </div>
       )}
 
-      {/* 连接错误信息 */}
+      {/* Connection error */}
       {channel.error && (
         <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3 flex items-start gap-3">
           <AlertTriangle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
@@ -536,7 +536,7 @@ function ChannelDetail({
         </div>
       )}
 
-      {/* 状态信息 */}
+      {/* Status info */}
       <div className="grid grid-cols-2 gap-3">
         <InfoCard
           label={t.channels.status}
@@ -556,7 +556,7 @@ function ChannelDetail({
         />
       </div>
 
-      {/* 配置编辑 */}
+      {/* Config editor */}
       {typeInfo && (
         <div>
           <h2 className="text-sm font-semibold mb-3">{t.channels.configuration}</h2>
@@ -579,7 +579,7 @@ function ChannelDetail({
   )
 }
 
-// === 单个配置字段编辑器 ===
+// === Single config field editor ===
 function ConfigFieldEditor({
   t,
   channelId,
@@ -677,7 +677,7 @@ function ConfigFieldEditor({
   )
 }
 
-// === 信息卡片 ===
+// === Info card ===
 function InfoCard({
   label,
   value,

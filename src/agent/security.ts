@@ -3,14 +3,14 @@ import type { SecurityConfig } from './schema.ts'
 import type { HookHandler, HookContext } from './hooks.ts'
 
 /**
- * 创建安全策略 hook
+ * Create security policy hook
  *
- * 注册为最高优先级的 pre_tool_use hook（priority = -1000），
- * 在所有用户 hook 之前执行
+ * Registered as highest-priority pre_tool_use hook (priority = -1000),
+ * executes before all user hooks
  *
- * 支持：
- * - 工具白名单/黑名单
- * - 文件路径访问控制（allowedPaths / deniedPaths）
+ * Supports:
+ * - Tool allowlist/denylist
+ * - File path access control (allowedPaths / deniedPaths)
  */
 export function createSecurityHook(securityConfig: SecurityConfig): HookHandler {
   const allowedTools = securityConfig.allowedTools
@@ -26,21 +26,21 @@ export function createSecurityHook(securityConfig: SecurityConfig): HookHandler 
   return async (ctx: HookContext): Promise<HookContext> => {
     const tool = ctx.payload.tool as string
 
-    // 检查工具白名单
+    // Check tool allowlist
     if (allowedTools && !allowedTools.has(tool)) {
       ctx.abort = true
-      ctx.abortReason = `工具 "${tool}" 不在允许列表中`
+      ctx.abortReason = `Tool "${tool}" is not in the allowed list`
       return ctx
     }
 
-    // 检查工具黑名单
+    // Check tool denylist
     if (disallowedTools && disallowedTools.has(tool)) {
       ctx.abort = true
-      ctx.abortReason = `工具 "${tool}" 被禁止使用`
+      ctx.abortReason = `Tool "${tool}" is blocked`
       return ctx
     }
 
-    // 检查文件路径访问（对文件操作工具生效）
+    // Check file path access (applies to file operation tools)
     const fileTools = new Set(['Read', 'Write', 'Edit', 'Glob', 'Grep'])
     if (fileTools.has(tool) && (allowedPaths || deniedPaths)) {
       const input = ctx.payload.input as Record<string, unknown> | undefined
@@ -49,19 +49,19 @@ export function createSecurityHook(securityConfig: SecurityConfig): HookHandler 
       if (filePath) {
         const normalizedPath = isAbsolute(filePath) ? filePath : resolve(process.cwd(), filePath)
 
-        // 检查 deniedPaths
+        // Check deniedPaths
         if (deniedPaths) {
           for (const denied of deniedPaths) {
             const normalizedDenied = isAbsolute(denied) ? denied : resolve(process.cwd(), denied)
             if (normalizedPath.startsWith(normalizedDenied)) {
               ctx.abort = true
-              ctx.abortReason = `文件路径 "${filePath}" 在禁止访问列表中`
+              ctx.abortReason = `File path "${filePath}" is in the denied list`
               return ctx
             }
           }
         }
 
-        // 检查 allowedPaths
+        // Check allowedPaths
         if (allowedPaths && allowedPaths.length > 0) {
           const allowed = allowedPaths.some((ap) => {
             const normalizedAllowed = isAbsolute(ap) ? ap : resolve(process.cwd(), ap)
@@ -69,7 +69,7 @@ export function createSecurityHook(securityConfig: SecurityConfig): HookHandler 
           })
           if (!allowed) {
             ctx.abort = true
-            ctx.abortReason = `文件路径 "${filePath}" 不在允许访问列表中`
+            ctx.abortReason = `File path "${filePath}" is not in the allowed list`
             return ctx
           }
         }
@@ -81,7 +81,7 @@ export function createSecurityHook(securityConfig: SecurityConfig): HookHandler 
 }
 
 /**
- * 从工具输入中提取文件路径
+ * Extract file path from tool input
  */
 function extractFilePath(tool: string, input: Record<string, unknown> | undefined): string | null {
   if (!input) return null

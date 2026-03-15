@@ -8,28 +8,28 @@ import { EventBus } from '../src/events/bus.ts'
 // ---------------------------------------------------------------------------
 
 describe('extractTextContent', () => {
-  test('text type 提取 text 字段', () => {
+  test('text type extracts text field', () => {
     expect(extractTextContent('{"text":"hello"}', 'text')).toBe('hello')
   })
 
-  test('post type 委托 extractPostText', () => {
+  test('post type delegates to extractPostText', () => {
     const json = JSON.stringify({
       zh_cn: { title: 'T', content: [[{ tag: 'text', text: 'body' }]] },
     })
     expect(extractTextContent(json, 'post')).toBe('T\nbody')
   })
 
-  test('JSON 解析失败时回退为原始字符串', () => {
+  test('falls back to raw string on JSON parse failure', () => {
     expect(extractTextContent('not json', 'text')).toBe('not json')
   })
 
-  test('未知消息类型返回空字符串', () => {
+  test('returns empty string for unknown message type', () => {
     expect(extractTextContent('{"text":"hello"}', 'image')).toBe('')
   })
 })
 
 describe('extractPostText', () => {
-  test('title + text 元素', () => {
+  test('title + text elements', () => {
     expect(
       extractPostText({
         zh_cn: { title: 'Title', content: [[{ tag: 'text', text: 'Hello' }]] },
@@ -45,7 +45,7 @@ describe('extractPostText', () => {
     ).toBe('T\nHi')
   })
 
-  test('link 提取文本', () => {
+  test('link text extraction', () => {
     expect(
       extractPostText({
         content: [[{ tag: 'a', text: 'Link', href: 'http://x.com' }]],
@@ -61,17 +61,17 @@ describe('extractPostText', () => {
     ).toBe('@Alice')
   })
 
-  test('image 占位符', () => {
+  test('image placeholder', () => {
     expect(
       extractPostText({ content: [[{ tag: 'img' }]] }),
-    ).toBe('[图片]')
+    ).toBe('[image]')
   })
 
-  test('空段落跳过', () => {
+  test('empty paragraph is skipped', () => {
     expect(extractPostText({ content: [[]] })).toBe('')
   })
 
-  test('多段落', () => {
+  test('multiple paragraphs', () => {
     expect(
       extractPostText({
         content: [
@@ -84,7 +84,7 @@ describe('extractPostText', () => {
 })
 
 describe('stripBotMention', () => {
-  test('移除 bot @提及', () => {
+  test('removes bot @mention', () => {
     expect(
       stripBotMention(
         'hello @_user_1 world',
@@ -94,7 +94,7 @@ describe('stripBotMention', () => {
     ).toBe('hello  world')
   })
 
-  test('保留非 bot 的 @提及', () => {
+  test('preserves non-bot @mentions', () => {
     expect(
       stripBotMention(
         '@_user_1 hi @_user_2',
@@ -107,7 +107,7 @@ describe('stripBotMention', () => {
     ).toBe('hi @_user_2')
   })
 
-  test('key 中包含正则特殊字符', () => {
+  test('key containing regex special characters', () => {
     expect(
       stripBotMention(
         'test @_user_1+2 end',
@@ -117,7 +117,7 @@ describe('stripBotMention', () => {
     ).toBe('test  end')
   })
 
-  test('trim 前导空白', () => {
+  test('trims leading whitespace', () => {
     expect(
       stripBotMention(
         '@_user_1 hello',
@@ -129,19 +129,19 @@ describe('stripBotMention', () => {
 })
 
 describe('chunkText', () => {
-  test('短文本返回单个分片', () => {
+  test('short text returns a single chunk', () => {
     expect(chunkText('hello', 10)).toEqual(['hello'])
   })
 
-  test('正确拆分', () => {
+  test('splits correctly', () => {
     expect(chunkText('abcdefghij', 3)).toEqual(['abc', 'def', 'ghi', 'j'])
   })
 
-  test('恰好整除', () => {
+  test('evenly divisible', () => {
     expect(chunkText('abcdef', 3)).toEqual(['abc', 'def'])
   })
 
-  test('空字符串', () => {
+  test('empty string', () => {
     expect(chunkText('', 10)).toEqual([''])
   })
 })
@@ -187,7 +187,7 @@ function createMockClient() {
 
 describe('FeishuChannel', () => {
   describe('sendMessage', () => {
-    test('纯文本使用 post 格式', async () => {
+    test('plain text uses post format', async () => {
       const { client, sentMessages } = createMockClient()
       const channel = new FeishuChannel('app1', 'secret1', {
         onMessage: mock(() => {}),
@@ -200,7 +200,7 @@ describe('FeishuChannel', () => {
       expect(sentMessages[0].data.msg_type).toBe('post')
     })
 
-    test('包含代码块时使用 card 格式', async () => {
+    test('uses card format when code blocks are present', async () => {
       const { client, sentMessages } = createMockClient()
       const channel = new FeishuChannel('app1', 'secret1', {
         onMessage: mock(() => {}),
@@ -213,7 +213,7 @@ describe('FeishuChannel', () => {
       expect(sentMessages[0].data.msg_type).toBe('interactive')
     })
 
-    test('包含表格时使用 card 格式', async () => {
+    test('uses card format when tables are present', async () => {
       const { client, sentMessages } = createMockClient()
       const channel = new FeishuChannel('app1', 'secret1', {
         onMessage: mock(() => {}),
@@ -226,14 +226,14 @@ describe('FeishuChannel', () => {
       expect(sentMessages[0].data.msg_type).toBe('interactive')
     })
 
-    test('长消息分片发送', async () => {
+    test('long message is sent in chunks', async () => {
       const { client, sentMessages } = createMockClient()
       const channel = new FeishuChannel('app1', 'secret1', {
         onMessage: mock(() => {}),
         _client: client,
       })
 
-      // 生成超过 4000 字符的文本
+      // generate text exceeding 4000 characters
       const longText = 'x'.repeat(4001)
       await channel.sendMessage('feishu:chat1', longText)
 
@@ -242,7 +242,7 @@ describe('FeishuChannel', () => {
   })
 
   describe('ownsChatId', () => {
-    test('feishu: 前缀返回 true', () => {
+    test('feishu: prefix returns true', () => {
       const { client } = createMockClient()
       const channel = new FeishuChannel('app1', 'secret1', {
         onMessage: mock(() => {}),
@@ -252,7 +252,7 @@ describe('FeishuChannel', () => {
       expect(channel.ownsChatId('feishu:chat1')).toBe(true)
     })
 
-    test('telegram: 前缀返回 false', () => {
+    test('telegram: prefix returns false', () => {
       const { client } = createMockClient()
       const channel = new FeishuChannel('app1', 'secret1', {
         onMessage: mock(() => {}),
@@ -264,7 +264,7 @@ describe('FeishuChannel', () => {
   })
 
   describe('isConnected', () => {
-    test('初始状态为 false', () => {
+    test('initial state is false', () => {
       const { client } = createMockClient()
       const channel = new FeishuChannel('app1', 'secret1', {
         onMessage: mock(() => {}),
@@ -276,7 +276,7 @@ describe('FeishuChannel', () => {
   })
 
   describe('Reaction lifecycle', () => {
-    test('eventBus 订阅在 disconnect 后清理', () => {
+    test('eventBus subscription is cleaned up after disconnect', () => {
       const eventBus = new EventBus()
       const { client } = createMockClient()
       const channel = new FeishuChannel('app1', 'secret1', {
@@ -285,17 +285,17 @@ describe('FeishuChannel', () => {
         _client: client,
       })
 
-      // 构造阶段不订阅 eventBus（订阅发生在 connect 中）
+      // no eventBus subscription during construction (subscription happens in connect)
       expect(eventBus.subscriberCount).toBe(0)
 
-      // disconnect 不应抛异常
+      // disconnect should not throw
       channel.disconnect()
       expect(eventBus.subscriberCount).toBe(0)
     })
 
-    test('reaction API 失败不抛异常', async () => {
+    test('reaction API failure does not throw', async () => {
       const { client } = createMockClient()
-      // 让 reaction create 失败
+      // make reaction create fail
       client.im.messageReaction.create = mock(async () => {
         throw new Error('API error')
       })
@@ -305,7 +305,7 @@ describe('FeishuChannel', () => {
         _client: client,
       })
 
-      // 未连接状态正常
+      // normal in disconnected state
       expect(channel.isConnected()).toBe(false)
     })
   })

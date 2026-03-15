@@ -7,7 +7,7 @@ export function useSidebar() {
   const collapse = useAppStore((s) => s.collapseSidebar)
   const expand = useAppStore((s) => s.expandSidebar)
 
-  // 键盘快捷键 Cmd/Ctrl+Shift+S
+  // Keyboard shortcut Cmd/Ctrl+Shift+S
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 's') {

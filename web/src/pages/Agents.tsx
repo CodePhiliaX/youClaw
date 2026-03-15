@@ -43,7 +43,7 @@ type SubAgentDef = {
 
 type SubAgentsMap = Record<string, SubAgentDef>
 
-// 文档文件列表和对应图标描述
+// Document file list and icon descriptions
 const DOC_FILES = [
   { name: 'SOUL.md', label: 'Soul', desc: 'Personality & Style' },
   { name: 'AGENT.md', label: 'Agent', desc: 'Capabilities & Rules' },
@@ -60,25 +60,25 @@ export function Agents() {
   const [selected, setSelected] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('detail')
 
-  // 文档相关状态
+  // Document-related state
   const [docs, setDocs] = useState<Record<string, string>>({})
   const [editingDoc, setEditingDoc] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
-  // 创建 Agent 表单
+  // Create Agent form
   const [newId, setNewId] = useState('')
   const [newName, setNewName] = useState('')
   const [newModel, setNewModel] = useState('default')
   const [isCreating, setIsCreating] = useState(false)
 
-  // 展开的文档
+  // Expanded document
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null)
 
-  // 子 Agent 相关状态
+  // Sub-agent related state
   const [subAgents, setSubAgents] = useState<SubAgentsMap>({})
 
-  // Browser Profile 相关状态
+  // Browser profile related state
   const [browserProfiles, setBrowserProfiles] = useState<BrowserProfileDTO[]>([])
   const [agentBrowserProfile, setAgentBrowserProfile] = useState<string | undefined>(undefined)
 
@@ -91,7 +91,7 @@ export function Agents() {
     getBrowserProfiles().then(setBrowserProfiles).catch(() => {})
   }, [loadAgents])
 
-  // 加载选中 agent 的文档
+  // Load documents for the selected agent
   useEffect(() => {
     if (selected) {
       getAgentDocs(selected)
@@ -102,7 +102,7 @@ export function Agents() {
     }
   }, [selected])
 
-  // 选中 agent 时加载子 Agent 配置和 browserProfile
+  // Load sub-agent config and browserProfile when agent is selected
   useEffect(() => {
     if (selected) {
       getAgentConfig(selected)
@@ -117,21 +117,21 @@ export function Agents() {
     }
   }, [selected])
 
-  // 保存子 Agent 配置
+  // Save sub-agent config
   const handleSaveSubAgents = async (updatedAgents: SubAgentsMap) => {
     if (!selected) return
     await updateAgentConfig(selected, { agents: updatedAgents })
     setSubAgents(updatedAgents)
   }
 
-  // 保存 browserProfile 配置
+  // Save browserProfile config
   const handleSaveBrowserProfile = async (profileId: string | undefined) => {
     if (!selected) return
     setAgentBrowserProfile(profileId)
     await updateAgentConfig(selected, { browserProfile: profileId ?? null })
   }
 
-  // 修改 Agent 名称
+  // Rename Agent
   const handleRename = async (newName: string) => {
     if (!selected) return
     await updateAgentConfig(selected, { name: newName })
@@ -140,7 +140,7 @@ export function Agents() {
 
   const selectedAgent = agents.find((a) => a.id === selected)
 
-  // 保存文档
+  // Save document
   const handleSaveDoc = async () => {
     if (!selected || !editingDoc) return
     setIsSaving(true)
@@ -149,13 +149,13 @@ export function Agents() {
       setDocs((prev) => ({ ...prev, [editingDoc]: editContent }))
       setEditingDoc(null)
     } catch {
-      // 静默处理
+      // silently ignore
     } finally {
       setIsSaving(false)
     }
   }
 
-  // 创建 Agent
+  // Create Agent
   const handleCreate = async () => {
     if (!newId.trim() || !newName.trim()) return
     setIsCreating(true)
@@ -168,13 +168,13 @@ export function Agents() {
       setNewName('')
       setNewModel('default')
     } catch {
-      // 静默处理
+      // silently ignore
     } finally {
       setIsCreating(false)
     }
   }
 
-  // 删除 Agent
+  // Delete Agent
   const handleDelete = async (agentId: string) => {
     if (agentId === 'default') return
     if (!confirm(t.agents.confirmDelete)) return
@@ -185,13 +185,13 @@ export function Agents() {
         setSelected(null)
       }
     } catch {
-      // 静默处理
+      // silently ignore
     }
   }
 
   return (
     <div className="flex h-full">
-      {/* 左侧：Agent 列表 */}
+      {/* Left side: Agent list */}
       <SidePanel>
         <div className="h-12 shrink-0 px-3 border-b border-border flex items-center justify-between">
           <h2 className="font-semibold text-sm">{t.agents.title}</h2>
@@ -245,7 +245,7 @@ export function Agents() {
         </div>
       </SidePanel>
 
-      {/* 右侧 */}
+      {/* Right side */}
       <div className="flex-1 overflow-y-auto">
         {viewMode === 'create' ? (
           <CreateAgentForm
@@ -304,7 +304,7 @@ export function Agents() {
   )
 }
 
-// === 创建 Agent 表单 ===
+// === Create Agent Form ===
 function CreateAgentForm({
   t,
   newId,
@@ -388,7 +388,7 @@ function CreateAgentForm({
   )
 }
 
-// === Agent 详情视图 ===
+// === Agent Detail View ===
 function AgentDetail({
   t,
   agent,
@@ -436,7 +436,7 @@ function AgentDetail({
   const [nameValue, setNameValue] = useState(agent.name)
   return (
     <div className="p-6 max-w-3xl space-y-6">
-      {/* 头部 */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -501,7 +501,7 @@ function AgentDetail({
         </div>
       </div>
 
-      {/* 状态卡片 */}
+      {/* Status cards */}
       {agent.state && (
         <div className="grid grid-cols-4 gap-3">
           <StatusCard
@@ -528,7 +528,7 @@ function AgentDetail({
         </div>
       )}
 
-      {/* 基本信息 */}
+      {/* Basic info */}
       <div className="grid gap-3">
         <InfoRow label={t.agents.workspace} value={
           <span className="flex items-center gap-1 text-xs font-mono">
@@ -543,7 +543,7 @@ function AgentDetail({
         )}
       </div>
 
-      {/* Browser Profile 绑定 */}
+      {/* Browser Profile binding */}
       {browserProfiles.length > 0 && (
         <div>
           <h2 className="text-sm font-semibold mb-3 flex items-center gap-2">
@@ -567,10 +567,10 @@ function AgentDetail({
         </div>
       )}
 
-      {/* 子 Agent 区 */}
+      {/* Sub-agents section */}
       <SubAgentsSection t={t} subAgents={subAgents} onSave={onSaveSubAgents} />
 
-      {/* 文档区 */}
+      {/* Documents section */}
       <div>
         <h2 className="text-sm font-semibold mb-3 flex items-center gap-2">
           <FileText className="h-4 w-4" />
@@ -602,7 +602,7 @@ function AgentDetail({
   )
 }
 
-// === 文档折叠编辑区 ===
+// === Collapsible Document Editor ===
 function DocSection({
   t,
   docName,
@@ -636,7 +636,7 @@ function DocSection({
 }) {
   return (
     <div className="border border-border rounded-md overflow-hidden">
-      {/* 标题栏 */}
+      {/* Title bar */}
       <button
         onClick={onToggle}
         className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-accent/30 transition-colors"
@@ -648,10 +648,10 @@ function DocSection({
         <span className="text-xs text-muted-foreground ml-auto">{docDesc}</span>
       </button>
 
-      {/* 展开内容 */}
+      {/* Expanded content */}
       {isExpanded && (
         <div className="border-t border-border">
-          {/* 工具栏 */}
+          {/* Toolbar */}
           <div className="flex items-center justify-end px-3 py-1.5 bg-muted/30 border-b border-border/50">
             {isEditing ? (
               <div className="flex items-center gap-2">
@@ -684,7 +684,7 @@ function DocSection({
             )}
           </div>
 
-          {/* 编辑/预览区 */}
+          {/* Edit/Preview area */}
           <div className="p-3">
             {isEditing ? (
               <textarea
@@ -708,7 +708,7 @@ function DocSection({
   )
 }
 
-// === 清理编辑草稿，去除空可选字段 ===
+// === Clean edit draft, remove empty optional fields ===
 function cleanDraft(draft: SubAgentDef): SubAgentDef {
   const result: SubAgentDef = { description: draft.description }
   if (draft.prompt?.trim()) result.prompt = draft.prompt.trim()
@@ -721,7 +721,7 @@ function cleanDraft(draft: SubAgentDef): SubAgentDef {
   return result
 }
 
-// === 子 Agent 管理区 ===
+// === Sub-Agent Management Section ===
 function SubAgentsSection({
   t,
   subAgents,
@@ -732,7 +732,7 @@ function SubAgentsSection({
   onSave: (agents: SubAgentsMap) => Promise<void>
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null) // null=无编辑, '__new__'=新增
+  const [editingId, setEditingId] = useState<string | null>(null) // null=no editing, '__new__'=adding new
   const [editDraft, setEditDraft] = useState<SubAgentDef>({ description: '' })
   const [newId, setNewId] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -818,7 +818,7 @@ function SubAgentsSection({
           const isEditing = editingId === id
           return (
             <div key={id} data-testid="subagent-item" className="border border-border rounded-md overflow-hidden">
-              {/* 标题栏 */}
+              {/* Title bar */}
               <button
                 onClick={() => setExpandedId(isExpanded ? null : id)}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-accent/30 transition-colors"
@@ -834,10 +834,10 @@ function SubAgentsSection({
                 )}
               </button>
 
-              {/* 展开内容 */}
+              {/* Expanded content */}
               {isExpanded && (
                 <div className="border-t border-border">
-                  {/* 工具栏 */}
+                  {/* Toolbar */}
                   <div className="flex items-center justify-end px-3 py-1.5 bg-muted/30 border-b border-border/50 gap-2">
                     {isEditing ? (
                       <>
@@ -878,7 +878,7 @@ function SubAgentsSection({
                     )}
                   </div>
 
-                  {/* 编辑/只读区 */}
+                  {/* Edit/Read-only area */}
                   <div className="p-3">
                     {isEditing ? (
                       <SubAgentForm t={t} draft={editDraft} setDraft={setEditDraft} />
@@ -892,7 +892,7 @@ function SubAgentsSection({
           )
         })}
 
-        {/* 新增子 Agent 表单 */}
+        {/* New sub-agent form */}
         {editingId === '__new__' && (
           <div className="border border-border rounded-md overflow-hidden">
             <div className="flex items-center gap-2 px-3 py-2 text-sm bg-accent/20">
@@ -919,7 +919,7 @@ function SubAgentsSection({
                 </button>
               </div>
               <div className="p-3 space-y-3">
-                {/* ID 输入（仅新增时显示） */}
+                {/* ID input (shown only when adding new) */}
                 <div>
                   <label className="block text-xs font-medium mb-1">{t.agents.subAgentId}</label>
                   <input
@@ -941,7 +941,7 @@ function SubAgentsSection({
   )
 }
 
-// === 子 Agent 只读视图 ===
+// === Sub-Agent Read-Only View ===
 function SubAgentReadView({ t, def }: { t: ReturnType<typeof useI18n>['t']; def: SubAgentDef }) {
   return (
     <div className="space-y-3">
@@ -996,7 +996,7 @@ function SubAgentReadView({ t, def }: { t: ReturnType<typeof useI18n>['t']; def:
   )
 }
 
-// === 子 Agent 编辑表单 ===
+// === Sub-Agent Edit Form ===
 function SubAgentForm({
   t,
   draft,
@@ -1097,7 +1097,7 @@ function SubAgentForm({
   )
 }
 
-// === 状态卡片 ===
+// === Status Card ===
 function StatusCard({
   icon,
   label,
@@ -1127,7 +1127,7 @@ function StatusCard({
   )
 }
 
-// === 信息行 ===
+// === Info Row ===
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between py-2 border-b border-border/50">

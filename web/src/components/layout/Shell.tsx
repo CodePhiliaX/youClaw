@@ -22,7 +22,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <div className="h-screen flex bg-background text-foreground">
         <AppSidebar onOpenSettings={() => setSettingsOpen(true)} />
         <main className="flex-1 overflow-hidden flex flex-col">
-          {/* Windows: drag region 条 */}
+          {/* Windows: drag region bar */}
           {isWin && (
             <div
               className="h-8 shrink-0 flex justify-end"

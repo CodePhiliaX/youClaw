@@ -4,14 +4,14 @@ import { getLogger } from '../logger/index.ts'
 import { getEnv } from '../config/index.ts'
 
 /**
- * 本地代理路由：将 SDK 的请求转发到云服务，附加 rdxtoken header
- * cloud 模式下 ANTHROPIC_BASE_URL 指向 http://localhost:{port}/api/proxy
- * SDK 调用 /api/proxy/v1/messages → 转发到云服务 /api/v1/messages
+ * Local proxy route: forwards SDK requests to cloud service with rdxtoken header.
+ * In cloud mode ANTHROPIC_BASE_URL points to http://localhost:{port}/api/proxy.
+ * SDK calls /api/proxy/v1/messages -> forwarded to cloud /api/v1/messages.
  */
 export function createProxyRoutes() {
   const app = new Hono()
 
-  // ALL /proxy/v1/messages — 转发到云服务
+  // ALL /proxy/v1/messages — forward to cloud service
   app.all('/proxy/v1/messages', async (c) => {
     const apiUrl = getEnv().YOUCLAW_API_URL
     const logger = getLogger()
@@ -28,26 +28,26 @@ export function createProxyRoutes() {
     const targetUrl = `${apiUrl}/api/v1/messages`
 
     try {
-      // 透传请求
+      // Pass-through request
       const headers: Record<string, string> = {
         rdxtoken: token,
       }
 
-      // 透传 Content-Type 和其他必要 header
+      // Forward Content-Type and other required headers
       const contentType = c.req.header('content-type')
       if (contentType) headers['content-type'] = contentType
 
       const accept = c.req.header('accept')
       if (accept) headers['accept'] = accept
 
-      // 透传 anthropic 相关 header
+      // Forward anthropic-related headers
       const anthropicVersion = c.req.header('anthropic-version')
       if (anthropicVersion) headers['anthropic-version'] = anthropicVersion
 
       const anthropicBeta = c.req.header('anthropic-beta')
       if (anthropicBeta) headers['anthropic-beta'] = anthropicBeta
 
-      // 不透传 x-api-key（SDK 会发 'youclaw'，readmex 用 rdxtoken 认证）
+      // Do not forward x-api-key (SDK sends 'youclaw'; readmex uses rdxtoken for auth)
 
       const body = c.req.method !== 'GET' ? await c.req.raw.clone().text() : undefined
 
@@ -57,7 +57,7 @@ export function createProxyRoutes() {
         body,
       })
 
-      // 流式响应透传
+      // Pass-through streaming response
       if (res.headers.get('content-type')?.includes('text/event-stream')) {
         return new Response(res.body, {
           status: res.status,
@@ -69,7 +69,7 @@ export function createProxyRoutes() {
         })
       }
 
-      // 普通 JSON 响应
+      // Regular JSON response
       const data = await res.text()
       return new Response(data, {
         status: res.status,

@@ -6,7 +6,7 @@ export interface PinoLogEntry {
   level: number
   time: number
   msg: string
-  category?: string  // 'agent' | 'tool_use' | 'task' | undefined(系统日志)
+  category?: string  // 'agent' | 'tool_use' | 'task' | undefined (system logs)
   agentId?: string
   chatId?: string
   tool?: string
@@ -18,7 +18,7 @@ const LEVEL_MAP: Record<string, number> = {
   trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60,
 }
 
-/** 获取所有日志日期，降序 */
+/** Get all log dates in descending order */
 export function getLogDates(): string[] {
   const logsDir = getPaths().logs
   try {
@@ -29,7 +29,7 @@ export function getLogDates(): string[] {
   } catch { return [] }
 }
 
-/** 读取某天日志，支持级别/类别/关键词过滤和分页 */
+/** Read log entries for a given date, with level/category/keyword filtering and pagination */
 export async function readLogEntries(date: string, options: {
   level?: string
   category?: string    // 'agent' | 'tool_use' | 'system'
@@ -53,14 +53,14 @@ export async function readLogEntries(date: string, options: {
     try {
       const entry = JSON.parse(line) as PinoLogEntry
       if (entry.level < minLevel) continue
-      // 类别过滤: 'system' 匹配无 category 的日志
+      // Category filter: 'system' matches entries without a category
       if (options.category) {
         if (options.category === 'system' && entry.category) continue
         if (options.category !== 'system' && entry.category !== options.category) continue
       }
       if (search && !JSON.stringify(entry).toLowerCase().includes(search)) continue
       filtered.push(entry)
-    } catch { /* 跳过非 JSON 行 */ }
+    } catch { /* skip non-JSON lines */ }
   }
 
   const total = filtered.length
@@ -68,7 +68,7 @@ export async function readLogEntries(date: string, options: {
   return { entries, total, hasMore: offset + limit < total }
 }
 
-/** 清理超过 retainDays 天的日志文件 */
+/** Delete log files older than retainDays */
 export function cleanOldLogs(retainDays: number): number {
   const logsDir = getPaths().logs
   const cutoff = new Date()

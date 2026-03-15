@@ -36,7 +36,7 @@ export class ChannelManager {
   }
 
   /**
-   * 从数据库加载所有 enabled 的 channel 并连接
+   * Load all enabled channels from the database and connect
    */
   async loadFromDatabase(): Promise<void> {
     const logger = getLogger()
@@ -48,26 +48,26 @@ export class ChannelManager {
       try {
         await this.startChannel(record)
       } catch (err) {
-        logger.error({ channelId: record.id, error: err instanceof Error ? err.message : String(err) }, 'Channel 启动失败')
+        logger.error({ channelId: record.id, error: err instanceof Error ? err.message : String(err) }, 'Channel failed to start')
       }
     }
 
-    logger.info({ count: this.managed.size }, 'Channels 加载完成')
+    logger.info({ count: this.managed.size }, 'Channels loaded')
   }
 
   /**
-   * 首次启动时从 env 迁移到数据库（向后兼容）
+   * Seed channels from env vars on first start (backward compatibility)
    */
   async seedFromEnv(env: EnvConfig): Promise<void> {
     const logger = getLogger()
     const existing = getChannelRecords()
 
-    // 如果数据库已有 channel 记录，跳过迁移
+    // Skip migration if database already has channel records
     if (existing.length > 0) return
 
     let seeded = false
 
-    // 迁移 Telegram
+    // Migrate Telegram
     if (env.TELEGRAM_BOT_TOKEN) {
       createChannelRecord({
         id: 'telegram',
@@ -77,10 +77,10 @@ export class ChannelManager {
         enabled: true,
       })
       seeded = true
-      logger.info('已从 env 迁移 Telegram channel 配置到数据库')
+      logger.info('Migrated Telegram channel config from env to database')
     }
 
-    // 迁移飞书
+    // Migrate Feishu
     if (env.FEISHU_APP_ID && env.FEISHU_APP_SECRET) {
       createChannelRecord({
         id: 'feishu',
@@ -90,10 +90,10 @@ export class ChannelManager {
         enabled: true,
       })
       seeded = true
-      logger.info('已从 env 迁移飞书 channel 配置到数据库')
+      logger.info('Migrated Feishu channel config from env to database')
     }
 
-    // 迁移 QQ
+    // Migrate QQ
     if (env.QQ_BOT_APP_ID && env.QQ_BOT_SECRET) {
       createChannelRecord({
         id: 'qq',
@@ -103,10 +103,10 @@ export class ChannelManager {
         enabled: true,
       })
       seeded = true
-      logger.info('已从 env 迁移 QQ channel 配置到数据库')
+      logger.info('Migrated QQ channel config from env to database')
     }
 
-    // 迁移企业微信
+    // Migrate WeCom
     if (env.WECOM_CORP_ID && env.WECOM_CORP_SECRET && env.WECOM_AGENT_ID && env.WECOM_TOKEN && env.WECOM_ENCODING_AES_KEY) {
       createChannelRecord({
         id: 'wecom',
@@ -122,10 +122,10 @@ export class ChannelManager {
         enabled: true,
       })
       seeded = true
-      logger.info('已从 env 迁移企业微信 channel 配置到数据库')
+      logger.info('Migrated WeCom channel config from env to database')
     }
 
-    // 迁移钉钉
+    // Migrate DingTalk
     if (env.DINGTALK_CLIENT_ID && env.DINGTALK_SECRET) {
       createChannelRecord({
         id: 'dingtalk',
@@ -135,16 +135,16 @@ export class ChannelManager {
         enabled: true,
       })
       seeded = true
-      logger.info('已从 env 迁移钉钉 channel 配置到数据库')
+      logger.info('Migrated DingTalk channel config from env to database')
     }
 
     if (seeded) {
-      logger.info('Channel 配置已迁移到数据库，后续可从环境变量中移除相关环境变量')
+      logger.info('Channel configs migrated to database; env vars can now be removed')
     }
   }
 
   /**
-   * 创建新 channel
+   * Create a new channel
    */
   async createChannel(opts: {
     id?: string
@@ -153,22 +153,22 @@ export class ChannelManager {
     config: Record<string, unknown>
     enabled?: boolean
   }): Promise<ChannelRecord> {
-    // 校验类型
+    // Validate type
     if (!CHANNEL_TYPE_REGISTRY[opts.type]) {
-      throw new Error(`未知的 channel 类型: ${opts.type}`)
+      throw new Error(`Unknown channel type: ${opts.type}`)
     }
 
-    // 校验配置
+    // Validate config
     const validation = validateChannelConfig(opts.type, opts.config)
     if (!validation.success) {
-      throw new Error(`配置校验失败: ${validation.error}`)
+      throw new Error(`Config validation failed: ${validation.error}`)
     }
 
     const id = opts.id || `${opts.type}-${Math.random().toString(36).slice(2, 8)}`
 
-    // 检查 ID 唯一
+    // Check ID uniqueness
     if (getChannelRecord(id)) {
-      throw new Error(`Channel ID "${id}" 已存在`)
+      throw new Error(`Channel ID "${id}" already exists`)
     }
 
     const record = createChannelRecord({
@@ -179,12 +179,12 @@ export class ChannelManager {
       enabled: opts.enabled !== false,
     })
 
-    // 如果启用，自动连接
+    // Auto-connect if enabled
     if (record.enabled) {
       try {
         await this.startChannel(record)
       } catch (err) {
-        getLogger().error({ channelId: id, error: err instanceof Error ? err.message : String(err) }, '新创建的 channel 连接失败')
+        getLogger().error({ channelId: id, error: err instanceof Error ? err.message : String(err) }, 'Newly created channel failed to connect')
       }
     }
 
@@ -192,7 +192,7 @@ export class ChannelManager {
   }
 
   /**
-   * 更新 channel 配置（触发热重连）
+   * Update channel config (triggers hot reconnect)
    */
   async updateChannel(id: string, opts: {
     label?: string
@@ -201,22 +201,22 @@ export class ChannelManager {
   }): Promise<ChannelRecord> {
     const existing = getChannelRecord(id)
     if (!existing) {
-      throw new Error(`Channel "${id}" 不存在`)
+      throw new Error(`Channel "${id}" does not exist`)
     }
 
-    // 如果更新了 config，先合并再校验（避免部分更新丢失其他字段）
+    // Merge then validate if config is updated (prevent partial update from losing other fields)
     let configToSave: string | undefined
     if (opts.config) {
       const existingConfig = JSON.parse(existing.config) as Record<string, unknown>
       const mergedConfig = { ...existingConfig, ...opts.config }
       const validation = validateChannelConfig(existing.type, mergedConfig)
       if (!validation.success) {
-        throw new Error(`配置校验失败: ${validation.error}`)
+        throw new Error(`Config validation failed: ${validation.error}`)
       }
       configToSave = JSON.stringify(mergedConfig)
     }
 
-    // 更新数据库
+    // Update database
     const record = updateChannelRecord(id, {
       label: opts.label,
       config: configToSave,
@@ -224,10 +224,10 @@ export class ChannelManager {
     })
 
     if (!record) {
-      throw new Error(`更新 channel "${id}" 失败`)
+      throw new Error(`Failed to update channel "${id}"`)
     }
 
-    // 热重载：断开旧连接 -> 重新创建连接
+    // Hot reload: disconnect old -> create new connection
     const managed = this.managed.get(id)
     if (managed) {
       await this.stopChannel(id)
@@ -237,7 +237,7 @@ export class ChannelManager {
       try {
         await this.startChannel(record)
       } catch (err) {
-        getLogger().error({ channelId: id, error: err instanceof Error ? err.message : String(err) }, 'Channel 热重连失败')
+        getLogger().error({ channelId: id, error: err instanceof Error ? err.message : String(err) }, 'Channel hot reconnect failed')
       }
     }
 
@@ -245,7 +245,7 @@ export class ChannelManager {
   }
 
   /**
-   * 删除 channel
+   * Delete a channel
    */
   async deleteChannel(id: string): Promise<void> {
     await this.stopChannel(id)
@@ -253,26 +253,26 @@ export class ChannelManager {
   }
 
   /**
-   * 手动连接
+   * Manually connect a channel
    */
   async connectChannel(id: string): Promise<void> {
     const record = getChannelRecord(id)
-    if (!record) throw new Error(`Channel "${id}" 不存在`)
+    if (!record) throw new Error(`Channel "${id}" does not exist`)
 
-    // 先断开已有连接
+    // Disconnect existing connection first
     await this.stopChannel(id)
     await this.startChannel(record)
   }
 
   /**
-   * 手动断开
+   * Manually disconnect a channel
    */
   async disconnectChannel(id: string): Promise<void> {
     await this.stopChannel(id)
   }
 
   /**
-   * 获取所有 channel 状态
+   * Get all channel statuses
    */
   getStatuses(): ChannelStatus[] {
     const records = getChannelRecords()
@@ -294,14 +294,14 @@ export class ChannelManager {
   }
 
   /**
-   * 获取 channel 实例（webhook 路由使用）
+   * Get channel instance (used by webhook routing)
    */
   getChannelInstance(id: string): Channel | null {
     return this.managed.get(id)?.instance ?? null
   }
 
   /**
-   * 关闭所有 channel
+   * Disconnect all channels
    */
   async disconnectAll(): Promise<void> {
     const ids = [...this.managed.keys()]
@@ -311,7 +311,7 @@ export class ChannelManager {
   }
 
   /**
-   * 启动单个 channel（创建实例 + 连接 + 注册到 router）
+   * Start a single channel (create instance + connect + register with router)
    */
   private async startChannel(record: ChannelRecord): Promise<void> {
     const logger = getLogger()
@@ -326,39 +326,39 @@ export class ChannelManager {
     }
     this.managed.set(record.id, managed)
 
-    // 异步连接，不阻塞启动流程
+    // Connect asynchronously, don't block startup
     instance.connect().then(() => {
       this.router.addChannel(instance)
       managed.retryCount = 0
       managed.lastError = undefined
-      logger.info({ channelId: record.id, type: record.type }, 'Channel 已连接')
+      logger.info({ channelId: record.id, type: record.type }, 'Channel connected')
     }).catch((err) => {
       const errMsg = err instanceof Error ? err.message : String(err)
       managed.lastError = errMsg
-      logger.error({ channelId: record.id, error: errMsg }, 'Channel 连接失败')
+      logger.error({ channelId: record.id, error: errMsg }, 'Channel connection failed')
       this.scheduleRetry(record.id)
     })
   }
 
   /**
-   * 停止单个 channel（断开 + 从 router 移除）
+   * Stop a single channel (disconnect + remove from router)
    */
   private async stopChannel(id: string): Promise<void> {
     const managed = this.managed.get(id)
     if (!managed) return
 
-    // 清除重试定时器
+    // Clear retry timer
     if (managed.retryTimer) {
       clearTimeout(managed.retryTimer)
       managed.retryTimer = null
     }
 
-    // 断开连接
+    // Disconnect
     if (managed.instance) {
       try {
         await managed.instance.disconnect()
       } catch (err) {
-        getLogger().warn({ channelId: id, error: err instanceof Error ? err.message : String(err) }, 'Channel 断开时出错')
+        getLogger().warn({ channelId: id, error: err instanceof Error ? err.message : String(err) }, 'Error while disconnecting channel')
       }
       this.router.removeChannel(managed.instance.name)
     }
@@ -367,27 +367,27 @@ export class ChannelManager {
   }
 
   /**
-   * 连接失败自动重试（指数退避）
+   * Auto-retry on connection failure (exponential backoff)
    */
   private scheduleRetry(id: string): void {
     const managed = this.managed.get(id)
     if (!managed) return
 
     if (managed.retryCount >= MAX_RETRIES) {
-      getLogger().warn({ channelId: id, retries: managed.retryCount }, 'Channel 重试次数已用完')
+      getLogger().warn({ channelId: id, retries: managed.retryCount }, 'Channel retry attempts exhausted')
       return
     }
 
     const delay = Math.min(BASE_RETRY_DELAY * Math.pow(2, managed.retryCount), MAX_RETRY_DELAY)
     managed.retryCount++
 
-    getLogger().info({ channelId: id, retryCount: managed.retryCount, delayMs: delay }, 'Channel 将在延迟后重试连接')
+    getLogger().info({ channelId: id, retryCount: managed.retryCount, delayMs: delay }, 'Channel will retry after delay')
 
     managed.retryTimer = setTimeout(async () => {
       const current = this.managed.get(id)
-      if (!current) return // 已被停止
+      if (!current) return // already stopped
 
-      // 重新从数据库读取最新记录
+      // Re-read latest record from database
       const record = getChannelRecord(id)
       if (!record || !record.enabled) return
 
@@ -399,11 +399,11 @@ export class ChannelManager {
         this.router.addChannel(instance)
         current.retryCount = 0
         current.lastError = undefined
-        getLogger().info({ channelId: id }, 'Channel 重试连接成功')
+        getLogger().info({ channelId: id }, 'Channel retry connected successfully')
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err)
         current.lastError = errMsg
-        getLogger().error({ channelId: id, error: errMsg }, 'Channel 重试连接失败')
+        getLogger().error({ channelId: id, error: errMsg }, 'Channel retry connection failed')
         this.scheduleRetry(id)
       }
     }, delay)

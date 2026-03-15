@@ -66,14 +66,14 @@ function scheduleLabel(type: string, value: string): string {
   return value
 }
 
-// 将毫秒转回分钟（用于 interval 编辑时回显）
+// Convert milliseconds back to minutes (for interval edit display)
 function msToMinutes(ms: string): string {
   const n = parseInt(ms, 10)
   if (isNaN(n)) return ms
   return String(n / 60_000)
 }
 
-// 将 ISO 时间转为 datetime-local 格式
+// Convert ISO time to datetime-local format
 function isoToDatetimeLocal(iso: string): string {
   try {
     const d = new Date(iso)
@@ -119,7 +119,7 @@ export function Tasks() {
     getAgents().then((list) => setAgents(list.map((a) => ({ id: a.id, name: a.name })))).catch(() => {})
   }, [loadTasks])
 
-  // 选中任务时加载日志
+  // Load logs when task is selected
   const selectTask = async (id: string) => {
     setSelectedId(id)
     setPanelMode('view')
@@ -137,7 +137,7 @@ export function Tasks() {
   const handleRun = async (id: string) => {
     await runScheduledTask(id).catch(() => {})
     loadTasks()
-    // 刷新日志
+    // Refresh logs
     if (id === selectedId) {
       getScheduledTaskLogs(id).then(setLogs).catch(() => {})
     }
@@ -181,7 +181,7 @@ export function Tasks() {
 
   return (
     <div className="flex h-full">
-      {/* 左面板 — 任务列表 */}
+      {/* Left panel — Task list */}
       <SidePanel>
         <div className="h-12 shrink-0 px-3 border-b border-[var(--subtle-border)] flex items-center justify-between">
           <h2 className="font-semibold text-sm">{t.tasks.title}</h2>
@@ -195,7 +195,7 @@ export function Tasks() {
           </button>
         </div>
 
-        {/* 任务列表 */}
+        {/* Task list */}
         <div className="flex-1 overflow-y-auto">
           {tasks.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -240,7 +240,7 @@ export function Tasks() {
         </div>
       </SidePanel>
 
-      {/* 右面板 */}
+      {/* Right panel */}
       <div className="flex-1 overflow-y-auto">
         {panelMode === 'create' ? (
           <TaskForm
@@ -286,7 +286,7 @@ export function Tasks() {
   )
 }
 
-// ===== 任务详情面板 =====
+// ===== Task detail panel =====
 
 function TaskDetail({
   task,
@@ -313,7 +313,7 @@ function TaskDetail({
 
   return (
     <div className="p-6 space-y-6">
-      {/* 标题 + 操作按钮 */}
+      {/* Title + action buttons */}
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-lg font-semibold">{task.name || t.tasks.noName}</h2>
@@ -365,7 +365,7 @@ function TaskDetail({
         </div>
       </div>
 
-      {/* 状态信息 */}
+      {/* Status info */}
       <div className="grid grid-cols-2 gap-4">
         <InfoField label={t.tasks.agent} value={agentName} />
         <InfoField label="Status">
@@ -384,7 +384,7 @@ function TaskDetail({
         <div className="text-sm bg-accent/20 rounded p-3 border border-border whitespace-pre-wrap">{task.prompt}</div>
       </div>
 
-      {/* 运行记录 */}
+      {/* Run history */}
       <div>
         <div className="text-xs text-muted-foreground mb-2">{t.tasks.recentRuns}</div>
         {logsLoading ? (
@@ -425,7 +425,7 @@ function InfoField({ label, value, mono, children }: { label: string; value?: st
   )
 }
 
-// ===== 任务表单（新建 + 编辑共用） =====
+// ===== Task form (shared for create + edit) =====
 
 function TaskForm({
   agents,
@@ -546,7 +546,7 @@ function TaskForm({
           />
         </div>
 
-        {/* Agent (仅新建时可选) */}
+        {/* Agent (only selectable when creating) */}
         <div>
           <label className="block text-xs text-muted-foreground mb-1">{t.tasks.agent}</label>
           <select

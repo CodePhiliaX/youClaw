@@ -59,7 +59,7 @@ export function Skills() {
 
   const selectedSkill = skills.find(s => s.name === selected)
 
-  // 按来源分组
+  // Group by source
   const grouped = sourceOrder
     .map(source => ({
       source,
@@ -67,7 +67,7 @@ export function Skills() {
     }))
     .filter(g => g.skills.length > 0)
 
-  // 按分类分组推荐技能
+  // Group recommended skills by category
   const categoryOrder = ['agent', 'search', 'browser', 'coding']
   const recommendedGrouped = categoryOrder
     .map(cat => ({
@@ -77,7 +77,7 @@ export function Skills() {
     }))
     .filter(g => g.skills.length > 0)
 
-  // 未分类的放入 "其他"
+  // Put uncategorized into "Other"
   const categorized = new Set(categoryOrder)
   const uncategorized = recommended.filter(s => !categorized.has(s.category))
   if (uncategorized.length > 0) {
@@ -90,7 +90,7 @@ export function Skills() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Tab 切换 */}
+      {/* Tab toggle */}
       <div className="border-b border-border px-4 flex gap-0">
         <button
           onClick={() => setTab('installed')}
@@ -117,10 +117,10 @@ export function Skills() {
         </button>
       </div>
 
-      {/* Tab 内容 */}
+      {/* Tab content */}
       {tab === 'installed' ? (
         <div className="flex flex-1 min-h-0">
-          {/* 左侧：Skill 列表 */}
+          {/* Left: Skill list */}
           <SidePanel>
             <div className="h-12 shrink-0 px-3 border-b border-border flex items-center">
               <h2 className="font-semibold text-sm">{t.skills.title}</h2>
@@ -166,7 +166,7 @@ export function Skills() {
             </div>
           </SidePanel>
 
-          {/* 右侧：Skill 详情 */}
+          {/* Right: Skill details */}
           <div className="flex-1 p-6 overflow-y-auto">
             {selectedSkill ? (
               <div className="max-w-2xl space-y-6">
@@ -225,7 +225,7 @@ export function Skills() {
                     )}
                   </div>
 
-                  {/* 环境变量配置 */}
+                  {/* Environment variable config */}
                   {selectedSkill.eligibilityDetail?.env.results.length > 0 && (
                     <div className="space-y-2">
                       {selectedSkill.eligibilityDetail.env.results.map(r => (
@@ -234,7 +234,7 @@ export function Skills() {
                     </div>
                   )}
 
-                  {/* 缺失依赖 + 有安装命令 */}
+                  {/* Missing dependencies + install commands */}
                   {selectedSkill.eligibilityDetail?.dependencies.passed === false && selectedSkill.frontmatter.install && Object.keys(selectedSkill.frontmatter.install).length > 0 && (
                     <div className="pt-2 border-t border-border/50 space-y-2">
                       <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -325,7 +325,7 @@ export function Skills() {
           </div>
         </div>
       ) : (
-        /* 技能市场 Tab */
+        /* Marketplace tab */
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-3xl mx-auto space-y-8">
             {recommendedGrouped.length === 0 && (
@@ -357,7 +357,7 @@ export function Skills() {
   )
 }
 
-/** 技能市场卡片 */
+/** Marketplace card */
 function MarketplaceCard({ skill, onChanged }: { skill: RecommendedSkill; onChanged: () => void }) {
   const { t } = useI18n()
   const [status, setStatus] = useState<'idle' | 'installing' | 'uninstalling' | 'error'>('idle')
@@ -446,7 +446,7 @@ function MarketplaceCard({ skill, onChanged }: { skill: RecommendedSkill; onChan
   )
 }
 
-/** 环境变量配置行：已配置显示掩码+编辑，未配置显示输入框 */
+/** Env config row: shows mask + edit if configured, input if not */
 function EnvConfigRow({ envName, configured, onSaved }: { envName: string; configured: boolean; onSaved: () => void }) {
   const { t } = useI18n()
   const [editing, setEditing] = useState(!configured)
@@ -523,7 +523,7 @@ function EnvConfigRow({ envName, configured, onSaved }: { envName: string; confi
   )
 }
 
-/** 安装按钮：复制命令 + 一键安装 */
+/** Install button: copy command + one-click install */
 function InstallButton({ method, command, skillName, onInstalled }: { method: string; command: string; skillName: string; onInstalled: () => void }) {
   const { t } = useI18n()
   const [copied, setCopied] = useState(false)

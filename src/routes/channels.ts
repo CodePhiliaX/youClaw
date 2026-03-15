@@ -22,7 +22,7 @@ const updateChannelSchema = z.object({
 export function createChannelsRoutes(channelManager: ChannelManager) {
   const channels = new Hono()
 
-  // GET /api/channels — 列出所有 channel 实例（含运行时状态）
+  // GET /api/channels — list all channel instances (with runtime status)
   channels.get('/channels', (c) => {
     const statuses = channelManager.getStatuses()
     const records = getChannelRecords()
@@ -52,7 +52,7 @@ export function createChannelsRoutes(channelManager: ChannelManager) {
     return c.json(result)
   })
 
-  // GET /api/channels/types — 列出支持的 channel 类型（元信息）
+  // GET /api/channels/types — list supported channel types (metadata)
   channels.get('/channels/types', (c) => {
     const types = Object.values(CHANNEL_TYPE_REGISTRY).map((info) => ({
       type: info.type,
@@ -65,12 +65,12 @@ export function createChannelsRoutes(channelManager: ChannelManager) {
     return c.json(types)
   })
 
-  // POST /api/channels — 创建 channel 实例
+  // POST /api/channels — create a channel instance
   channels.post('/channels', async (c) => {
     const body = await c.req.json()
     const parsed = createChannelSchema.safeParse(body)
     if (!parsed.success) {
-      return c.json({ error: '参数校验失败', details: parsed.error.issues }, 400)
+      return c.json({ error: 'Validation failed', details: parsed.error.issues }, 400)
     }
 
     try {
@@ -82,13 +82,13 @@ export function createChannelsRoutes(channelManager: ChannelManager) {
     }
   })
 
-  // PUT /api/channels/:id — 更新配置（触发热重连）
+  // PUT /api/channels/:id — update config (triggers hot reconnect)
   channels.put('/channels/:id', async (c) => {
     const id = c.req.param('id')
     const body = await c.req.json()
     const parsed = updateChannelSchema.safeParse(body)
     if (!parsed.success) {
-      return c.json({ error: '参数校验失败', details: parsed.error.issues }, 400)
+      return c.json({ error: 'Validation failed', details: parsed.error.issues }, 400)
     }
 
     try {
@@ -96,17 +96,17 @@ export function createChannelsRoutes(channelManager: ChannelManager) {
       return c.json(record)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      const status = msg.includes('不存在') ? 404 : 400
+      const status = msg.includes('not found') ? 404 : 400
       return c.json({ error: msg }, status)
     }
   })
 
-  // DELETE /api/channels/:id — 删除（先断开）
+  // DELETE /api/channels/:id — delete (disconnect first)
   channels.delete('/channels/:id', async (c) => {
     const id = c.req.param('id')
 
     if (!getChannelRecord(id)) {
-      return c.json({ error: `Channel "${id}" 不存在` }, 404)
+      return c.json({ error: `Channel "${id}" not found` }, 404)
     }
 
     try {
@@ -118,7 +118,7 @@ export function createChannelsRoutes(channelManager: ChannelManager) {
     }
   })
 
-  // POST /api/channels/:id/connect — 手动连接
+  // POST /api/channels/:id/connect — manually connect
   channels.post('/channels/:id/connect', async (c) => {
     const id = c.req.param('id')
     try {
@@ -130,7 +130,7 @@ export function createChannelsRoutes(channelManager: ChannelManager) {
     }
   })
 
-  // POST /api/channels/:id/disconnect — 手动断开
+  // POST /api/channels/:id/disconnect — manually disconnect
   channels.post('/channels/:id/disconnect', async (c) => {
     const id = c.req.param('id')
     try {

@@ -15,11 +15,11 @@ import { getActiveModelConfig } from '../settings/manager.ts'
 import { getAuthToken } from '../routes/auth.ts'
 import type { AgentConfig, ProcessParams } from './types.ts'
 
-// 解析 claude-agent-sdk cli.js 路径
-// - Tauri 打包模式：从 RESOURCES_DIR 读取
-// - 开发模式：通过 require.resolve 定位 node_modules
+// Resolve claude-agent-sdk cli.js path
+// - Tauri bundled mode: read from RESOURCES_DIR
+// - Dev mode: locate via require.resolve in node_modules
 function resolveCliPath(): string {
-  // Tauri 打包模式：cli.js 在 resources 目录中
+  // Tauri bundled mode: cli.js is in the resources directory
   const resourcesDir = process.env.RESOURCES_DIR
   if (resourcesDir) {
     const resourceCliPath = resolve(resourcesDir, '_up_/node_modules/@anthropic-ai/claude-agent-sdk/cli.js')
@@ -28,13 +28,13 @@ function resolveCliPath(): string {
     }
   }
 
-  // 开发模式：通过 require.resolve 定位
+  // Dev mode: locate via require.resolve
   try {
     const require = createRequire(import.meta.url)
     const sdkEntry = require.resolve('@anthropic-ai/claude-agent-sdk')
     return resolve(dirname(sdkEntry), 'cli.js')
   } catch {
-    // fallback: 相对于项目根目录
+    // fallback: relative to project root
     return resolve(process.cwd(), 'node_modules/@anthropic-ai/claude-agent-sdk/cli.js')
   }
 }
@@ -61,14 +61,14 @@ export class AgentRuntime {
   }
 
   /**
-   * 处理用户消息，返回 agent 回复
+   * Process a user message and return the agent's reply
    */
   async process(params: ProcessParams): Promise<string> {
     const { chatId, prompt, agentId } = params
     const logger = getLogger()
     const env = getEnv()
 
-    // 通知开始处理
+    // Notify processing started
     this.emitProcessing(agentId, chatId, true)
 
     // on_session_start hook
@@ -81,14 +81,14 @@ export class AgentRuntime {
       })
     }
 
-    // 查找已有 session
+    // Look up existing session
     const existingSessionId = getSession(agentId, chatId)
     logger.info({
       agentId, chatId,
       hasSession: !!existingSessionId,
       promptPreview: prompt.length > 100 ? prompt.slice(0, 100) + '...' : prompt,
       category: 'agent',
-    }, '开始处理消息')
+    }, 'Processing message')
 
     const startTime = Date.now()
     try {
@@ -102,36 +102,36 @@ export class AgentRuntime {
           payload: { prompt, chatId },
         })
         if (preCtx.abort) {
-          return preCtx.abortReason ?? '消息被 hook 拦截'
+          return preCtx.abortReason ?? 'Message blocked by hook'
         }
         if (preCtx.modifiedPayload?.prompt) {
           finalPrompt = preCtx.modifiedPayload.prompt as string
         }
       }
 
-      // 优先从 Settings API 读取模型配置，fallback 到环境变量
+      // Read model config from Settings API first, fall back to env vars
       const modelConfig = getActiveModelConfig()
       let model = env.AGENT_MODEL
       if (modelConfig) {
         model = modelConfig.modelId
-        // 设置环境变量让 SDK 生效
+        // Set env vars for the SDK
         process.env.ANTHROPIC_API_KEY = modelConfig.apiKey
         if (modelConfig.baseUrl) {
           process.env.ANTHROPIC_BASE_URL = modelConfig.baseUrl
         }
-        logger.info({ provider: modelConfig.provider, model, baseUrl: modelConfig.baseUrl || '(default)' }, '模型配置已加载')
+        logger.info({ provider: modelConfig.provider, model, baseUrl: modelConfig.baseUrl || '(default)' }, 'Model config loaded')
       } else {
         // 切回内置模型时，恢复环境变量原始值，避免 SDK 继续使用旧的自定义模型配置
         if (env.ANTHROPIC_API_KEY) {
           process.env.ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY
         }
-        // 恢复 .env 中的 ANTHROPIC_BASE_URL（如果有），而不是删除
+        // Restore ANTHROPIC_BASE_URL from .env if present, otherwise delete
         if (env.ANTHROPIC_BASE_URL) {
           process.env.ANTHROPIC_BASE_URL = env.ANTHROPIC_BASE_URL
         } else {
           delete process.env.ANTHROPIC_BASE_URL
         }
-        logger.info({ model, baseUrl: env.ANTHROPIC_BASE_URL || '(default)' }, '使用环境变量模型配置')
+        logger.info({ model, baseUrl: env.ANTHROPIC_BASE_URL || '(default)' }, 'Using env var model config')
       }
 
       // 将用户 auth token 注入到 SDK 请求 header 中
@@ -151,7 +151,7 @@ export class AgentRuntime {
         params.attachments,
       )
 
-      // 保存 session
+      // Save session
       if (sessionId) {
         saveSession(agentId, chatId, sessionId)
       }
@@ -170,7 +170,7 @@ export class AgentRuntime {
         }
       }
 
-      // 广播完成事件
+      // Broadcast completion event
       this.eventBus.emit({
         type: 'complete',
         agentId,
@@ -180,7 +180,7 @@ export class AgentRuntime {
       })
 
       const durationMs = Date.now() - startTime
-      logger.info({ agentId, chatId, sessionId, responseLength: finalText.length, durationMs, category: 'agent' }, '消息处理完成')
+      logger.info({ agentId, chatId, sessionId, responseLength: finalText.length, durationMs, category: 'agent' }, 'Message processing completed')
 
       // on_session_end hook
       if (this.hooksManager) {
@@ -195,9 +195,9 @@ export class AgentRuntime {
       return finalText
     } catch (err) {
       const rawError = err instanceof Error ? err.message : String(err)
-      logger.error({ agentId, chatId, error: rawError, durationMs: Date.now() - startTime, category: 'agent' }, '消息处理失败')
+      logger.error({ agentId, chatId, error: rawError, durationMs: Date.now() - startTime, category: 'agent' }, 'Message processing failed')
 
-      // 将 SDK 内部错误转为用户友好提示
+      // Convert SDK internal errors to user-friendly messages
       const { message: userError, errorCode } = this.humanizeError(rawError)
       logger.info({ agentId, chatId, errorCode, userError, category: 'agent' }, '错误码识别结果')
 
@@ -226,7 +226,7 @@ export class AgentRuntime {
   }
 
   /**
-   * 执行 SDK query 并流式处理消息
+   * Execute SDK query and stream-process messages
    */
   private async executeQuery(
     prompt: string,
@@ -243,14 +243,14 @@ export class AgentRuntime {
     let fullText = ''
     let sessionId = existingSessionId ?? ''
 
-    // 实时构建系统提示词
+    // Build system prompt on the fly
     const systemPrompt = this.promptBuilder.build(
       this.config.workspaceDir,
       this.config,
       { agentId, chatId, requestedSkills, browserProfileId },
     )
 
-    // 构建 query 选项
+    // Build query options
     const cwd = this.config.workspaceDir
     const mcpServerNames = this.config.mcpServers ? Object.keys(this.config.mcpServers) : []
 
@@ -263,7 +263,7 @@ export class AgentRuntime {
       subAgents: this.config.agents ? Object.keys(this.config.agents).length : 0,
       maxTurns: this.config.maxTurns,
       category: 'agent',
-    }, 'SDK query 启动')
+    }, 'SDK query started')
 
     const queryOptions: Record<string, unknown> = {
       model,
@@ -276,7 +276,7 @@ export class AgentRuntime {
       ...(existingSessionId ? { resume: existingSessionId } : {}),
     }
 
-    // 子 Agent 配置（通过 AgentCompiler 编译 ref 引用）
+    // Sub-agent config (compile ref references via AgentCompiler)
     if (this.config.agents) {
       if (this.compiler) {
         queryOptions.agents = this.compiler.resolve(this.config.agents, agentId)
@@ -285,12 +285,12 @@ export class AgentRuntime {
       }
     }
 
-    // MCP 服务器（使用公共函数解析环境变量）
+    // MCP servers (resolve env vars via shared utility)
     if (this.config.mcpServers) {
       queryOptions.mcpServers = resolveMcpServers(this.config.mcpServers)
     }
 
-    // 工具控制
+    // Tool access control
     if (this.config.allowedTools) {
       queryOptions.allowedTools = this.config.allowedTools
     }
@@ -298,7 +298,7 @@ export class AgentRuntime {
       queryOptions.disallowedTools = this.config.disallowedTools
     }
 
-    // 其他 SDK 能力
+    // Other SDK capabilities
     if (this.config.maxTurns) {
       queryOptions.maxTurns = this.config.maxTurns
     }
@@ -307,7 +307,7 @@ export class AgentRuntime {
 
     let q
     if (attachments && attachments.length > 0) {
-      // 构建多模态 content blocks
+      // Build multimodal content blocks
       const content: Array<Record<string, unknown>> = [
         { type: 'text', text: prompt },
       ]
@@ -345,15 +345,15 @@ export class AgentRuntime {
       })
     }
 
-    // 流式处理 SDK 消息
+    // Stream-process SDK messages
     let firstResponseLogged = false
     let turnCount = 0
     try {
       for await (const message of q) {
-        // 记录首次响应延迟（TTFT）
+        // Log time-to-first-token (TTFT)
         if (!firstResponseLogged && message.type === 'assistant') {
           const ttftMs = Date.now() - queryStartTime
-          logger.info({ agentId, chatId, ttftMs, category: 'agent' }, 'SDK 首次响应')
+          logger.info({ agentId, chatId, ttftMs, category: 'agent' }, 'SDK first response')
           firstResponseLogged = true
         }
         if (message.type === 'assistant') {
@@ -380,13 +380,13 @@ export class AgentRuntime {
       totalTurns: turnCount,
       totalDurationMs: Date.now() - queryStartTime,
       category: 'agent',
-    }, 'SDK query 结束')
+    }, 'SDK query finished')
 
     return { fullText, sessionId }
   }
 
   /**
-   * 处理 SDK 消息
+   * Handle an SDK message
    */
   private async handleMessage(
     message: SDKMessage,
@@ -397,12 +397,12 @@ export class AgentRuntime {
   ): Promise<void> {
     switch (message.type) {
       case 'assistant': {
-        // 提取 session_id
+        // Extract session_id
         if (message.session_id) {
           setSessionId(message.session_id)
         }
 
-        // 从 assistant message 中提取文本和工具使用
+        // Extract text and tool_use blocks from assistant message
         for (const block of message.message.content) {
           if (block.type === 'text') {
             appendText(block.text)
@@ -417,7 +417,7 @@ export class AgentRuntime {
                 payload: { tool: block.name, input: block.input },
               })
               if (preCtx.abort) {
-                this.emitStream(agentId, chatId, `\n[工具 ${block.name} 被 hook 拦截: ${preCtx.abortReason ?? '未知原因'}]\n`)
+                this.emitStream(agentId, chatId, `\n[Tool ${block.name} blocked by hook: ${preCtx.abortReason ?? 'unknown reason'}]\n`)
                 continue
               }
             }
@@ -427,7 +427,7 @@ export class AgentRuntime {
               tool: block.name,
               input: JSON.stringify(block.input).slice(0, 500),
               category: 'tool_use',
-            }, `工具调用: ${block.name}`)
+            }, `Tool call: ${block.name}`)
             this.emitToolUse(agentId, chatId, block.name, block.input)
           }
         }
@@ -441,7 +441,7 @@ export class AgentRuntime {
         break
       }
 
-      // 子 Agent 系统消息处理
+      // Sub-agent system message handling
       case 'system': {
         this.handleSystemMessage(message, agentId, chatId)
         break
@@ -450,7 +450,7 @@ export class AgentRuntime {
   }
 
   /**
-   * 处理 SDK system 类型消息（子 Agent 事件）
+   * Handle SDK system messages (sub-agent events)
    */
   private handleSystemMessage(
     message: SDKMessage & { type: 'system' },
@@ -503,34 +503,34 @@ export class AgentRuntime {
   }
 
   /**
-   * 将 SDK 内部错误转为用户可读的提示，同时返回错误码
-   * 注意匹配顺序：具体错误类型在前，通用兜底（process exited）在最后
+   * Convert SDK internal errors to user-readable messages with error codes.
+   * Order matters: specific errors first, generic fallback (process exited) last.
    */
   private humanizeError(raw: string): { message: string; errorCode: ErrorCode } {
-    // 余额/积分不足（优先级最高，因为这需要弹充值弹窗）
+    // Insufficient credits (highest priority — triggers top-up dialog)
     if (/insufficient|credit|balance|quota|insufficient_credits/i.test(raw)) {
       return { message: 'Insufficient credits or API quota. Please check your account balance.', errorCode: ErrorCode.INSUFFICIENT_CREDITS }
     }
-    // API 认证失败
+    // API authentication failure
     if (/unauthorized|authentication_error|invalid.*token|invalid.*key/i.test(raw)) {
       return { message: 'Model authentication failed. Please check your API Key in Settings → Models.', errorCode: ErrorCode.AUTH_FAILED }
     }
-    // 频率限制
+    // Rate limiting
     if (/rate.?limit|too many requests|429/i.test(raw)) {
       return { message: 'Request rate limited. Please try again later.', errorCode: ErrorCode.RATE_LIMITED }
     }
-    // 网络错误
+    // Network error
     if (/ECONNREFUSED|ENOTFOUND|fetch failed|network/i.test(raw)) {
       return { message: 'Cannot reach the model API. Please check your network connection and Base URL.', errorCode: ErrorCode.NETWORK_ERROR }
     }
-    // SDK 进程崩溃（兜底 — 放在最后，避免遮盖 upstream_response 中的具体错误）
+    // SDK process crash (fallback — last to avoid masking specific errors in upstream_response)
     if (/process exited with code/i.test(raw)) {
       return { message: 'Model connection failed. Please check your model configuration (API Key, Base URL) in Settings → Models.', errorCode: ErrorCode.MODEL_CONNECTION_FAILED }
     }
     return { message: raw, errorCode: ErrorCode.UNKNOWN }
   }
 
-  // --- Emit 辅助方法 ---
+  // --- Emit helper methods ---
 
   private emitProcessing(agentId: string, chatId: string, isProcessing: boolean): void {
     this.eventBus.emit({ type: 'processing', agentId, chatId, isProcessing })

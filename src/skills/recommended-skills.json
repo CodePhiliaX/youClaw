@@ -2,61 +2,61 @@
   {
     "slug": "self-improving-agent",
     "displayName": "Self Improving Agent",
-    "summary": "捕获学习、错误和纠正，实现持续自我改进",
+    "summary": "Captures learnings, errors, and corrections for continuous self-improvement",
     "category": "agent"
   },
   {
     "slug": "ddg-web-search",
     "displayName": "DuckDuckGo Web Search",
-    "summary": "无需 API Key 的网页搜索，使用 DuckDuckGo Lite",
+    "summary": "Web search without API key using DuckDuckGo Lite",
     "category": "search"
   },
   {
     "slug": "web-search-exa",
     "displayName": "Web Search by Exa",
-    "summary": "使用 Exa 进行精准实时网页搜索",
+    "summary": "Precise real-time web search powered by Exa",
     "category": "search"
   },
   {
     "slug": "agent-browser",
     "displayName": "Agent Browser",
-    "summary": "基于 Rust 的无头浏览器自动化 CLI",
+    "summary": "Rust-based headless browser automation CLI",
     "category": "browser"
   },
   {
     "slug": "agentic-coding",
     "displayName": "Agentic Coding",
-    "summary": "通过验收合约、微差异和红绿循环交付生产代码",
+    "summary": "Delivers production code through acceptance contracts, micro-diffs, and red-green cycles",
     "category": "coding"
   },
   {
     "slug": "coding",
     "displayName": "Coding",
-    "summary": "适应你偏好和模式的编码风格记忆",
+    "summary": "Coding style memory that adapts to your preferences and patterns",
     "category": "coding"
   },
   {
     "slug": "find-skills",
     "displayName": "Find Skills",
-    "summary": "帮助用户发现和安装 Agent 技能",
+    "summary": "Helps users discover and install agent skills",
     "category": "agent"
   },
   {
     "slug": "ai-web-automation",
     "displayName": "AI Web Automation",
-    "summary": "自动化表单填写、数据抓取、测试、监控等网页任务",
+    "summary": "Automates web tasks like form filling, data scraping, testing, and monitoring",
     "category": "browser"
   },
   {
     "slug": "coding-agent-backup",
     "displayName": "Coding Agent Backup",
-    "summary": "将编码任务委派给后台 Agent 运行",
+    "summary": "Delegates coding tasks to a background agent",
     "category": "coding"
   },
   {
     "slug": "browser-automation",
     "displayName": "Browser Automation",
-    "summary": "通过自然语言 CLI 命令自动化浏览器交互",
+    "summary": "Automates browser interactions via natural language CLI commands",
     "category": "browser"
   }
 ]

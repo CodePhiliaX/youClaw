@@ -50,42 +50,42 @@ describe('MemoryManager', () => {
     createdAgentIds.clear()
   })
 
-  test('getMemory 在文件不存在时返回空字符串', () => {
+  test('getMemory returns empty string when file does not exist', () => {
     const agentId = createAgentId('memory-empty')
     expect(memoryManager.getMemory(agentId)).toBe('')
   })
 
-  test('updateMemory 会创建目录并写入 MEMORY.md', async () => {
+  test('updateMemory creates directory and writes MEMORY.md', async () => {
     const agentId = createAgentId('memory-write')
 
-    memoryManager.updateMemory(agentId, '长期记忆内容')
+    memoryManager.updateMemory(agentId, 'long-term memory content')
 
     await waitFor(() => existsSync(getMemoryFile(agentId)))
-    expect(memoryManager.getMemory(agentId)).toBe('长期记忆内容')
+    expect(memoryManager.getMemory(agentId)).toBe('long-term memory content')
   })
 
-  test('appendDailyLog 会创建当天日志并追加内容', async () => {
+  test('appendDailyLog creates daily log and appends content', async () => {
     const agentId = createAgentId('memory-log')
     const today = new Date().toISOString().split('T')[0]!
     const todayLog = resolve(getLogsDir(agentId), `${today}.md`)
 
-    memoryManager.appendDailyLog(agentId, 'web:chat-1', '第一条问题', '第一条回答')
-    memoryManager.appendDailyLog(agentId, 'web:chat-1', '第二条问题', '第二条回答')
+    memoryManager.appendDailyLog(agentId, 'web:chat-1', 'first question', 'first answer')
+    memoryManager.appendDailyLog(agentId, 'web:chat-1', 'second question', 'second answer')
 
-    await waitFor(() => existsSync(todayLog) && readFileSync(todayLog, 'utf-8').includes('第二条回答'))
+    await waitFor(() => existsSync(todayLog) && readFileSync(todayLog, 'utf-8').includes('second answer'))
 
     const content = readFileSync(todayLog, 'utf-8')
     expect(content).toContain(`# ${today}`)
-    expect(content).toContain('第一条问题')
-    expect(content).toContain('第一条回答')
-    expect(content).toContain('第二条问题')
-    expect(content).toContain('第二条回答')
+    expect(content).toContain('first question')
+    expect(content).toContain('first answer')
+    expect(content).toContain('second question')
+    expect(content).toContain('second answer')
   })
 
-  test('getDailyLogDates 按日期降序返回，getMemoryContext 只包含最近 3 天日志', () => {
+  test('getDailyLogDates returns in descending order, getMemoryContext only includes last 3 days of logs', () => {
     const agentId = createAgentId('memory-context')
     mkdirSync(getLogsDir(agentId), { recursive: true })
-    writeFileSync(getMemoryFile(agentId), '长期记忆 A')
+    writeFileSync(getMemoryFile(agentId), 'long-term memory A')
     writeFileSync(resolve(getLogsDir(agentId), '2026-03-07.md'), '# 2026-03-07\nold')
     writeFileSync(resolve(getLogsDir(agentId), '2026-03-08.md'), '# 2026-03-08\nlog-08')
     writeFileSync(resolve(getLogsDir(agentId), '2026-03-09.md'), '# 2026-03-09\nlog-09')
@@ -101,7 +101,7 @@ describe('MemoryManager', () => {
 
     const context = memoryManager.getMemoryContext(agentId)
     expect(context).toContain('<long_term>')
-    expect(context).toContain('长期记忆 A')
+    expect(context).toContain('long-term memory A')
     expect(context).toContain('log-10')
     expect(context).toContain('log-09')
     expect(context).toContain('log-08')

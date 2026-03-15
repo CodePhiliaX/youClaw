@@ -56,7 +56,7 @@ export function Memory() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
 
-  // 右侧面板
+  // Right panel
   const [panelOpen, setPanelOpen] = useState(false)
   const [panelTab, setPanelTab] = useState<'logs' | 'archives' | 'search'>('logs')
 
@@ -133,7 +133,7 @@ export function Memory() {
       setMemoryContent(editContent)
       setIsEditing(false)
     } catch {
-      // 静默处理
+      // Silently ignore
     } finally {
       setIsSaving(false)
     }
@@ -188,7 +188,7 @@ export function Memory() {
 
   return (
     <div className="flex h-full">
-      {/* 左侧：Memory 列表 */}
+      {/* Left: Memory list */}
       <SidePanel>
         <div className="h-12 shrink-0 px-3 border-b border-[var(--subtle-border)] flex items-center justify-between">
           <h2 className="font-semibold text-sm">{t.memory.title}</h2>
@@ -220,9 +220,9 @@ export function Memory() {
         </div>
       </SidePanel>
 
-      {/* 中间：Memory 内容 */}
+      {/* Center: Memory content */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {/* 顶部工具栏 */}
+        {/* Top toolbar */}
         <div className="h-12 shrink-0 flex items-center justify-between px-3 border-b border-[var(--subtle-border)]">
           <div className="flex items-center gap-2">
             {selectedItem?.isGlobal ? (
@@ -235,7 +235,7 @@ export function Memory() {
             </span>
           </div>
           <div className="flex items-center gap-1">
-            {/* 编辑/保存 */}
+            {/* Edit/Save */}
             {isEditing ? (
               <>
                 <button
@@ -271,7 +271,7 @@ export function Memory() {
 
             <div className="w-px h-4 bg-border mx-1" />
 
-            {/* 切换右侧面板 */}
+            {/* Toggle right panel */}
             <button
               onClick={() => setPanelOpen((v) => !v)}
               className={cn(
@@ -287,7 +287,7 @@ export function Memory() {
           </div>
         </div>
 
-        {/* Memory 内容 */}
+        {/* Memory content */}
         <div className="flex-1 overflow-y-auto p-4">
           {isEditing ? (
             <textarea
@@ -309,10 +309,10 @@ export function Memory() {
         </div>
       </div>
 
-      {/* 右侧面板：日志 / 存档 / 搜索 */}
+      {/* Right panel: logs / archives / search */}
       {panelOpen && (
         <div className="w-[340px] shrink-0 border-l border-[var(--subtle-border)] flex flex-col">
-          {/* Tab 切换 */}
+          {/* Tab switcher */}
           <div className="h-12 shrink-0 flex items-center gap-1 px-3 border-b border-[var(--subtle-border)]">
             {!isGlobal && (
               <>

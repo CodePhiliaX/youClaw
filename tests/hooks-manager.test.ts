@@ -19,14 +19,14 @@ describe('HooksManager', () => {
     hooks = new HooksManager()
   })
 
-  test('无 hooks 时直接返回原始 context', async () => {
+  test('returns original context when no hooks are registered', async () => {
     const ctx = createContext({ payload: { prompt: 'hello' } })
     const result = await hooks.execute('test-agent', 'pre_process', ctx)
     expect(result.payload.prompt).toBe('hello')
     expect(result.abort).toBeUndefined()
   })
 
-  test('registerBuiltinHook 注册并执行', async () => {
+  test('registerBuiltinHook registers and executes', async () => {
     const handler: HookHandler = async (ctx) => {
       ctx.modifiedPayload = { prompt: 'modified' }
       return ctx
@@ -40,10 +40,10 @@ describe('HooksManager', () => {
     expect(result.modifiedPayload?.prompt).toBe('modified')
   })
 
-  test('abort 中止后续 hooks', async () => {
+  test('abort stops subsequent hooks', async () => {
     const firstHook: HookHandler = async (ctx) => {
       ctx.abort = true
-      ctx.abortReason = '被第一个 hook 拦截'
+      ctx.abortReason = 'intercepted by first hook'
       return ctx
     }
 
@@ -59,11 +59,11 @@ describe('HooksManager', () => {
     const result = await hooks.execute('test-agent', 'pre_process', ctx)
 
     expect(result.abort).toBe(true)
-    expect(result.abortReason).toBe('被第一个 hook 拦截')
+    expect(result.abortReason).toBe('intercepted by first hook')
     expect(result.modifiedPayload?.reached).toBeUndefined()
   })
 
-  test('priority 排序：数值越小越先执行', async () => {
+  test('priority sorting: lower values execute first', async () => {
     const order: number[] = []
 
     const hookA: HookHandler = async (ctx) => {
@@ -88,9 +88,9 @@ describe('HooksManager', () => {
     expect(order).toEqual([1, 2, 3])
   })
 
-  test('hook 错误不影响主流程（跳过并继续）', async () => {
+  test('hook errors do not affect main flow (skip and continue)', async () => {
     const errorHook: HookHandler = async () => {
-      throw new Error('Hook 内部错误')
+      throw new Error('Hook internal error')
     }
 
     const normalHook: HookHandler = async (ctx) => {
@@ -103,11 +103,11 @@ describe('HooksManager', () => {
 
     const result = await hooks.execute('test-agent', 'pre_process', createContext())
 
-    // 错误的 hook 被跳过，后续 hook 正常执行
+    // The errored hook is skipped, subsequent hooks execute normally
     expect(result.modifiedPayload?.reached).toBe(true)
   })
 
-  test('hook 超时被跳过', async () => {
+  test('timed-out hook is skipped', async () => {
     const slowHook: HookHandler = async (ctx) => {
       await new Promise((resolve) => setTimeout(resolve, 10_000))
       return ctx
@@ -123,28 +123,28 @@ describe('HooksManager', () => {
 
     const result = await hooks.execute('test-agent', 'pre_process', createContext())
 
-    // 超时 hook 被跳过，后续 hook 正常执行
+    // The timed-out hook is skipped, subsequent hooks execute normally
     expect(result.modifiedPayload?.afterTimeout).toBe(true)
-  }, 10_000) // 测试本身给足时间
+  }, 10_000) // give the test itself enough time
 
-  test('pre_tool_use 的 tools 过滤', async () => {
+  test('pre_tool_use tools filtering', async () => {
     const called: string[] = []
 
     const bashGuard: HookHandler = async (ctx) => {
       called.push('bash-guard')
       ctx.abort = true
-      ctx.abortReason = 'Bash 被禁止'
+      ctx.abortReason = 'Bash is forbidden'
       return ctx
     }
 
-    // 注册一个只对 Bash 工具生效的 hook
+    // Register a hook that only applies to the Bash tool
     hooks.registerBuiltinHook('test-agent', 'pre_tool_use', bashGuard, 0)
 
-    // 手动设置 tools 过滤
+    // Manually set tools filtering
     const agentHooks = (hooks as any).hooks.get('test-agent')!.get('pre_tool_use')!
     agentHooks[0].tools = ['Bash']
 
-    // Bash 工具 → 应该被拦截
+    // Bash tool -> should be intercepted
     const bashCtx = createContext({
       phase: 'pre_tool_use',
       payload: { tool: 'Bash', input: 'rm -rf /' },
@@ -153,7 +153,7 @@ describe('HooksManager', () => {
     expect(bashResult.abort).toBe(true)
     expect(called).toContain('bash-guard')
 
-    // Read 工具 → 应该跳过 bashGuard
+    // Read tool -> should skip bashGuard
     called.length = 0
     const readCtx = createContext({
       phase: 'pre_tool_use',
@@ -164,7 +164,7 @@ describe('HooksManager', () => {
     expect(called).not.toContain('bash-guard')
   })
 
-  test('unloadHooks 清理后不再执行', async () => {
+  test('unloadHooks stops execution after cleanup', async () => {
     const handler: HookHandler = async (ctx) => {
       ctx.modifiedPayload = { executed: true }
       return ctx
@@ -172,17 +172,17 @@ describe('HooksManager', () => {
 
     hooks.registerBuiltinHook('test-agent', 'pre_process', handler)
 
-    // 卸载前能执行
+    // Can execute before unloading
     let result = await hooks.execute('test-agent', 'pre_process', createContext())
     expect(result.modifiedPayload?.executed).toBe(true)
 
-    // 卸载后不再执行
+    // No longer executes after unloading
     hooks.unloadHooks('test-agent')
     result = await hooks.execute('test-agent', 'pre_process', createContext())
     expect(result.modifiedPayload).toBeUndefined()
   })
 
-  test('不同 agent 的 hooks 互相隔离', async () => {
+  test('hooks of different agents are isolated from each other', async () => {
     const handlerA: HookHandler = async (ctx) => {
       ctx.modifiedPayload = { agent: 'A' }
       return ctx
@@ -202,7 +202,7 @@ describe('HooksManager', () => {
     expect(resultB.modifiedPayload?.agent).toBe('B')
   })
 
-  test('不同 phase 的 hooks 互相隔离', async () => {
+  test('hooks of different phases are isolated from each other', async () => {
     const preHandler: HookHandler = async (ctx) => {
       ctx.modifiedPayload = { phase: 'pre' }
       return ctx
@@ -222,14 +222,14 @@ describe('HooksManager', () => {
     expect(postResult.modifiedPayload?.phase).toBe('post')
   })
 
-  test('hook 链依次传递 context 修改', async () => {
+  test('hook chain passes context modifications sequentially', async () => {
     const hook1: HookHandler = async (ctx) => {
       ctx.payload.step1 = true
       return ctx
     }
     const hook2: HookHandler = async (ctx) => {
       ctx.payload.step2 = true
-      // 验证 step1 已存在
+      // Verify step1 already exists
       ctx.payload.step1Existed = ctx.payload.step1 === true
       return ctx
     }

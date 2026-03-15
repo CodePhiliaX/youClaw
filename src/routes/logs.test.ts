@@ -39,7 +39,7 @@ function cleanLogsDir() {
 describe('GET /logs', () => {
   beforeEach(cleanLogsDir)
 
-  test('返回日期列表', async () => {
+  test('returns date list', async () => {
     writeFileSync(`${logsDir}/2026-03-10.log`, '')
     writeFileSync(`${logsDir}/2026-03-11.log`, '')
 
@@ -49,7 +49,7 @@ describe('GET /logs', () => {
     expect(data).toEqual(['2026-03-11', '2026-03-10'])
   })
 
-  test('无日志文件时返回空数组', async () => {
+  test('returns empty array when no log files exist', async () => {
     const res = await app.request('/logs')
     expect(res.status).toBe(200)
     const data = await res.json() as string[]
@@ -60,7 +60,7 @@ describe('GET /logs', () => {
 describe('GET /logs/:date', () => {
   beforeEach(cleanLogsDir)
 
-  test('返回日志条目', async () => {
+  test('returns log entries', async () => {
     const lines = [
       makeLogLine({ msg: 'hello' }),
       makeLogLine({ msg: 'world' }),
@@ -75,12 +75,12 @@ describe('GET /logs/:date', () => {
     expect(data.hasMore).toBe(false)
   })
 
-  test('无效日期格式返回 400', async () => {
+  test('returns 400 for invalid date format', async () => {
     const res = await app.request('/logs/invalid-date')
     expect(res.status).toBe(400)
   })
 
-  test('不存在的日期返回空结果', async () => {
+  test('returns empty result for nonexistent date', async () => {
     const res = await app.request('/logs/2099-01-01')
     expect(res.status).toBe(200)
     const data = await res.json() as { entries: unknown[]; total: number }
@@ -88,7 +88,7 @@ describe('GET /logs/:date', () => {
     expect(data.entries.length).toBe(0)
   })
 
-  test('支持 category 过滤', async () => {
+  test('supports category filtering', async () => {
     const lines = [
       makeLogLine({ msg: 'sys', level: 30 }),
       makeLogLine({ msg: 'agent', level: 30, category: 'agent' }),
@@ -102,7 +102,7 @@ describe('GET /logs/:date', () => {
     expect(data.entries[0]!.msg).toBe('agent')
   })
 
-  test('支持 level 过滤', async () => {
+  test('supports level filtering', async () => {
     const lines = [
       makeLogLine({ level: 20, msg: 'debug' }),
       makeLogLine({ level: 50, msg: 'error' }),
@@ -116,7 +116,7 @@ describe('GET /logs/:date', () => {
     expect(data.entries[0]!.msg).toBe('error')
   })
 
-  test('支持 search 过滤', async () => {
+  test('supports search filtering', async () => {
     const lines = [
       makeLogLine({ msg: 'hello world' }),
       makeLogLine({ msg: 'foo bar' }),
@@ -129,7 +129,7 @@ describe('GET /logs/:date', () => {
     expect(data.total).toBe(1)
   })
 
-  test('支持分页', async () => {
+  test('supports pagination', async () => {
     const lines = Array.from({ length: 5 }, (_, i) =>
       makeLogLine({ msg: `msg-${i}` })
     )
@@ -144,8 +144,8 @@ describe('GET /logs/:date', () => {
     expect(data.hasMore).toBe(true)
   })
 
-  test('limit 上限为 500', async () => {
-    // 请求 limit=9999 应被限制为 500
+  test('limit is capped at 500', async () => {
+    // Requesting limit=9999 should be capped to 500
     const res = await app.request('/logs/2099-01-01?limit=9999')
     expect(res.status).toBe(200)
   })

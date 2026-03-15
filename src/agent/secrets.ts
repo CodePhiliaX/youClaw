@@ -2,12 +2,12 @@ import { getLogger } from '../logger/index.ts'
 import type { McpServerConfig } from './schema.ts'
 
 /**
- * SecretsManager：Agent 级别的 secrets 管理
+ * SecretsManager: Agent-level secrets management
  *
- * 约定命名规范：YOUCLAW_SECRET_<AGENTID>_<KEY>
- * 在 agent.yaml 中通过 ${SECRET:key} 引用
+ * Naming convention: YOUCLAW_SECRET_<AGENTID>_<KEY>
+ * Referenced in agent.yaml via ${SECRET:key}
  *
- * 例如：
+ * Example:
  * .env:
  *   YOUCLAW_SECRET_MYAGENT_API_TOKEN=sk-xxx
  *
@@ -22,7 +22,7 @@ export class SecretsManager {
   private secrets: Map<string, Map<string, string>> = new Map()
 
   /**
-   * 从 process.env 中加载按 agent 隔离的 secrets
+   * Load per-agent isolated secrets from process.env
    */
   loadFromEnv(): void {
     const logger = getLogger()
@@ -37,7 +37,7 @@ export class SecretsManager {
       const firstUnderscore = rest.indexOf('_')
 
       if (firstUnderscore === -1) {
-        logger.warn({ key }, '无效的 secret 命名格式，应为 YOUCLAW_SECRET_<AGENTID>_<KEY>')
+        logger.warn({ key }, 'Invalid secret naming format, expected YOUCLAW_SECRET_<AGENTID>_<KEY>')
         continue
       }
 
@@ -52,12 +52,12 @@ export class SecretsManager {
     }
 
     if (count > 0) {
-      logger.info({ count }, 'Agent secrets 加载完成')
+      logger.info({ count }, 'Agent secrets loaded')
     }
   }
 
   /**
-   * 解析字符串模板中的 ${SECRET:key} 引用
+   * Resolve ${SECRET:key} references in string templates
    */
   resolve(agentId: string, template: string): string {
     const agentSecrets = this.secrets.get(agentId)
@@ -66,7 +66,7 @@ export class SecretsManager {
     return template.replace(/\$\{SECRET:(\w+)\}/g, (_, key: string) => {
       const value = agentSecrets.get(key.toLowerCase())
       if (!value) {
-        getLogger().warn({ agentId, secretKey: key }, 'Secret 未找到')
+        getLogger().warn({ agentId, secretKey: key }, 'Secret not found')
         return ''
       }
       return value
@@ -74,8 +74,8 @@ export class SecretsManager {
   }
 
   /**
-   * 注入 secrets 到 MCP 服务器的 env 中
-   * 预处理 ${SECRET:key} 引用，返回替换后的 servers 配置
+   * Inject secrets into MCP server env
+   * Pre-process ${SECRET:key} references and return resolved server configs
    */
   injectToMcpEnv(agentId: string, servers: Record<string, McpServerConfig>): Record<string, McpServerConfig> {
     const agentSecrets = this.secrets.get(agentId)
@@ -99,7 +99,7 @@ export class SecretsManager {
   }
 
   /**
-   * 获取指定 agent 的 secret 列表（仅返回 key 名，不返回值）
+   * Get secret key names for a given agent (returns keys only, not values)
    */
   getSecretKeys(agentId: string): string[] {
     const agentSecrets = this.secrets.get(agentId)

@@ -5,7 +5,7 @@ export { test, expect }
 
 // ===== 常量 =====
 
-export const API_BASE = 'http://localhost:3000'
+export const API_BASE = 'http://localhost:23107'
 export const UNIQUE = () => `E2E-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
 
 // ===== API 辅助函数 =====

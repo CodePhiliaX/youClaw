@@ -12,7 +12,7 @@ import { test, expect } from '../fixtures'
 
 const AGENT_ID = 'e2e-coordinator'
 const AGENT_NAME = 'E2E Coordinator'
-const API_BASE = 'http://localhost:3000'
+const API_BASE = 'http://localhost:23107'
 
 test.describe('多 Agent 创建与协调', () => {
   test.setTimeout(180_000)

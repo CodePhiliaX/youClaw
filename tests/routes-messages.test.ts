@@ -11,7 +11,7 @@ import { createMessagesRoutes } from '../src/routes/messages.ts'
 describe('messages routes', () => {
   beforeEach(() => cleanTables('messages', 'chats'))
 
-  test('POST /agents/:id/message 缺少 prompt 时返回 400', async () => {
+  test('POST /agents/:id/message returns 400 when prompt is missing', async () => {
     const app = createMessagesRoutes(
       { getAgent: () => ({ id: 'agent-1' }) } as any,
       {} as any,
@@ -27,7 +27,7 @@ describe('messages routes', () => {
     expect(res.status).toBe(400)
   })
 
-  test('POST /agents/:id/message agent 不存在时返回 404', async () => {
+  test('POST /agents/:id/message returns 404 when agent does not exist', async () => {
     const app = createMessagesRoutes(
       { getAgent: () => undefined } as any,
       {} as any,
@@ -43,7 +43,7 @@ describe('messages routes', () => {
     expect(res.status).toBe(404)
   })
 
-  test('POST /agents/:id/message 返回 processing 并转发给 router', async () => {
+  test('POST /agents/:id/message returns processing and forwards to router', async () => {
     const handleInbound = mock(() => Promise.resolve())
     const app = createMessagesRoutes(
       { getAgent: () => ({ id: 'agent-1' }) } as any,
@@ -65,7 +65,7 @@ describe('messages routes', () => {
     expect(handleInbound.mock.calls[0]?.[0]?.requestedSkills).toEqual(['pdf'])
   })
 
-  test('GET /chats/:chatId/messages 按时间正序返回', async () => {
+  test('GET /chats/:chatId/messages returns in chronological order', async () => {
     saveMessage({
       id: 'm1',
       chatId: 'chat-1',
@@ -99,7 +99,7 @@ describe('messages routes', () => {
     expect(body.map((message) => message.content)).toEqual(['old', 'new'])
   })
 
-  test('DELETE /chats/:chatId 会删除 chat 及消息', async () => {
+  test('DELETE /chats/:chatId deletes chat and its messages', async () => {
     upsertChat('chat-1', 'agent-1', 'Chat 1')
     saveMessage({
       id: 'm1',

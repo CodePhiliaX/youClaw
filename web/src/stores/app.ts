@@ -84,11 +84,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       set({ authLoading: true })
       const user = await getAuthUser()
-      // 后端未返回名称时，通过用户 id 拼一个默认用户名
+      // Construct a default username from user id when backend doesn't return one
       if (!user.name) {
         user.name = `User_${user.id.slice(0, 6)}`
       }
-      // 后端未返回头像时，使用默认头像
+      // Use default avatar when backend doesn't return one
       if (!user.avatar) {
         user.avatar = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user.name)}`
       }
@@ -103,12 +103,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ authLoading: true })
 
       if (isTauri) {
-        // Tauri 模式：使用 deep link 回调
+        // Tauri mode: use deep link callback
         const { loginUrl } = await getAuthLoginUrl('tauri')
         const { openUrl } = await import('@tauri-apps/plugin-opener')
         await openUrl(loginUrl)
 
-        // 监听 deep link 事件
+        // Listen for deep link events
         const { listen } = await import('@tauri-apps/api/event')
         let timeoutId: ReturnType<typeof setTimeout>
         const unlisten = await listen<string>('deep-link-received', async (event) => {
@@ -131,13 +131,13 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
         })
 
-        // 120 秒超时
+        // 120 second timeout
         timeoutId = setTimeout(() => {
           unlisten()
           set({ authLoading: false })
         }, 120000)
       } else {
-        // Web 模式：保持轮询逻辑
+        // Web mode: keep polling logic
         const { loginUrl } = await getAuthLoginUrl()
         window.open(loginUrl, '_blank')
 
@@ -150,11 +150,11 @@ export const useAppStore = create<AppState>((set, get) => ({
               await get().fetchCreditBalance()
             }
           } catch {
-            // 继续轮询
+            // Continue polling
           }
         }, 2000)
 
-        // 60 秒超时
+        // 60 second timeout
         setTimeout(() => {
           clearInterval(pollInterval)
           set({ authLoading: false })
@@ -170,7 +170,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       await authLogout()
     } catch {
-      // 即使远程注销失败也清理本地状态
+      // Clean up local state even if remote logout fails
     }
     set({ user: null, isLoggedIn: false, creditBalance: null })
   },
@@ -195,12 +195,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   openPayPage: async () => {
     try {
       if (isTauri) {
-        // Tauri 模式：使用 deep link 回调
+        // Tauri mode: use deep link callback
         const { payUrl } = await getPayUrl('tauri')
         const { openUrl } = await import('@tauri-apps/plugin-opener')
         await openUrl(payUrl)
 
-        // 监听 deep link 支付回调
+        // Listen for deep link payment callback
         const { listen } = await import('@tauri-apps/api/event')
         let timeoutId: ReturnType<typeof setTimeout>
         const unlisten = await listen<string>('deep-link-received', async (event) => {
@@ -210,17 +210,17 @@ export const useAppStore = create<AppState>((set, get) => ({
               await get().fetchCreditBalance()
             }
           } catch {
-            // 忽略解析错误
+            // Ignore parse errors
           } finally {
             unlisten()
             clearTimeout(timeoutId)
           }
         })
 
-        // 120 秒超时
+        // 120 second timeout
         timeoutId = setTimeout(() => unlisten(), 120000)
       } else {
-        // Web 模式：保持轮询逻辑
+        // Web mode: keep polling logic
         const { payUrl } = await getPayUrl()
         window.open(payUrl, '_blank')
 
@@ -233,7 +233,7 @@ export const useAppStore = create<AppState>((set, get) => ({
               set({ creditBalance: balance })
             }
           } catch {
-            // 继续轮询
+            // Continue polling
           }
         }, 3000)
 
@@ -258,7 +258,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     })
     applyThemeToDOM(resolvedTheme)
 
-    // 检查云服务状态 & 模型配置
+    // Check cloud service status & model configuration
     try {
       const { enabled } = await getCloudStatus()
       set({ cloudEnabled: enabled })
@@ -270,14 +270,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
-      // 拉取模型设置，判断是否可用
+      // Fetch model settings to determine availability
       const settings = await getSettings()
       const { provider } = settings.activeModel
 
       if (!enabled && (provider === 'builtin' || provider === 'cloud')) {
-        // 离线模式下内置/云模型不可用，自动切换到 custom
+        // Builtin/cloud models unavailable in offline mode, auto-switch to custom
         await updateSettings({ activeModel: { provider: 'custom' } })
-        // 有自定义模型才算 ready
+        // Only considered ready when custom models exist
         set({ modelReady: settings.customModels.length > 0 })
       } else if (provider === 'custom') {
         const model = settings.activeModel.id
@@ -285,11 +285,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           : settings.customModels[0]
         set({ modelReady: !!model })
       } else {
-        // builtin/cloud 在线模式下可用
+        // Builtin/cloud models available in online mode
         set({ modelReady: true })
       }
     } catch {
-      // 后端未就绪，忽略
+      // Backend not ready, ignore
     }
   },
 }))

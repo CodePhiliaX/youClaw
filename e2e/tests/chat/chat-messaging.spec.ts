@@ -15,7 +15,7 @@ test.describe('Level 3: 消息发送与流式显示', () => {
     // 检查服务健康
     let healthy = false
     try {
-      const res = await request.get('http://localhost:3000/api/health')
+      const res = await request.get('http://localhost:23107/api/health')
       healthy = res.status() === 200
     } catch {
       healthy = false

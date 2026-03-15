@@ -1,16 +1,16 @@
 /**
- * Scheduler 测试
+ * Scheduler tests
  *
- * 覆盖：
- * - calculateNextRun 各调度类型
- * - executeTask 成功/失败时的行为
- * - 执行结果写入 messages 表
- * - 并发防护（running_since 标记）
- * - 卡住检测
- * - 错误退避
- * - 连续失败自动暂停
- * - 时区支持
- * - start/stop 生命周期
+ * Coverage:
+ * - calculateNextRun for each schedule type
+ * - executeTask behavior on success/failure
+ * - Execution results written to messages table
+ * - Concurrency guard (running_since flag)
+ * - Stuck task detection
+ * - Error backoff
+ * - Auto-pause after consecutive failures
+ * - Timezone support
+ * - start/stop lifecycle
  */
 
 import { describe, test, expect, beforeEach, beforeAll, mock } from 'bun:test'
@@ -29,7 +29,7 @@ import {
 } from '../src/db/index.ts'
 import { Scheduler } from '../src/scheduler/scheduler.ts'
 
-// mock eventBus，提供 emit 方法
+// mock eventBus, providing an emit method
 const mockEventBus = { emit: mock(() => {}) } as any
 
 // ===== calculateNextRun =====
@@ -43,7 +43,7 @@ describe('Scheduler.calculateNextRun', () => {
 
   // --- interval ---
 
-  test('interval — 基于 last_run 计算', () => {
+  test('interval — calculates based on last_run', () => {
     const result = scheduler.calculateNextRun({
       schedule_type: 'interval',
       schedule_value: '3600000',
@@ -52,7 +52,7 @@ describe('Scheduler.calculateNextRun', () => {
     expect(result).toBe('2026-03-10T11:00:00.000Z')
   })
 
-  test('interval — 无 last_run 基于 now', () => {
+  test('interval — calculates based on now when no last_run', () => {
     const before = Date.now()
     const result = scheduler.calculateNextRun({
       schedule_type: 'interval',
@@ -65,22 +65,22 @@ describe('Scheduler.calculateNextRun', () => {
     expect(nextTime).toBeLessThanOrEqual(Date.now() + 60000 + 100)
   })
 
-  test('interval — NaN 值返回 null', () => {
+  test('interval — NaN value returns null', () => {
     expect(scheduler.calculateNextRun({ schedule_type: 'interval', schedule_value: 'abc', last_run: null })).toBeNull()
   })
 
-  test('interval — 负数返回 null', () => {
+  test('interval — negative value returns null', () => {
     expect(scheduler.calculateNextRun({ schedule_type: 'interval', schedule_value: '-1000', last_run: null })).toBeNull()
   })
 
-  test('interval — 零值返回 null', () => {
+  test('interval — zero value returns null', () => {
     expect(scheduler.calculateNextRun({ schedule_type: 'interval', schedule_value: '0', last_run: null })).toBeNull()
   })
 
-  test('interval — 小间隔正常工作', () => {
+  test('interval — small interval works correctly', () => {
     const result = scheduler.calculateNextRun({
       schedule_type: 'interval',
-      schedule_value: '1000', // 1 秒
+      schedule_value: '1000', // 1 second
       last_run: '2026-03-10T10:00:00.000Z',
     })
     expect(result).toBe('2026-03-10T10:00:01.000Z')
@@ -88,7 +88,7 @@ describe('Scheduler.calculateNextRun', () => {
 
   // --- cron ---
 
-  test('cron — 每分钟返回未来时间', () => {
+  test('cron — every minute returns a future time', () => {
     const result = scheduler.calculateNextRun({
       schedule_type: 'cron',
       schedule_value: '* * * * *',
@@ -98,10 +98,10 @@ describe('Scheduler.calculateNextRun', () => {
     expect(new Date(result!).getTime()).toBeGreaterThan(Date.now() - 1000)
   })
 
-  test('cron — 特定时间表达式', () => {
+  test('cron — specific time expression', () => {
     const result = scheduler.calculateNextRun({
       schedule_type: 'cron',
-      schedule_value: '0 9 * * *', // 每天 9 点
+      schedule_value: '0 9 * * *', // daily at 9am
       last_run: null,
     })
     expect(result).not.toBeNull()
@@ -112,54 +112,54 @@ describe('Scheduler.calculateNextRun', () => {
 
   // --- once ---
 
-  test('once — 无失败时返回 null', () => {
+  test('once — returns null when no failures', () => {
     expect(scheduler.calculateNextRun({ schedule_type: 'once', schedule_value: '2026-12-01T00:00:00.000Z', last_run: null })).toBeNull()
   })
 
-  test('once — 即使有 last_run，无失败时也返回 null', () => {
+  test('once — returns null even with last_run when no failures', () => {
     expect(scheduler.calculateNextRun({ schedule_type: 'once', schedule_value: '2026-12-01T00:00:00.000Z', last_run: '2026-03-10T10:00:00.000Z' })).toBeNull()
   })
 
-  test('once — 有失败时返回退避时间', () => {
+  test('once — returns backoff time when there are failures', () => {
     const before = Date.now()
     const result = scheduler.calculateNextRun(
       { schedule_type: 'once', schedule_value: '2026-12-01T00:00:00.000Z', last_run: null },
       { consecutiveFailures: 1 },
     )
     expect(result).not.toBeNull()
-    // 应该在 now + 30s 附近（第一次退避）
+    // Should be around now + 30s (first backoff)
     expect(new Date(result!).getTime()).toBeGreaterThanOrEqual(before + 29_000)
   })
 
-  // --- 未知类型 ---
+  // --- unknown type ---
 
-  test('未知类型返回 null', () => {
+  test('unknown type returns null', () => {
     expect(scheduler.calculateNextRun({ schedule_type: 'unknown', schedule_value: 'x', last_run: null })).toBeNull()
     expect(scheduler.calculateNextRun({ schedule_type: '', schedule_value: '', last_run: null })).toBeNull()
   })
 })
 
-// ===== calculateNextRun — 退避逻辑 =====
+// ===== calculateNextRun — backoff logic =====
 
-describe('Scheduler.calculateNextRun — 退避逻辑', () => {
+describe('Scheduler.calculateNextRun — backoff logic', () => {
   let scheduler: Scheduler
 
   beforeAll(() => {
     scheduler = new Scheduler({} as any, {} as any, mockEventBus)
   })
 
-  test('无失败时不退避', () => {
+  test('no backoff when no failures', () => {
     const result = scheduler.calculateNextRun(
       { schedule_type: 'interval', schedule_value: '60000', last_run: new Date().toISOString() },
       { consecutiveFailures: 0 },
     )
     expect(result).not.toBeNull()
     const nextTime = new Date(result!).getTime()
-    // 应该在 now + 60s 附近
+    // Should be around now + 60s
     expect(nextTime).toBeLessThanOrEqual(Date.now() + 61_000)
   })
 
-  test('1 次失败退避 30 秒', () => {
+  test('1 failure backs off 30 seconds', () => {
     const before = Date.now()
     const result = scheduler.calculateNextRun(
       { schedule_type: 'interval', schedule_value: '1000', last_run: new Date().toISOString() },
@@ -167,11 +167,11 @@ describe('Scheduler.calculateNextRun — 退避逻辑', () => {
     )
     expect(result).not.toBeNull()
     const nextTime = new Date(result!).getTime()
-    // 退避至少 30 秒
+    // Backoff at least 30 seconds
     expect(nextTime).toBeGreaterThanOrEqual(before + 29_000)
   })
 
-  test('3 次失败退避 5 分钟', () => {
+  test('3 failures back off 5 minutes', () => {
     const before = Date.now()
     const result = scheduler.calculateNextRun(
       { schedule_type: 'interval', schedule_value: '1000', last_run: new Date().toISOString() },
@@ -179,11 +179,11 @@ describe('Scheduler.calculateNextRun — 退避逻辑', () => {
     )
     expect(result).not.toBeNull()
     const nextTime = new Date(result!).getTime()
-    // 退避至少 5 分钟
+    // Backoff at least 5 minutes
     expect(nextTime).toBeGreaterThanOrEqual(before + 299_000)
   })
 
-  test('超过 5 次失败使用最大退避 60 分钟', () => {
+  test('more than 5 failures uses max backoff of 60 minutes', () => {
     const before = Date.now()
     const result = scheduler.calculateNextRun(
       { schedule_type: 'interval', schedule_value: '1000', last_run: new Date().toISOString() },
@@ -191,32 +191,32 @@ describe('Scheduler.calculateNextRun — 退避逻辑', () => {
     )
     expect(result).not.toBeNull()
     const nextTime = new Date(result!).getTime()
-    // 退避至少 60 分钟
+    // Backoff at least 60 minutes
     expect(nextTime).toBeGreaterThanOrEqual(before + 3_599_000)
   })
 
-  test('正常间隔大于退避时使用正常间隔', () => {
+  test('uses normal interval when it exceeds backoff', () => {
     const result = scheduler.calculateNextRun(
-      { schedule_type: 'interval', schedule_value: '7200000', last_run: new Date().toISOString() },  // 2 小时
-      { consecutiveFailures: 1 },  // 退避 30 秒
+      { schedule_type: 'interval', schedule_value: '7200000', last_run: new Date().toISOString() },  // 2 hours
+      { consecutiveFailures: 1 },  // 30 second backoff
     )
     expect(result).not.toBeNull()
     const nextTime = new Date(result!).getTime()
-    // 2 小时 > 30 秒退避，所以用 2 小时
+    // 2 hours > 30 second backoff, so use 2 hours
     expect(nextTime).toBeGreaterThanOrEqual(Date.now() + 7_199_000)
   })
 })
 
-// ===== calculateNextRun — 时区支持 =====
+// ===== calculateNextRun — timezone support =====
 
-describe('Scheduler.calculateNextRun — 时区支持', () => {
+describe('Scheduler.calculateNextRun — timezone support', () => {
   let scheduler: Scheduler
 
   beforeAll(() => {
     scheduler = new Scheduler({} as any, {} as any, mockEventBus)
   })
 
-  test('cron 带时区参数不崩溃', () => {
+  test('cron with timezone parameter does not crash', () => {
     const result = scheduler.calculateNextRun({
       schedule_type: 'cron',
       schedule_value: '0 9 * * *',
@@ -226,7 +226,7 @@ describe('Scheduler.calculateNextRun — 时区支持', () => {
     expect(result).not.toBeNull()
   })
 
-  test('cron 不同时区返回不同时间', () => {
+  test('cron with different timezones returns different times', () => {
     const shanghai = scheduler.calculateNextRun({
       schedule_type: 'cron',
       schedule_value: '0 9 * * *',
@@ -241,13 +241,13 @@ describe('Scheduler.calculateNextRun — 时区支持', () => {
     })
     expect(shanghai).not.toBeNull()
     expect(utc).not.toBeNull()
-    // 时区差异导致不同的 UTC 时间（除非正好对齐）
-    // 只需验证两者都是合法时间
+    // Timezone difference causes different UTC times (unless they happen to align)
+    // Just verify both are valid times
     expect(new Date(shanghai!).getTime()).toBeGreaterThan(0)
     expect(new Date(utc!).getTime()).toBeGreaterThan(0)
   })
 
-  test('interval 类型忽略时区参数', () => {
+  test('interval type ignores timezone parameter', () => {
     const withTz = scheduler.calculateNextRun({
       schedule_type: 'interval',
       schedule_value: '60000',
@@ -265,23 +265,23 @@ describe('Scheduler.calculateNextRun — 时区支持', () => {
 
 // ===== executeTask =====
 
-describe('Scheduler.executeTask — 成功执行', () => {
+describe('Scheduler.executeTask — successful execution', () => {
   beforeEach(() => cleanTables('messages', 'chats', 'scheduled_tasks', 'task_run_logs'))
 
-  test('写入 user + bot messages、chat、run log', async () => {
+  test('writes user + bot messages, chat, and run log', async () => {
     const chatId = 'task:exec-ok'
     createTask({
       id: 'exec-1',
       agentId: 'agent-1',
       chatId,
-      prompt: '请生成报告',
+      prompt: 'Please generate report',
       scheduleType: 'interval',
       scheduleValue: '60000',
       nextRun: new Date(Date.now() - 1000).toISOString(),
-      name: '测试任务',
+      name: 'Test Task',
     })
 
-    const mockQueue = { enqueue: mock(() => Promise.resolve('报告结果')) } as any
+    const mockQueue = { enqueue: mock(() => Promise.resolve('Report result')) } as any
     const scheduler = new Scheduler(mockQueue, {} as any, mockEventBus)
     const task = getTask('exec-1')!
 
@@ -292,28 +292,28 @@ describe('Scheduler.executeTask — 成功执行', () => {
     expect(messages.length).toBe(2)
     const userMsg = messages.find((m) => m.is_bot_message === 0)!
     const botMsg = messages.find((m) => m.is_bot_message === 1)!
-    expect(userMsg.content).toBe('请生成报告')
+    expect(userMsg.content).toBe('Please generate report')
     expect(userMsg.sender).toBe('scheduler')
     expect(userMsg.sender_name).toBe('Scheduled Task')
-    expect(userMsg.is_from_me).toBe(0) // 非 bot 发出
-    expect(botMsg.content).toBe('报告结果')
+    expect(userMsg.is_from_me).toBe(0) // not sent by bot
+    expect(botMsg.content).toBe('Report result')
     expect(botMsg.sender).toBe('agent-1')
-    expect(botMsg.is_from_me).toBe(1) // bot 发出
+    expect(botMsg.is_from_me).toBe(1) // sent by bot
 
     // chat
     const chat = getChats().find((c) => c.chat_id === chatId)!
-    expect(chat.name).toBe('Task: 测试任务')
+    expect(chat.name).toBe('Task: Test Task')
     expect(chat.channel).toBe('task')
 
     // run log
     const logs = getTaskRunLogs('exec-1')
     expect(logs.length).toBe(1)
     expect(logs[0].status).toBe('success')
-    expect(logs[0].result).toBe('报告结果')
+    expect(logs[0].result).toBe('Report result')
   })
 
-  test('无 name 时 chat 名称使用 prompt 截断', async () => {
-    const longPrompt = '这是一段很长的提示词用来测试截断功能是否正常工作'
+  test('chat name uses truncated prompt when no name is set', async () => {
+    const longPrompt = 'This is a very long prompt text to test whether truncation works properly'
     createTask({
       id: 'exec-noname',
       agentId: 'agent-1',
@@ -333,7 +333,7 @@ describe('Scheduler.executeTask — 成功执行', () => {
     expect(chat.name).toBe(`Task: ${longPrompt.slice(0, 30)}`)
   })
 
-  test('enqueue 无输出时保存 "(no output)"', async () => {
+  test('saves "(no output)" when enqueue returns no output', async () => {
     createTask({
       id: 'exec-null',
       agentId: 'agent-1',
@@ -355,21 +355,21 @@ describe('Scheduler.executeTask — 成功执行', () => {
   })
 })
 
-describe('Scheduler.executeTask — 执行失败', () => {
+describe('Scheduler.executeTask — execution failure', () => {
   beforeEach(() => cleanTables('messages', 'chats', 'scheduled_tasks', 'task_run_logs'))
 
-  test('失败时不写入 messages，但写入 error run log', async () => {
+  test('on failure, does not write messages but writes error run log', async () => {
     createTask({
       id: 'exec-fail',
       agentId: 'agent-1',
       chatId: 'task:fail',
-      prompt: '会失败',
+      prompt: 'will fail',
       scheduleType: 'interval',
       scheduleValue: '60000',
       nextRun: new Date(Date.now() - 1000).toISOString(),
     })
 
-    const mockQueue = { enqueue: mock(() => Promise.reject(new Error('崩溃了'))) } as any
+    const mockQueue = { enqueue: mock(() => Promise.reject(new Error('crashed'))) } as any
     const scheduler = new Scheduler(mockQueue, {} as any, mockEventBus)
 
     await scheduler.executeTask(getTask('exec-fail')!)
@@ -379,10 +379,10 @@ describe('Scheduler.executeTask — 执行失败', () => {
     const logs = getTaskRunLogs('exec-fail')
     expect(logs.length).toBe(1)
     expect(logs[0].status).toBe('error')
-    expect(logs[0].error).toBe('崩溃了')
+    expect(logs[0].error).toBe('crashed')
   })
 
-  test('非 Error 异常也能正确记录', async () => {
+  test('non-Error exceptions are also recorded correctly', async () => {
     createTask({
       id: 'exec-str-err',
       agentId: 'agent-1',
@@ -403,12 +403,12 @@ describe('Scheduler.executeTask — 执行失败', () => {
   })
 })
 
-// ===== 并发防护 =====
+// ===== concurrency guard =====
 
-describe('Scheduler.executeTask — 并发防护', () => {
+describe('Scheduler.executeTask — concurrency guard', () => {
   beforeEach(() => cleanTables('messages', 'chats', 'scheduled_tasks', 'task_run_logs'))
 
-  test('执行开始时设置 running_since，完成后清除', async () => {
+  test('sets running_since at start, clears it on completion', async () => {
     createTask({
       id: 'conc-1',
       agentId: 'agent-1',
@@ -424,12 +424,12 @@ describe('Scheduler.executeTask — 并发防护', () => {
     const mockQueue = { enqueue: mock(() => enqueuePromise) } as any
     const scheduler = new Scheduler(mockQueue, {} as any, mockEventBus)
 
-    // running_since 现在由 tick() 同步设置，模拟 tick 行为
+    // running_since is now set synchronously by tick(), simulate tick behavior
     updateTask('conc-1', { runningSince: new Date().toISOString() })
 
     const taskPromise = scheduler.executeTask(getTask('conc-1')!)
 
-    // 执行中应该有 running_since（tick 设置的）
+    // During execution, running_since should be set (by tick)
     await new Promise((r) => setTimeout(r, 50))
     const during = getTask('conc-1')!
     expect(during.running_since).not.toBeNull()
@@ -437,12 +437,12 @@ describe('Scheduler.executeTask — 并发防护', () => {
     resolveEnqueue!('done')
     await taskPromise
 
-    // 执行完成后 running_since 应清除
+    // After completion, running_since should be cleared
     const after = getTask('conc-1')!
     expect(after.running_since).toBeNull()
   })
 
-  test('running 的任务不会被 getTasksDueBy 查询到', async () => {
+  test('running tasks are not returned by getTasksDueBy', async () => {
     const pastTime = new Date(Date.now() - 5000).toISOString()
 
     createTask({
@@ -465,7 +465,7 @@ describe('Scheduler.executeTask — 并发防护', () => {
       nextRun: pastTime,
     })
 
-    // 标记 conc-due-1 为正在运行
+    // Mark conc-due-1 as running
     updateTask('conc-due-1', { runningSince: new Date().toISOString() })
 
     const dueTasks = getTasksDueBy(new Date().toISOString())
@@ -473,7 +473,7 @@ describe('Scheduler.executeTask — 并发防护', () => {
     expect(dueTasks[0].id).toBe('conc-due-2')
   })
 
-  test('失败时也清除 running_since', async () => {
+  test('running_since is also cleared on failure', async () => {
     createTask({
       id: 'conc-fail',
       agentId: 'agent-1',
@@ -494,12 +494,12 @@ describe('Scheduler.executeTask — 并发防护', () => {
   })
 })
 
-// ===== 卡住检测 =====
+// ===== stuck task detection =====
 
-describe('Scheduler — 卡住检测', () => {
+describe('Scheduler — stuck task detection', () => {
   beforeEach(() => cleanTables('messages', 'chats', 'scheduled_tasks', 'task_run_logs'))
 
-  test('getStuckTasks 查询早于阈值的 running 任务', () => {
+  test('getStuckTasks returns running tasks older than the threshold', () => {
     createTask({
       id: 'stuck-1',
       agentId: 'agent-1',
@@ -510,29 +510,29 @@ describe('Scheduler — 卡住检测', () => {
       nextRun: new Date(Date.now() + 60000).toISOString(),
     })
 
-    // 标记为 10 分钟前开始运行
+    // Mark as started running 10 minutes ago
     const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
     updateTask('stuck-1', { runningSince: tenMinAgo })
 
-    // 用 5 分钟前作为 cutoff
+    // Use 5 minutes ago as cutoff
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
     const stuck = getStuckTasks(fiveMinAgo)
     expect(stuck.length).toBe(1)
     expect(stuck[0].id).toBe('stuck-1')
 
-    // 刚开始运行的不应该被检测到
+    // Recently started tasks should not be detected
     updateTask('stuck-1', { runningSince: new Date().toISOString() })
     const notStuck = getStuckTasks(fiveMinAgo)
     expect(notStuck.length).toBe(0)
   })
 })
 
-// ===== 连续失败 + 自动暂停 =====
+// ===== consecutive failures + auto-pause =====
 
-describe('Scheduler.executeTask — 连续失败与自动暂停', () => {
+describe('Scheduler.executeTask — consecutive failures and auto-pause', () => {
   beforeEach(() => cleanTables('messages', 'chats', 'scheduled_tasks', 'task_run_logs'))
 
-  test('失败递增 consecutive_failures', async () => {
+  test('failure increments consecutive_failures', async () => {
     createTask({
       id: 'fail-count',
       agentId: 'agent-1',
@@ -553,7 +553,7 @@ describe('Scheduler.executeTask — 连续失败与自动暂停', () => {
     expect(getTask('fail-count')!.consecutive_failures).toBe(2)
   })
 
-  test('成功执行重置 consecutive_failures', async () => {
+  test('successful execution resets consecutive_failures', async () => {
     createTask({
       id: 'fail-reset',
       agentId: 'agent-1',
@@ -564,7 +564,7 @@ describe('Scheduler.executeTask — 连续失败与自动暂停', () => {
       nextRun: new Date(Date.now() - 1000).toISOString(),
     })
 
-    // 先失败 3 次
+    // Fail 3 times first
     const failQueue = { enqueue: mock(() => Promise.reject(new Error('err'))) } as any
     const scheduler1 = new Scheduler(failQueue, {} as any, {} as any)
     await scheduler1.executeTask(getTask('fail-reset')!)
@@ -572,14 +572,14 @@ describe('Scheduler.executeTask — 连续失败与自动暂停', () => {
     await scheduler1.executeTask(getTask('fail-reset')!)
     expect(getTask('fail-reset')!.consecutive_failures).toBe(3)
 
-    // 成功一次
+    // Succeed once
     const successQueue = { enqueue: mock(() => Promise.resolve('ok')) } as any
     const scheduler2 = new Scheduler(successQueue, {} as any, mockEventBus)
     await scheduler2.executeTask(getTask('fail-reset')!)
     expect(getTask('fail-reset')!.consecutive_failures).toBe(0)
   })
 
-  test('连续失败 5 次后自动暂停', async () => {
+  test('auto-pauses after 5 consecutive failures', async () => {
     createTask({
       id: 'auto-pause',
       agentId: 'agent-1',
@@ -603,7 +603,7 @@ describe('Scheduler.executeTask — 连续失败与自动暂停', () => {
     expect(task.last_result).toContain('ERROR:')
   })
 
-  test('失败后 last_result 包含错误信息', async () => {
+  test('last_result contains error message after failure', async () => {
     createTask({
       id: 'last-result-err',
       agentId: 'agent-1',
@@ -614,16 +614,16 @@ describe('Scheduler.executeTask — 连续失败与自动暂停', () => {
       nextRun: new Date(Date.now() - 1000).toISOString(),
     })
 
-    const mockQueue = { enqueue: mock(() => Promise.reject(new Error('具体错误信息'))) } as any
+    const mockQueue = { enqueue: mock(() => Promise.reject(new Error('specific error message'))) } as any
     const scheduler = new Scheduler(mockQueue, {} as any, mockEventBus)
 
     await scheduler.executeTask(getTask('last-result-err')!)
 
     const task = getTask('last-result-err')!
-    expect(task.last_result).toBe('ERROR: 具体错误信息')
+    expect(task.last_result).toBe('ERROR: specific error message')
   })
 
-  test('成功后 last_result 保存结果（截断至 500 字符）', async () => {
+  test('last_result saves result on success (truncated to 500 chars)', async () => {
     createTask({
       id: 'last-result-ok',
       agentId: 'agent-1',
@@ -645,12 +645,12 @@ describe('Scheduler.executeTask — 连续失败与自动暂停', () => {
   })
 })
 
-// ===== 状态更新 =====
+// ===== status updates =====
 
-describe('Scheduler.executeTask — 状态更新', () => {
+describe('Scheduler.executeTask — status updates', () => {
   beforeEach(() => cleanTables('messages', 'chats', 'scheduled_tasks', 'task_run_logs'))
 
-  test('interval 任务成功后更新 lastRun 和 nextRun', async () => {
+  test('interval task updates lastRun and nextRun on success', async () => {
     createTask({
       id: 'exec-intv',
       agentId: 'agent-1',
@@ -670,11 +670,11 @@ describe('Scheduler.executeTask — 状态更新', () => {
     expect(updated.status).toBe('active')
     expect(updated.last_run).not.toBeNull()
     expect(updated.next_run).not.toBeNull()
-    // nextRun 应在 lastRun 之后
+    // nextRun should be after lastRun
     expect(new Date(updated.next_run!).getTime()).toBeGreaterThan(new Date(updated.last_run!).getTime())
   })
 
-  test('once 任务成功后变为 completed', async () => {
+  test('once task becomes completed on success', async () => {
     createTask({
       id: 'exec-once',
       agentId: 'agent-1',
@@ -696,7 +696,7 @@ describe('Scheduler.executeTask — 状态更新', () => {
     expect(updated.last_run).not.toBeNull()
   })
 
-  test('once 任务失败后退避重试（不直接 completed）', async () => {
+  test('once task retries with backoff on failure (not immediately completed)', async () => {
     createTask({
       id: 'exec-once-fail',
       agentId: 'agent-1',
@@ -713,15 +713,15 @@ describe('Scheduler.executeTask — 状态更新', () => {
     await scheduler.executeTask(getTask('exec-once-fail')!)
 
     const updated = getTask('exec-once-fail')!
-    // 失败后应保持 active 并设置退避后的 nextRun，而非直接 completed
+    // Should remain active with a backoff nextRun, not immediately completed
     expect(updated.status).toBe('active')
     expect(updated.next_run).not.toBeNull()
     expect(updated.consecutive_failures).toBe(1)
-    // nextRun 应至少在 now + 30s（第一次退避）
+    // nextRun should be at least now + 30s (first backoff)
     expect(new Date(updated.next_run!).getTime()).toBeGreaterThanOrEqual(Date.now() + 29_000)
   })
 
-  test('interval 任务失败后仍更新 nextRun（避免重复触发）', async () => {
+  test('interval task still updates nextRun on failure (prevents repeated triggers)', async () => {
     createTask({
       id: 'exec-intv-fail',
       agentId: 'agent-1',
@@ -745,33 +745,33 @@ describe('Scheduler.executeTask — 状态更新', () => {
 })
 
 describe('Scheduler.start / stop', () => {
-  test('stop 后 intervalId 为 null', () => {
+  test('stop does not throw when not started', () => {
     const scheduler = new Scheduler({} as any, {} as any, mockEventBus)
-    // 不 start 直接 stop 不报错
+    // stop without start does not throw
     expect(() => scheduler.stop()).not.toThrow()
   })
 
-  test('重复 start 不创建多个 interval', () => {
+  test('repeated start does not create multiple intervals', () => {
     const mockQueue = { enqueue: mock(() => Promise.resolve('')) } as any
     const scheduler = new Scheduler(mockQueue, {} as any, mockEventBus)
 
     scheduler.start()
-    scheduler.start() // 第二次应该直接 return
+    scheduler.start() // second call should return immediately
 
     scheduler.stop()
   })
 })
 
-// ===== calculateNextRun — cron 复杂表达式 =====
+// ===== calculateNextRun — complex cron expressions =====
 
-describe('Scheduler.calculateNextRun — cron 复杂表达式', () => {
+describe('Scheduler.calculateNextRun — complex cron expressions', () => {
   let scheduler: Scheduler
 
   beforeAll(() => {
     scheduler = new Scheduler({} as any, {} as any, mockEventBus)
   })
 
-  test('*/5 * * * * — 下次运行在 5 分钟以内', () => {
+  test('*/5 * * * * — next run is within 5 minutes', () => {
     const result = scheduler.calculateNextRun({
       schedule_type: 'cron',
       schedule_value: '*/5 * * * *',
@@ -784,7 +784,7 @@ describe('Scheduler.calculateNextRun — cron 复杂表达式', () => {
     expect(nextTime).toBeLessThanOrEqual(now + 5 * 60 * 1000 + 1000)
   })
 
-  test('0 0 1 * * — 下次运行在下个月 1 号', () => {
+  test('0 0 1 * * — next run is on the 1st of the next month', () => {
     const result = scheduler.calculateNextRun({
       schedule_type: 'cron',
       schedule_value: '0 0 1 * *',
@@ -797,7 +797,7 @@ describe('Scheduler.calculateNextRun — cron 复杂表达式', () => {
     expect(nextDate.getUTCMinutes()).toBe(0)
   })
 
-  test('0 12 * * 1-5 — 下次运行在工作日', () => {
+  test('0 12 * * 1-5 — next run is on a weekday', () => {
     const result = scheduler.calculateNextRun({
       schedule_type: 'cron',
       schedule_value: '0 12 * * 1-5',
@@ -806,7 +806,7 @@ describe('Scheduler.calculateNextRun — cron 复杂表达式', () => {
     expect(result).not.toBeNull()
     const nextDate = new Date(result!)
     const dayOfWeek = nextDate.getUTCDay()
-    // 1=Monday ... 5=Friday，排除 0=Sunday 和 6=Saturday
+    // 1=Monday ... 5=Friday, excluding 0=Sunday and 6=Saturday
     expect(dayOfWeek).toBeGreaterThanOrEqual(1)
     expect(dayOfWeek).toBeLessThanOrEqual(5)
     expect(nextDate.getUTCHours()).toBe(12)
@@ -814,16 +814,16 @@ describe('Scheduler.calculateNextRun — cron 复杂表达式', () => {
   })
 })
 
-// ===== calculateNextRun — interval 边界值 =====
+// ===== calculateNextRun — interval edge cases =====
 
-describe('Scheduler.calculateNextRun — interval 边界值', () => {
+describe('Scheduler.calculateNextRun — interval edge cases', () => {
   let scheduler: Scheduler
 
   beforeAll(() => {
     scheduler = new Scheduler({} as any, {} as any, mockEventBus)
   })
 
-  test('interval = 1000（1 秒）— 下次运行约 1 秒后', () => {
+  test('interval = 1000 (1 second) — next run is about 1 second later', () => {
     const before = Date.now()
     const result = scheduler.calculateNextRun({
       schedule_type: 'interval',
@@ -836,7 +836,7 @@ describe('Scheduler.calculateNextRun — interval 边界值', () => {
     expect(nextTime).toBeLessThanOrEqual(Date.now() + 1000 + 100)
   })
 
-  test('interval = 86400000（24 小时）— 下次运行约 24 小时后', () => {
+  test('interval = 86400000 (24 hours) — next run is about 24 hours later', () => {
     const before = Date.now()
     const result = scheduler.calculateNextRun({
       schedule_type: 'interval',
@@ -849,7 +849,7 @@ describe('Scheduler.calculateNextRun — interval 边界值', () => {
     expect(nextTime).toBeLessThanOrEqual(Date.now() + 86400000 + 100)
   })
 
-  test('interval = 0 — 返回 null（不崩溃）', () => {
+  test('interval = 0 — returns null (no crash)', () => {
     const result = scheduler.calculateNextRun({
       schedule_type: 'interval',
       schedule_value: '0',
@@ -859,16 +859,16 @@ describe('Scheduler.calculateNextRun — interval 边界值', () => {
   })
 })
 
-// ===== calculateNextRun — once 过去/未来时间 =====
+// ===== calculateNextRun — once past/future time =====
 
-describe('Scheduler.calculateNextRun — once 时间处理', () => {
+describe('Scheduler.calculateNextRun — once time handling', () => {
   let scheduler: Scheduler
 
   beforeAll(() => {
     scheduler = new Scheduler({} as any, {} as any, mockEventBus)
   })
 
-  test('once — 无失败时过去时间返回 null', () => {
+  test('once — past time returns null when no failures', () => {
     const pastDate = new Date(Date.now() - 3600000).toISOString()
     const result = scheduler.calculateNextRun({
       schedule_type: 'once',
@@ -878,29 +878,29 @@ describe('Scheduler.calculateNextRun — once 时间处理', () => {
     expect(result).toBeNull()
   })
 
-  test('once — 无失败时未来时间也返回 null', () => {
+  test('once — future time also returns null when no failures', () => {
     const futureDate = new Date(Date.now() + 3600000).toISOString()
     const result = scheduler.calculateNextRun({
       schedule_type: 'once',
       schedule_value: futureDate,
       last_run: null,
     })
-    // once 类型无失败时始终返回 null（由 createTask 时设置 nextRun，executeTask 后标记 completed）
+    // once type always returns null when no failures (nextRun is set by createTask, executeTask marks completed)
     expect(result).toBeNull()
   })
 })
 
-// ===== executeTask — enqueue 参数验证 =====
+// ===== executeTask — enqueue parameter validation =====
 
-describe('Scheduler.executeTask — enqueue 参数验证', () => {
+describe('Scheduler.executeTask — enqueue parameter validation', () => {
   beforeEach(() => cleanTables('messages', 'chats', 'scheduled_tasks', 'task_run_logs'))
 
-  test('enqueue 被调用时传入正确的 agentId、chatId、prompt', async () => {
+  test('enqueue is called with correct agentId, chatId, and prompt', async () => {
     createTask({
       id: 'enqueue-args',
       agentId: 'agent-verify',
       chatId: 'task:enqueue-args',
-      prompt: '验证参数',
+      prompt: 'verify params',
       scheduleType: 'interval',
       scheduleValue: '60000',
       nextRun: new Date(Date.now() - 1000).toISOString(),
@@ -915,27 +915,27 @@ describe('Scheduler.executeTask — enqueue 参数验证', () => {
     expect(enqueueMock).toHaveBeenCalledTimes(1)
     expect(enqueueMock.mock.calls[0][0]).toBe('agent-verify')
     expect(enqueueMock.mock.calls[0][1]).toBe('task:enqueue-args')
-    expect(enqueueMock.mock.calls[0][2]).toBe('验证参数')
+    expect(enqueueMock.mock.calls[0][2]).toBe('verify params')
   })
 })
 
-// ===== executeTask — 保存消息到 messages 表 =====
+// ===== executeTask — saving messages to messages table =====
 
-describe('Scheduler.executeTask — 保存消息到 messages 表', () => {
+describe('Scheduler.executeTask — saving messages to messages table', () => {
   beforeEach(() => cleanTables('messages', 'chats', 'scheduled_tasks', 'task_run_logs'))
 
-  test('成功执行后消息写入正确的 task:xxx chatId', async () => {
+  test('messages are written to correct task:xxx chatId after successful execution', async () => {
     createTask({
       id: 'msg-save',
       agentId: 'agent-msg',
       chatId: 'task:msg-save',
-      prompt: '消息保存测试',
+      prompt: 'message save test',
       scheduleType: 'interval',
       scheduleValue: '60000',
       nextRun: new Date(Date.now() - 1000).toISOString(),
     })
 
-    const mockQueue = { enqueue: mock(() => Promise.resolve('保存结果')) } as any
+    const mockQueue = { enqueue: mock(() => Promise.resolve('saved result')) } as any
     const scheduler = new Scheduler(mockQueue, {} as any, mockEventBus)
 
     await scheduler.executeTask(getTask('msg-save')!)
@@ -943,33 +943,33 @@ describe('Scheduler.executeTask — 保存消息到 messages 表', () => {
     const messages = getMessages('task:msg-save', 10)
     expect(messages.length).toBe(2)
 
-    // 验证 user 消息（isFromMe=false → is_from_me=0）
+    // Verify user message (isFromMe=false -> is_from_me=0)
     const userMsg = messages.find((m) => m.is_bot_message === 0)!
     expect(userMsg).toBeDefined()
-    expect(userMsg.content).toBe('消息保存测试')
+    expect(userMsg.content).toBe('message save test')
     expect(userMsg.sender).toBe('scheduler')
     expect(userMsg.is_from_me).toBe(0)
 
-    // 验证 bot 消息（isFromMe=true → is_from_me=1）
+    // Verify bot message (isFromMe=true -> is_from_me=1)
     const botMsg = messages.find((m) => m.is_bot_message === 1)!
     expect(botMsg).toBeDefined()
-    expect(botMsg.content).toBe('保存结果')
+    expect(botMsg.content).toBe('saved result')
     expect(botMsg.sender).toBe('agent-msg')
     expect(botMsg.is_from_me).toBe(1)
   })
 })
 
-// ===== executeTask — 连续执行同一任务 =====
+// ===== executeTask — consecutive execution of same task =====
 
-describe('Scheduler.executeTask — 连续执行同一任务', () => {
+describe('Scheduler.executeTask — consecutive execution of same task', () => {
   beforeEach(() => cleanTables('messages', 'chats', 'scheduled_tasks', 'task_run_logs'))
 
-  test('连续执行两次，生成两条 run log', async () => {
+  test('two consecutive executions generate two run logs', async () => {
     createTask({
       id: 'exec-twice',
       agentId: 'agent-twice',
       chatId: 'task:exec-twice',
-      prompt: '重复执行',
+      prompt: 'repeated execution',
       scheduleType: 'interval',
       scheduleValue: '60000',
       nextRun: new Date(Date.now() - 1000).toISOString(),
@@ -988,19 +988,19 @@ describe('Scheduler.executeTask — 连续执行同一任务', () => {
   })
 })
 
-// ===== tick — 多个到期任务 =====
+// ===== tick — multiple due tasks =====
 
-describe('Scheduler.tick — 多个到期任务', () => {
+describe('Scheduler.tick — multiple due tasks', () => {
   beforeEach(() => cleanTables('messages', 'chats', 'scheduled_tasks', 'task_run_logs'))
 
-  test('3 个到期任务全部被执行', async () => {
+  test('all 3 due tasks are executed', async () => {
     const pastTime = new Date(Date.now() - 5000).toISOString()
     for (let i = 1; i <= 3; i++) {
       createTask({
         id: `tick-multi-${i}`,
         agentId: `agent-${i}`,
         chatId: `task:tick-multi-${i}`,
-        prompt: `任务 ${i}`,
+        prompt: `task ${i}`,
         scheduleType: 'interval',
         scheduleValue: '60000',
         nextRun: pastTime,
@@ -1011,30 +1011,30 @@ describe('Scheduler.tick — 多个到期任务', () => {
     const mockQueue = { enqueue: enqueueMock } as any
     const scheduler = new Scheduler(mockQueue, {} as any, mockEventBus)
 
-    // @ts-ignore — 测试私有方法
+    // @ts-ignore — testing private method
     await scheduler.tick()
 
-    // tick 内部不 await 每个 executeTask，等待一小段时间让异步完成
+    // tick does not await each executeTask internally, wait briefly for async completion
     await new Promise((resolve) => setTimeout(resolve, 200))
 
     expect(enqueueMock).toHaveBeenCalledTimes(3)
   })
 })
 
-// ===== tick — 混合状态任务 =====
+// ===== tick — mixed status tasks =====
 
-describe('Scheduler.tick — 混合状态任务', () => {
+describe('Scheduler.tick — mixed status tasks', () => {
   beforeEach(() => cleanTables('messages', 'chats', 'scheduled_tasks', 'task_run_logs'))
 
-  test('仅执行 active 状态的到期任务，跳过 paused 和 completed', async () => {
+  test('only executes active due tasks, skips paused and completed', async () => {
     const pastTime = new Date(Date.now() - 5000).toISOString()
 
-    // 创建 2 个 active 任务
+    // Create 2 active tasks
     createTask({
       id: 'tick-active-1',
       agentId: 'agent-a',
       chatId: 'task:tick-active-1',
-      prompt: '活跃任务 1',
+      prompt: 'active task 1',
       scheduleType: 'interval',
       scheduleValue: '60000',
       nextRun: pastTime,
@@ -1043,30 +1043,30 @@ describe('Scheduler.tick — 混合状态任务', () => {
       id: 'tick-active-2',
       agentId: 'agent-a',
       chatId: 'task:tick-active-2',
-      prompt: '活跃任务 2',
+      prompt: 'active task 2',
       scheduleType: 'interval',
       scheduleValue: '60000',
       nextRun: pastTime,
     })
 
-    // 创建 paused 任务（先创建为 active，然后更新状态）
+    // Create paused task (created as active first, then update status)
     createTask({
       id: 'tick-paused',
       agentId: 'agent-a',
       chatId: 'task:tick-paused',
-      prompt: '暂停任务',
+      prompt: 'paused task',
       scheduleType: 'interval',
       scheduleValue: '60000',
       nextRun: pastTime,
     })
     updateTask('tick-paused', { status: 'paused' })
 
-    // 创建 completed 任务
+    // Create completed task
     createTask({
       id: 'tick-completed',
       agentId: 'agent-a',
       chatId: 'task:tick-completed',
-      prompt: '已完成任务',
+      prompt: 'completed task',
       scheduleType: 'interval',
       scheduleValue: '60000',
       nextRun: pastTime,
@@ -1077,24 +1077,24 @@ describe('Scheduler.tick — 混合状态任务', () => {
     const mockQueue = { enqueue: enqueueMock } as any
     const scheduler = new Scheduler(mockQueue, {} as any, mockEventBus)
 
-    // @ts-ignore — 测试私有方法
+    // @ts-ignore — testing private method
     await scheduler.tick()
 
-    // 等待异步 executeTask 完成
+    // Wait for async executeTask to complete
     await new Promise((resolve) => setTimeout(resolve, 200))
 
-    // 只有 2 个 active 任务被执行
+    // Only 2 active tasks should be executed
     expect(enqueueMock).toHaveBeenCalledTimes(2)
   })
 })
 
-// ===== 日志裁剪 =====
+// ===== log pruning =====
 
 describe('pruneOldTaskRunLogs', () => {
   beforeEach(() => cleanTables('task_run_logs'))
 
-  test('删除超期日志，保留近期日志', () => {
-    // 创建 40 天前的日志
+  test('deletes expired logs, keeps recent logs', () => {
+    // Create log from 40 days ago
     saveTaskRunLog({
       taskId: 'prune-1',
       runAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString(),
@@ -1102,7 +1102,7 @@ describe('pruneOldTaskRunLogs', () => {
       status: 'success',
     })
 
-    // 创建今天的日志
+    // Create today's log
     saveTaskRunLog({
       taskId: 'prune-1',
       runAt: new Date().toISOString(),
@@ -1123,41 +1123,41 @@ describe('pruneOldTaskRunLogs', () => {
 describe('Scheduler.runManually', () => {
   beforeEach(() => cleanTables('messages', 'chats', 'scheduled_tasks', 'task_run_logs'))
 
-  test('手动执行成功返回结果并记录 task_run_logs', async () => {
+  test('manual execution success returns result and records task_run_logs', async () => {
     createTask({
       id: 'manual-1',
       agentId: 'agent-1',
       chatId: 'task:manual-1',
-      prompt: '手动执行',
+      prompt: 'manual execution',
       scheduleType: 'interval',
       scheduleValue: '60000',
       nextRun: new Date(Date.now() + 60000).toISOString(),
     })
 
-    const mockQueue = { enqueue: mock(() => Promise.resolve('手动结果')) } as any
+    const mockQueue = { enqueue: mock(() => Promise.resolve('manual result')) } as any
     const scheduler = new Scheduler(mockQueue, {} as any, mockEventBus)
 
     const result = await scheduler.runManually(getTask('manual-1')!)
     expect(result.status).toBe('success')
-    expect(result.result).toBe('手动结果')
+    expect(result.result).toBe('manual result')
 
-    // 应该保存了消息
+    // Messages should be saved
     const messages = getMessages('task:manual-1', 10)
     expect(messages.length).toBe(2)
 
-    // 应该记录了运行日志
+    // Run log should be recorded
     const logs = getTaskRunLogs('manual-1')
     expect(logs.length).toBe(1)
     expect(logs[0].status).toBe('success')
     expect(logs[0].result).toContain('[manual]')
   })
 
-  test('手动执行失败也记录 task_run_logs', async () => {
+  test('manual execution failure also records task_run_logs', async () => {
     createTask({
       id: 'manual-2',
       agentId: 'agent-1',
       chatId: 'task:manual-2',
-      prompt: '手动执行',
+      prompt: 'manual execution',
       scheduleType: 'interval',
       scheduleValue: '60000',
       nextRun: new Date(Date.now() + 60000).toISOString(),
@@ -1170,12 +1170,12 @@ describe('Scheduler.runManually', () => {
     expect(result.status).toBe('error')
     expect(result.error).toBe('err')
 
-    // consecutive_failures 不变
+    // consecutive_failures remains unchanged
     const task = getTask('manual-2')!
     expect(task.consecutive_failures).toBe(0)
     expect(task.running_since).toBeNull()
 
-    // 应该记录了失败日志
+    // Failure log should be recorded
     const logs = getTaskRunLogs('manual-2')
     expect(logs.length).toBe(1)
     expect(logs[0].status).toBe('error')
@@ -1183,29 +1183,29 @@ describe('Scheduler.runManually', () => {
   })
 })
 
-// ===== Delivery 投递 =====
+// ===== Delivery =====
 
-describe('Scheduler.executeTask — Delivery 投递', () => {
+describe('Scheduler.executeTask — Delivery', () => {
   beforeEach(() => {
     cleanTables('messages', 'chats', 'scheduled_tasks', 'task_run_logs')
     mockEventBus.emit.mockClear()
   })
 
-  test('delivery_mode=push 时通过 EventBus 投递到 delivery_target', async () => {
+  test('delivery_mode=push delivers to delivery_target via EventBus', async () => {
     createTask({
       id: 'dlv-1',
       agentId: 'agent-dlv',
       chatId: 'task:dlv-1',
-      prompt: '投递测试',
+      prompt: 'delivery test',
       scheduleType: 'interval',
       scheduleValue: '60000',
       nextRun: new Date(Date.now() - 1000).toISOString(),
-      name: '日报',
+      name: 'Daily Report',
       deliveryMode: 'push',
       deliveryTarget: 'tg:123456',
     })
 
-    const mockQueue = { enqueue: mock(() => Promise.resolve('投递结果')) } as any
+    const mockQueue = { enqueue: mock(() => Promise.resolve('delivery result')) } as any
     const scheduler = new Scheduler(mockQueue, {} as any, mockEventBus)
 
     await scheduler.executeTask(getTask('dlv-1')!)
@@ -1215,15 +1215,15 @@ describe('Scheduler.executeTask — Delivery 投递', () => {
     expect(emittedEvent.type).toBe('complete')
     expect(emittedEvent.agentId).toBe('agent-dlv')
     expect(emittedEvent.chatId).toBe('tg:123456')
-    expect(emittedEvent.fullText).toContain('[Task: 日报]')
-    expect(emittedEvent.fullText).toContain('投递结果')
+    expect(emittedEvent.fullText).toContain('[Task: Daily Report]')
+    expect(emittedEvent.fullText).toContain('delivery result')
 
-    // run log 记录 delivery_status
+    // run log records delivery_status
     const logs = getTaskRunLogs('dlv-1')
     expect(logs[0].delivery_status).toBe('sent')
   })
 
-  test('delivery_mode=none 时不调用 EventBus', async () => {
+  test('delivery_mode=none does not call EventBus', async () => {
     createTask({
       id: 'dlv-2',
       agentId: 'agent-dlv',
@@ -1245,7 +1245,7 @@ describe('Scheduler.executeTask — Delivery 投递', () => {
     expect(logs[0].delivery_status).toBe('skipped')
   })
 
-  test('执行失败时 delivery_status=skipped', async () => {
+  test('delivery_status=skipped on execution failure', async () => {
     createTask({
       id: 'dlv-3',
       agentId: 'agent-dlv',
@@ -1263,13 +1263,13 @@ describe('Scheduler.executeTask — Delivery 投递', () => {
 
     await scheduler.executeTask(getTask('dlv-3')!)
 
-    // 失败时不投递
+    // No delivery on failure
     expect(mockEventBus.emit).not.toHaveBeenCalled()
     const logs = getTaskRunLogs('dlv-3')
     expect(logs[0].delivery_status).toBe('skipped')
   })
 
-  test('delivery emit 异常时 delivery_status=failed 但任务不失败', async () => {
+  test('delivery emit exception results in delivery_status=failed but task does not fail', async () => {
     createTask({
       id: 'dlv-4',
       agentId: 'agent-dlv',
@@ -1282,14 +1282,14 @@ describe('Scheduler.executeTask — Delivery 投递', () => {
       deliveryTarget: 'tg:999',
     })
 
-    // emit 抛异常
+    // emit throws exception
     const failEventBus = { emit: mock(() => { throw new Error('channel down') }) } as any
     const mockQueue = { enqueue: mock(() => Promise.resolve('ok')) } as any
     const scheduler = new Scheduler(mockQueue, {} as any, failEventBus)
 
     await scheduler.executeTask(getTask('dlv-4')!)
 
-    // 任务本身应该成功（best-effort 投递）
+    // Task itself should succeed (best-effort delivery)
     const task = getTask('dlv-4')!
     expect(task.consecutive_failures).toBe(0)
 
@@ -1299,12 +1299,12 @@ describe('Scheduler.executeTask — Delivery 投递', () => {
   })
 })
 
-// ===== tick 竞态条件防护 =====
+// ===== tick race condition guard =====
 
-describe('Scheduler.tick — 竞态条件防护', () => {
+describe('Scheduler.tick — race condition guard', () => {
   beforeEach(() => cleanTables('messages', 'chats', 'scheduled_tasks', 'task_run_logs'))
 
-  test('tick 在 executeTask 之前同步设置 running_since', async () => {
+  test('tick synchronously sets running_since before executeTask', async () => {
     const pastTime = new Date(Date.now() - 5000).toISOString()
     createTask({
       id: 'race-1',
@@ -1316,20 +1316,20 @@ describe('Scheduler.tick — 竞态条件防护', () => {
       nextRun: pastTime,
     })
 
-    // enqueue 延迟返回，模拟慢执行
+    // enqueue returns with delay, simulating slow execution
     let resolveEnqueue: (v: string) => void
     const enqueuePromise = new Promise<string>((r) => { resolveEnqueue = r })
     const mockQueue = { enqueue: mock(() => enqueuePromise) } as any
     const scheduler = new Scheduler(mockQueue, {} as any, mockEventBus)
 
-    // @ts-ignore — 测试私有方法
+    // @ts-ignore — testing private method
     await scheduler.tick()
 
-    // tick 返回后（executeTask 还在等 enqueue），running_since 应已设置
+    // After tick returns (executeTask still awaiting enqueue), running_since should be set
     const during = getTask('race-1')!
     expect(during.running_since).not.toBeNull()
 
-    // 再次查询到期任务，应该查不到（已被锁定）
+    // Querying due tasks again should not find it (already locked)
     const dueTasks = getTasksDueBy(new Date().toISOString())
     expect(dueTasks.find((t) => t.id === 'race-1')).toBeUndefined()
 

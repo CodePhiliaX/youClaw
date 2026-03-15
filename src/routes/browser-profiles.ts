@@ -15,13 +15,13 @@ import { getLogger } from '../logger/index.ts'
 export function createBrowserProfilesRoutes() {
   const app = new Hono()
 
-  // 列出所有 Profile
+  // List all profiles
   app.get('/browser-profiles', (c) => {
     const profiles = getBrowserProfiles()
     return c.json(profiles)
   })
 
-  // 创建 Profile
+  // Create a profile
   app.post('/browser-profiles', async (c) => {
     const body = await c.req.json<{ name: string }>()
     if (!body.name) {
@@ -29,13 +29,13 @@ export function createBrowserProfilesRoutes() {
     }
     const id = crypto.randomUUID().slice(0, 8)
     createBrowserProfile({ id, name: body.name })
-    // 创建 userDataDir
+    // Create userDataDir
     const profileDir = resolve(getPaths().browserProfiles, id)
     mkdirSync(profileDir, { recursive: true })
     return c.json(getBrowserProfile(id), 201)
   })
 
-  // 删除 Profile
+  // Delete a profile
   app.delete('/browser-profiles/:id', (c) => {
     const id = c.req.param('id')
     const profile = getBrowserProfile(id)
@@ -43,7 +43,7 @@ export function createBrowserProfilesRoutes() {
       return c.json({ error: 'not found' }, 404)
     }
     deleteBrowserProfile(id)
-    // 删除 userDataDir
+    // Delete userDataDir
     const profileDir = resolve(getPaths().browserProfiles, id)
     try {
       rmSync(profileDir, { recursive: true, force: true })
@@ -51,7 +51,7 @@ export function createBrowserProfilesRoutes() {
     return c.json({ ok: true })
   })
 
-  // 启动 headed 浏览器
+  // Launch headed browser
   app.post('/browser-profiles/:id/launch', async (c) => {
     const log = getLogger()
     const id = c.req.param('id')
@@ -62,11 +62,11 @@ export function createBrowserProfilesRoutes() {
     const profileDir = resolve(getPaths().browserProfiles, id)
     mkdirSync(profileDir, { recursive: true })
 
-    // 先关闭该 profile 对应的 session（幂等操作），确保新参数生效
+    // Close existing session for this profile (idempotent) to ensure new params take effect
     log.info({ profileId: id }, 'closing existing session before launch')
     await launchAndVerify(['--session', id, 'close'], 10_000).catch(() => {})
 
-    // 启动 headed 浏览器，使用独立 session 避免 daemon 参数被忽略
+    // Launch headed browser with isolated session to avoid daemon params being ignored
     log.info({ profileId: id, profileDir }, 'launching headed browser')
     const result = await launchAndVerify(
       ['--session', id, '--profile', profileDir, '--headed', 'open', 'about:blank'],
@@ -85,7 +85,7 @@ export function createBrowserProfilesRoutes() {
   return app
 }
 
-/** 封装 spawn agent-browser + 等待退出的逻辑 */
+/** Spawn agent-browser and wait for exit */
 function launchAndVerify(
   args: string[],
   timeoutMs: number,

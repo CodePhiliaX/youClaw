@@ -3,20 +3,20 @@ import { getLogger } from '../logger/index.ts'
 import type { HooksConfig } from './schema.ts'
 
 /**
- * Hook 生命周期阶段
+ * Hook lifecycle phases
  */
 export type HookPhase =
-  | 'pre_process'       // 消息进入 agent 前（可修改 prompt、可拒绝）
-  | 'post_process'      // agent 回复后（可修改回复文本）
-  | 'pre_tool_use'      // agent 调用工具前（可拦截、可修改参数）
-  | 'post_tool_use'     // 工具执行后（可修改结果）
-  | 'pre_compact'       // session compact 前（可归档完整对话）
-  | 'on_error'          // 错误发生时
-  | 'on_session_start'  // 新 session 创建时
-  | 'on_session_end'    // session 结束时
+  | 'pre_process'       // Before message enters agent (can modify prompt, can reject)
+  | 'post_process'      // After agent reply (can modify response text)
+  | 'pre_tool_use'      // Before agent calls a tool (can intercept, can modify params)
+  | 'post_tool_use'     // After tool execution (can modify result)
+  | 'pre_compact'       // Before session compact (can archive full conversation)
+  | 'on_error'          // When an error occurs
+  | 'on_session_start'  // When a new session is created
+  | 'on_session_end'    // When a session ends
 
 /**
- * Hook 上下文：传递给 hook 脚本的数据
+ * Hook context: data passed to hook scripts
  */
 export interface HookContext {
   agentId: string
@@ -29,38 +29,38 @@ export interface HookContext {
 }
 
 /**
- * Hook 处理函数签名
+ * Hook handler function signature
  */
 export type HookHandler = (ctx: HookContext) => Promise<HookContext>
 
 /**
- * 内部 hook 条目（含加载后的函数引用）
+ * Internal hook entry (includes loaded function reference)
  */
 interface LoadedHook {
   handler: HookHandler
   priority: number
-  tools?: string[]     // pre_tool_use 专用：只对指定工具生效
-  source: string       // 脚本路径或 'builtin'
+  tools?: string[]     // pre_tool_use only: applies to specified tools only
+  source: string       // Script path or 'builtin'
 }
 
 const HOOK_TIMEOUT_MS = 5000
 
 /**
- * HooksManager：管理 Agent 生命周期 hooks
+ * HooksManager: manages Agent lifecycle hooks
  *
- * 支持：
- * - 从 agent.yaml 的 hooks 配置加载 .ts 脚本
- * - 内置 hook 注册（如安全策略）
- * - 按 priority 排序执行
- * - 5 秒超时保护
- * - 错误隔离（hook 报错不影响主流程）
+ * Features:
+ * - Load .ts scripts from agent.yaml hooks config
+ * - Built-in hook registration (e.g. security policies)
+ * - Execute in priority order (ascending)
+ * - 5-second timeout protection
+ * - Error isolation (hook errors do not affect main flow)
  */
 export class HooksManager {
-  // agentId → phase → LoadedHook[]
+  // agentId -> phase -> LoadedHook[]
   private hooks: Map<string, Map<HookPhase, LoadedHook[]>> = new Map()
 
   /**
-   * 加载 agent 的 hooks 配置，动态 import() 脚本
+   * Load agent hooks config, dynamically import() scripts
    */
   async loadHooks(agentId: string, workspaceDir: string, hooksConfig: HooksConfig): Promise<void> {
     const logger = getLogger()
@@ -81,7 +81,7 @@ export class HooksManager {
           const handler: HookHandler = module.default ?? module
 
           if (typeof handler !== 'function') {
-            logger.warn({ agentId, script: entry.script }, 'Hook 脚本没有导出函数，跳过')
+            logger.warn({ agentId, script: entry.script }, 'Hook script does not export a function, skipping')
             continue
           }
 
@@ -92,21 +92,21 @@ export class HooksManager {
             source: scriptPath,
           })
 
-          logger.info({ agentId, phase, script: entry.script }, 'Hook 已加载')
+          logger.info({ agentId, phase, script: entry.script }, 'Hook loaded')
         } catch (err) {
           logger.error({
             agentId,
             phase,
             script: entry.script,
             error: err instanceof Error ? err.message : String(err),
-          }, '加载 hook 脚本失败')
+          }, 'Failed to load hook script')
         }
       }
     }
   }
 
   /**
-   * 注册内置 hook（如安全策略）
+   * Register a built-in hook (e.g. security policy)
    */
   registerBuiltinHook(agentId: string, phase: HookPhase, handler: HookHandler, priority: number = 0): void {
     this.registerHook(agentId, phase, {
@@ -117,7 +117,7 @@ export class HooksManager {
   }
 
   /**
-   * 执行 hook 链（按 priority 升序，数值越小越先执行；支持提前 abort）
+   * Execute hook chain (ascending priority; lower value runs first; supports early abort)
    */
   async execute(agentId: string, phase: HookPhase, ctx: HookContext): Promise<HookContext> {
     const logger = getLogger()
@@ -130,7 +130,7 @@ export class HooksManager {
     let currentCtx = { ...ctx }
 
     for (const hook of phaseHooks) {
-      // pre_tool_use 的 tools 过滤
+      // Filter by tools for pre_tool_use phase
       if (phase === 'pre_tool_use' && hook.tools && hook.tools.length > 0) {
         const tool = currentCtx.payload.tool as string
         if (!hook.tools.includes(tool)) {
@@ -146,19 +146,19 @@ export class HooksManager {
           phase,
           source: hook.source,
           error: err instanceof Error ? err.message : String(err),
-        }, 'Hook 执行失败（已跳过）')
-        // hook 错误不影响主流程
+        }, 'Hook execution failed (skipped)')
+        // Hook errors do not affect main flow
         continue
       }
 
-      // 检查 abort 标志
+      // Check abort flag
       if (currentCtx.abort) {
         logger.info({
           agentId,
           phase,
           source: hook.source,
           reason: currentCtx.abortReason,
-        }, 'Hook 触发 abort')
+        }, 'Hook triggered abort')
         break
       }
     }
@@ -167,14 +167,14 @@ export class HooksManager {
   }
 
   /**
-   * 清理指定 agent 的 hooks（reload 时用）
+   * Clear hooks for a given agent (used during reload)
    */
   unloadHooks(agentId: string): void {
     this.hooks.delete(agentId)
   }
 
   /**
-   * 注册 hook 到内部存储
+   * Register a hook to internal storage
    */
   private registerHook(agentId: string, phase: HookPhase, hook: LoadedHook): void {
     if (!this.hooks.has(agentId)) {
@@ -189,17 +189,17 @@ export class HooksManager {
     const phaseHooks = agentHooks.get(phase)!
     phaseHooks.push(hook)
 
-    // 按 priority 升序排序（数值越小优先级越高，越先执行）
+    // Sort by priority ascending (lower value = higher priority, runs first)
     phaseHooks.sort((a, b) => a.priority - b.priority)
   }
 
   /**
-   * 带超时的 hook 执行
+   * Execute hook with timeout
    */
   private executeWithTimeout(handler: HookHandler, ctx: HookContext, timeoutMs: number): Promise<HookContext> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error(`Hook 执行超时 (${timeoutMs}ms)`))
+        reject(new Error(`Hook execution timed out (${timeoutMs}ms)`))
       }, timeoutMs)
 
       handler(ctx)
