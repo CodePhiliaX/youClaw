@@ -1,6 +1,6 @@
 import { z } from 'zod/v4'
 
-// ===== 各 Channel 类型的配置 Schema =====
+// ===== Config schema for each channel type =====
 
 export const TelegramConfigSchema = z.object({
   botToken: z.string().min(1),
@@ -29,7 +29,7 @@ export const DingTalkConfigSchema = z.object({
   appSecret: z.string().min(1),
 })
 
-// ===== 配置字段描述 =====
+// ===== Config field descriptors =====
 
 export interface ConfigFieldInfo {
   key: string
@@ -38,7 +38,7 @@ export interface ConfigFieldInfo {
   secret: boolean
 }
 
-// ===== Channel 类型元信息 =====
+// ===== Channel type metadata =====
 
 export interface ChannelTypeInfo {
   type: string
@@ -116,8 +116,8 @@ export const CHANNEL_TYPE_REGISTRY: Record<string, ChannelTypeInfo> = {
 }
 
 /**
- * 根据 chatId 前缀推断 channel 类型
- * 遍历注册表的 chatIdPrefix 匹配
+ * Infer channel type from chatId prefix
+ * Matches against registered chatIdPrefix entries
  */
 export function inferChannelType(chatId: string): string {
   for (const info of Object.values(CHANNEL_TYPE_REGISTRY)) {
@@ -129,12 +129,12 @@ export function inferChannelType(chatId: string): string {
 }
 
 /**
- * 根据 channel 类型校验 config 对象
+ * Validate config object by channel type
  */
 export function validateChannelConfig(type: string, config: unknown): { success: true; data: Record<string, unknown> } | { success: false; error: string } {
   const typeInfo = CHANNEL_TYPE_REGISTRY[type]
   if (!typeInfo) {
-    return { success: false, error: `未知的 channel 类型: ${type}` }
+    return { success: false, error: `Unknown channel type: ${type}` }
   }
 
   const result = typeInfo.configSchema.safeParse(config)
@@ -146,7 +146,7 @@ export function validateChannelConfig(type: string, config: unknown): { success:
 }
 
 /**
- * 隐藏 config 中的 secret 字段（GET 响应用）
+ * Mask secret fields in config (for GET responses)
  */
 export function maskSecretFields(type: string, config: Record<string, unknown>): { masked: Record<string, string>; configuredFields: string[] } {
   const typeInfo = CHANNEL_TYPE_REGISTRY[type]

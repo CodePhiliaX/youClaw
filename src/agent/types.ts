@@ -1,7 +1,7 @@
 import type { AgentRuntime } from './runtime.ts'
 import type { AgentConfig as SchemaAgentConfig } from './schema.ts'
 
-// 扩展 schema 配置，添加运行时字段
+// Extend schema config with runtime fields
 export interface AgentConfig extends SchemaAgentConfig {
   workspaceDir: string
 }
@@ -31,5 +31,5 @@ export interface AgentInstance {
   state: AgentState
 }
 
-// 向后兼容别名
+// Backward-compatible alias
 export type ManagedAgent = AgentInstance

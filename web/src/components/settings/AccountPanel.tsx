@@ -23,12 +23,12 @@ export function AccountPanel() {
   const [loadingTx, setLoadingTx] = useState(false)
   const [logoutOpen, setLogoutOpen] = useState(false)
 
-  // 编辑用户名状态
+  // Edit username state
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState("")
   const [savingName, setSavingName] = useState(false)
 
-  // 上传头像状态
+  // Avatar upload state
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -96,11 +96,11 @@ export function AccountPanel() {
       console.error("Failed to upload avatar:", err)
     }
     setUploadingAvatar(false)
-    // 清空 input 以便重复选择同一文件
+    // Clear input to allow re-selecting the same file
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
-  // 离线模式：云服务未配置
+  // Offline mode: cloud service not configured
   if (!cloudEnabled) {
     return (
       <div className="flex flex-col items-center justify-center gap-6 py-20">
@@ -135,7 +135,7 @@ export function AccountPanel() {
 
   return (
     <div className="space-y-8">
-      {/* 用户信息 — 参考设计：大头像 + 用户名/邮箱/徽章 */}
+      {/* User info: large avatar + username/email/badge */}
       <div className="flex items-center gap-6">
         <div className="relative group cursor-pointer shrink-0" onClick={handleAvatarClick}>
           {uploadingAvatar ? (
@@ -149,7 +149,7 @@ export function AccountPanel() {
               {user?.name?.[0]?.toUpperCase() ?? '?'}
             </div>
           )}
-          {/* 头像悬浮遮罩 */}
+          {/* Avatar hover overlay */}
           <div className="absolute inset-0 rounded-3xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <Camera size={20} className="text-white" />
           </div>
@@ -205,7 +205,7 @@ export function AccountPanel() {
         </Button>
       </div>
 
-      {/* 积分余额 — 独立卡片 */}
+      {/* Credit balance card */}
       <div className="rounded-2xl border-2 border-border p-5">
         <div className="flex items-center justify-between">
           <div>
@@ -222,7 +222,7 @@ export function AccountPanel() {
         </div>
       </div>
 
-      {/* 积分流水 */}
+      {/* Credit transactions */}
       <div>
         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
           {t.account.transactions}
@@ -260,7 +260,7 @@ export function AccountPanel() {
         )}
       </div>
 
-      {/* 退出确认弹窗 */}
+      {/* Logout confirmation dialog */}
       <AlertDialog open={logoutOpen} onOpenChange={setLogoutOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

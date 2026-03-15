@@ -15,7 +15,7 @@ export type Message = {
   role: 'user' | 'assistant'
   content: string
   timestamp: string
-  toolUse?: ToolUseItem[]  // 新增
+  toolUse?: ToolUseItem[]
   attachments?: Attachment[]
 }
 
@@ -30,7 +30,7 @@ export function useChat(agentId: string) {
   const pendingToolUseRef = useRef<ToolUseItem[]>([])
   useEffect(() => { pendingToolUseRef.current = pendingToolUse }, [pendingToolUse])
 
-  // 记录最后一次收到 SSE 事件的时间，用于超时兜底
+  // Track last SSE event time for timeout fallback
   const lastEventTimeRef = useRef<number>(0)
 
   const { close: closeSSE } = useSSE(chatId, (event) => {
@@ -69,7 +69,7 @@ export function useChat(agentId: string) {
       case 'error':
         setChatStatus('error')
         setTimeout(() => setChatStatus('ready'), 2000)
-        // 显示错误信息给用户，而不是静默吞掉
+        // Show error to user instead of silently swallowing it
         if (event.error) {
           setMessages(prev => [...prev, {
             id: Date.now().toString(),
@@ -84,7 +84,7 @@ export function useChat(agentId: string) {
     }
   })
 
-  // SSE 兜底：处理中超过 8 秒没收到任何事件时，主动查询后端消息
+  // SSE fallback: proactively query backend when no event received for 8+ seconds while processing
   const chatIdRef = useRef(chatId)
   useEffect(() => { chatIdRef.current = chatId }, [chatId])
 
@@ -93,13 +93,13 @@ export function useChat(agentId: string) {
     const timer = setInterval(async () => {
       const cid = chatIdRef.current
       if (!cid) return
-      // 距离上次事件超过 8 秒，主动拉取
+      // Over 8 seconds since last event, fetch proactively
       if (Date.now() - lastEventTimeRef.current < 8000) return
       try {
         const msgs = await getMessages(cid)
         const lastMsg = msgs[msgs.length - 1]
         if (lastMsg && lastMsg.is_bot_message) {
-          // 后端已有 bot 回复，说明 complete 事件丢失了，手动恢复
+          // Backend has bot reply, meaning complete event was lost, recover manually
           setMessages(msgs.map(m => ({
             id: m.id,
             role: m.is_bot_message ? 'assistant' as const : 'user' as const,
@@ -112,20 +112,20 @@ export function useChat(agentId: string) {
           setIsProcessing(false)
         }
       } catch {
-        // 查询失败忽略，下次重试
+        // Query failed, ignore and retry next time
       }
     }, 5000)
     return () => clearInterval(timer)
   }, [isProcessing])
 
   useEffect(() => {
-    if (chatStatus === 'error') return // 保持 error 状态直到 setTimeout 重置
+    if (chatStatus === 'error') return // Keep error status until setTimeout resets it
     if (isProcessing && !streamingText) setChatStatus('submitted')
     else if (isProcessing && streamingText) setChatStatus('streaming')
     else setChatStatus('ready')
   }, [isProcessing, streamingText, chatStatus])
 
-  const send = useCallback(async (prompt: string, browserProfileId?: string, attachments?: Attachment[]) => {    // 添加用户消息到列表
+  const send = useCallback(async (prompt: string, browserProfileId?: string, attachments?: Attachment[]) => {    // Add user message to the list
     setMessages(prev => [...prev, {
       id: Date.now().toString(),
       role: 'user',
@@ -142,7 +142,7 @@ export function useChat(agentId: string) {
         setChatId(result.chatId)
       }
     } catch (err) {
-      // 请求失败时显示错误并重置状态
+      // Show error and reset state on request failure
       const errorMsg = err instanceof Error ? err.message : String(err)
       setMessages(prev => [...prev, {
         id: Date.now().toString(),

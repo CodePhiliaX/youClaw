@@ -13,7 +13,7 @@ import {
 describe('deleteChat', () => {
   beforeEach(() => cleanTables('messages', 'chats'))
 
-  test('删除指定 chat 及其消息，不影响其他 chat', () => {
+  test('deletes specified chat and its messages without affecting other chats', () => {
     upsertChat('chat-a', 'agent-1', 'Chat A')
     upsertChat('chat-b', 'agent-1', 'Chat B')
 
@@ -47,14 +47,14 @@ describe('deleteChat', () => {
   })
 })
 
-describe('session 存取', () => {
+describe('session storage', () => {
   beforeEach(() => cleanTables('sessions'))
 
-  test('未保存时返回 null', () => {
+  test('returns null when not saved', () => {
     expect(getSession('agent-1', 'web:chat-1')).toBeNull()
   })
 
-  test('保存后可读取，重复保存会覆盖', () => {
+  test('can be read after saving, repeated saves overwrite', () => {
     saveSession('agent-1', 'web:chat-1', 'session-1')
     expect(getSession('agent-1', 'web:chat-1')).toBe('session-1')
 

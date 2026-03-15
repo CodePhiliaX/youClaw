@@ -14,7 +14,7 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
   return res.json() as Promise<T>
 }
 
-// 发消息给 agent
+// Send message to agent
 export async function sendMessage(agentId: string, prompt: string, chatId?: string, browserProfileId?: string, attachments?: Attachment[]) {
   return apiFetch<{ chatId: string; status: string }>(`/api/agents/${agentId}/message`, {
     method: 'POST',
@@ -22,24 +22,24 @@ export async function sendMessage(agentId: string, prompt: string, chatId?: stri
   })
 }
 
-// 获取聊天列表
+// Get chat list
 export async function getChats() {
   return apiFetch<Array<{ chat_id: string; name: string; agent_id: string; channel: string; last_message_time: string; last_message: string | null; avatar: string | null }>>('/api/chats')
 }
 
-// 获取消息历史
+// Get message history
 export async function getMessages(chatId: string) {
   return apiFetch<Array<{ id: string; chat_id: string; sender: string; sender_name: string; content: string; timestamp: string; is_from_me: number; is_bot_message: number; attachments: Attachment[] | null }>>(`/api/chats/${encodeURIComponent(chatId)}/messages`)
 }
 
-// 删除聊天
+// Delete chat
 export async function deleteChat(chatId: string) {
   return apiFetch<{ ok: boolean }>(`/api/chats/${encodeURIComponent(chatId)}`, {
     method: 'DELETE',
   })
 }
 
-// 更新对话（头像/标题）
+// Update chat (avatar/title)
 export async function updateChat(chatId: string, data: { name?: string; avatar?: string }) {
   return apiFetch<{ ok: boolean }>(`/api/chats/${encodeURIComponent(chatId)}`, {
     method: 'PATCH',
@@ -47,22 +47,22 @@ export async function updateChat(chatId: string, data: { name?: string; avatar?:
   })
 }
 
-// 获取 agents 列表
+// Get agents list
 export async function getAgents() {
   return apiFetch<Array<{ id: string; name: string; workspaceDir: string; status: string; hasConfig: boolean }>>('/api/agents')
 }
 
-// 获取 agent 的工作空间文档列表及内容
+// Get agent workspace docs list and content
 export async function getAgentDocs(agentId: string) {
   return apiFetch<Record<string, string>>(`/api/agents/${agentId}/docs`)
 }
 
-// 获取 agent 指定文档内容
+// Get specific agent doc content
 export async function getAgentDoc(agentId: string, filename: string) {
   return apiFetch<{ content: string }>(`/api/agents/${agentId}/docs/${encodeURIComponent(filename)}`)
 }
 
-// 更新 agent 指定文档
+// Update specific agent doc
 export async function updateAgentDoc(agentId: string, filename: string, content: string) {
   return apiFetch<{ ok: boolean }>(`/api/agents/${agentId}/docs/${encodeURIComponent(filename)}`, {
     method: 'PUT',
@@ -70,7 +70,7 @@ export async function updateAgentDoc(agentId: string, filename: string, content:
   })
 }
 
-// 创建新 agent
+// Create new agent
 export async function createAgent(data: { id: string; name: string; model?: string }) {
   return apiFetch<{ ok: boolean; id: string }>('/api/agents', {
     method: 'POST',
@@ -78,12 +78,12 @@ export async function createAgent(data: { id: string; name: string; model?: stri
   })
 }
 
-// 获取单个 agent 的完整配置（含子 Agent 定义）
+// Get full config for a single agent (including sub-agent definitions)
 export async function getAgentConfig(agentId: string) {
   return apiFetch<Record<string, unknown>>(`/api/agents/${encodeURIComponent(agentId)}`)
 }
 
-// 更新 agent 配置
+// Update agent config
 export async function updateAgentConfig(agentId: string, data: Record<string, unknown>) {
   return apiFetch<{ ok: boolean }>(`/api/agents/${agentId}`, {
     method: 'PUT',
@@ -91,7 +91,7 @@ export async function updateAgentConfig(agentId: string, data: Record<string, un
   })
 }
 
-// 删除 agent
+// Delete agent
 export async function deleteAgent(agentId: string) {
   return apiFetch<{ ok: boolean }>(`/api/agents/${agentId}`, {
     method: 'DELETE',
@@ -100,12 +100,12 @@ export async function deleteAgent(agentId: string) {
 
 // Memory API
 
-// 获取 agent 的 MEMORY.md 内容
+// Get agent MEMORY.md content
 export async function getMemory(agentId: string) {
   return apiFetch<{ content: string }>(`/api/agents/${agentId}/memory`)
 }
 
-// 更新 agent 的 MEMORY.md
+// Update agent MEMORY.md
 export async function updateMemory(agentId: string, content: string) {
   return apiFetch<{ ok: boolean }>(`/api/agents/${agentId}/memory`, {
     method: 'PUT',
@@ -113,17 +113,17 @@ export async function updateMemory(agentId: string, content: string) {
   })
 }
 
-// 获取每日日志列表
+// Get daily log list
 export async function getMemoryLogs(agentId: string) {
   return apiFetch<string[]>(`/api/agents/${agentId}/memory/logs`)
 }
 
-// 获取某天的日志内容
+// Get log content for a specific date
 export async function getMemoryLog(agentId: string, date: string) {
   return apiFetch<{ content: string }>(`/api/agents/${agentId}/memory/logs/${date}`)
 }
 
-// 全局 Memory
+// Global Memory
 export async function getGlobalMemory() {
   return apiFetch<{ content: string }>('/api/memory/global')
 }
@@ -135,7 +135,7 @@ export async function updateGlobalMemory(content: string) {
   })
 }
 
-// 对话存档
+// Conversation archives
 export async function getConversationArchives(agentId: string) {
   return apiFetch<Array<{ filename: string; date: string }>>(`/api/agents/${agentId}/memory/conversations`)
 }
@@ -144,7 +144,7 @@ export async function getConversationArchive(agentId: string, filename: string) 
   return apiFetch<{ content: string }>(`/api/agents/${agentId}/memory/conversations/${encodeURIComponent(filename)}`)
 }
 
-// 快照
+// Snapshots
 export async function createSnapshot(agentId: string) {
   return apiFetch<{ ok: boolean }>(`/api/agents/${agentId}/memory/snapshot`, { method: 'POST' })
 }
@@ -153,14 +153,14 @@ export async function getSnapshot(agentId: string) {
   return apiFetch<{ content: string }>(`/api/agents/${agentId}/memory/snapshot`)
 }
 
-// 记忆搜索
+// Memory search
 export async function searchMemory(query: string, agentId?: string) {
   const params = new URLSearchParams({ q: query })
   if (agentId) params.set('agentId', agentId)
   return apiFetch<Array<{ agentId: string; fileType: string; filePath: string; snippet: string; rank: number }>>(`/api/memory/search?${params}`)
 }
 
-// Skills 相关类型
+// Skills related types
 export interface SkillFrontmatter {
   name: string
   description: string
@@ -191,17 +191,17 @@ export interface Skill {
   usable: boolean
 }
 
-// 获取所有可用 skills
+// Get all available skills
 export async function getSkills() {
   return apiFetch<Skill[]>('/api/skills')
 }
 
-// 获取 agent 启用的 skills
+// Get skills enabled for an agent
 export async function getAgentSkills(agentId: string) {
   return apiFetch<Skill[]>(`/api/agents/${encodeURIComponent(agentId)}/skills`)
 }
 
-// 配置 skill 环境变量
+// Configure skill environment variable
 export async function configureSkillEnv(key: string, value: string) {
   return apiFetch<{ ok: boolean }>('/api/skills/configure', {
     method: 'POST',
@@ -209,7 +209,7 @@ export async function configureSkillEnv(key: string, value: string) {
   })
 }
 
-// 安装 skill 依赖
+// Install skill dependencies
 export async function installSkill(skillName: string, method: string) {
   return apiFetch<{ ok: boolean; stdout: string; stderr: string; exitCode: number }>('/api/skills/install', {
     method: 'POST',
@@ -217,7 +217,7 @@ export async function installSkill(skillName: string, method: string) {
   })
 }
 
-// 启用/停用 skill
+// Enable/disable skill
 export async function toggleSkill(name: string, enabled: boolean) {
   return apiFetch<Skill>(`/api/skills/${encodeURIComponent(name)}/toggle`, {
     method: 'POST',
@@ -225,7 +225,7 @@ export async function toggleSkill(name: string, enabled: boolean) {
   })
 }
 
-// ===== 技能市场 API =====
+// ===== Skill Marketplace API =====
 
 export interface RecommendedSkill {
   slug: string
@@ -253,7 +253,7 @@ export async function uninstallRecommendedSkill(slug: string) {
   })
 }
 
-// ===== 浏览器 Profile API =====
+// ===== Browser Profile API =====
 
 export interface BrowserProfileDTO {
   id: string
@@ -284,7 +284,7 @@ export async function launchBrowserProfile(id: string) {
   })
 }
 
-// ===== 定时任务 API =====
+// ===== Scheduled Tasks API =====
 
 export interface ScheduledTaskDTO {
   id: string
@@ -476,7 +476,7 @@ export async function updateSettings(data: Partial<SettingsDTO>) {
   })
 }
 
-// ===== 系统日志 API =====
+// ===== System Logs API =====
 
 export interface LogEntry {
   level: number

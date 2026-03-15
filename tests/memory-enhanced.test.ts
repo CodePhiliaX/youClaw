@@ -26,7 +26,7 @@ function getLogsDir(agentId: string) {
   return resolve(getAgentMemoryDir(agentId), 'logs')
 }
 
-describe('MemoryManager 增强功能', () => {
+describe('MemoryManager enhanced features', () => {
   beforeEach(() => {
     for (const agentId of createdAgentIds) {
       rmSync(resolve(getPaths().agents, agentId), { recursive: true, force: true })
@@ -41,37 +41,37 @@ describe('MemoryManager 增强功能', () => {
     createdAgentIds.clear()
   })
 
-  // === recentDays 参数测试 ===
+  // === recentDays parameter tests ===
 
-  test('getMemoryContext 支持 recentDays 参数', () => {
+  test('getMemoryContext supports recentDays parameter', () => {
     const agentId = createAgentId('mem-days')
     mkdirSync(getLogsDir(agentId), { recursive: true })
-    writeFileSync(getMemoryFile(agentId), '长期记忆')
+    writeFileSync(getMemoryFile(agentId), 'long-term memory')
     writeFileSync(resolve(getLogsDir(agentId), '2026-03-07.md'), '# 2026-03-07\nday7')
     writeFileSync(resolve(getLogsDir(agentId), '2026-03-08.md'), '# 2026-03-08\nday8')
     writeFileSync(resolve(getLogsDir(agentId), '2026-03-09.md'), '# 2026-03-09\nday9')
     writeFileSync(resolve(getLogsDir(agentId), '2026-03-10.md'), '# 2026-03-10\nday10')
     writeFileSync(resolve(getLogsDir(agentId), '2026-03-11.md'), '# 2026-03-11\nday11')
 
-    // recentDays=2: 只包含最近 2 天
+    // recentDays=2: only includes the most recent 2 days
     const context2 = memoryManager.getMemoryContext(agentId, { recentDays: 2 })
     expect(context2).toContain('day11')
     expect(context2).toContain('day10')
     expect(context2).not.toContain('day9')
     expect(context2).not.toContain('day8')
 
-    // recentDays=5: 包含全部 5 天
+    // recentDays=5: includes all 5 days
     const context5 = memoryManager.getMemoryContext(agentId, { recentDays: 5 })
     expect(context5).toContain('day11')
     expect(context5).toContain('day7')
 
-    // recentDays=1: 只包含最近 1 天
+    // recentDays=1: only includes the most recent 1 day
     const context1 = memoryManager.getMemoryContext(agentId, { recentDays: 1 })
     expect(context1).toContain('day11')
     expect(context1).not.toContain('day10')
   })
 
-  test('默认 recentDays=3', () => {
+  test('default recentDays=3', () => {
     const agentId = createAgentId('mem-default-days')
     mkdirSync(getLogsDir(agentId), { recursive: true })
     writeFileSync(getMemoryFile(agentId), '')
@@ -87,24 +87,24 @@ describe('MemoryManager 增强功能', () => {
     expect(context).not.toContain('day8')
   })
 
-  // === maxContextChars 参数测试 ===
+  // === maxContextChars parameter tests ===
 
-  test('getMemoryContext 支持 maxContextChars 截断', () => {
+  test('getMemoryContext supports maxContextChars truncation', () => {
     const agentId = createAgentId('mem-chars')
     mkdirSync(getLogsDir(agentId), { recursive: true })
     writeFileSync(getMemoryFile(agentId), 'M'.repeat(100))
-    // 每天 200 字符
+    // 200 characters per day
     writeFileSync(resolve(getLogsDir(agentId), '2026-03-10.md'), 'A'.repeat(200))
     writeFileSync(resolve(getLogsDir(agentId), '2026-03-11.md'), 'B'.repeat(200))
 
-    // maxContextChars=250: 长期记忆 100 + 第一天日志 200 = 300 > 250
-    // 所以第一天的日志会被截断
+    // maxContextChars=250: long-term memory 100 + first day log 200 = 300 > 250
+    // so the first day's log will be truncated
     const context = memoryManager.getMemoryContext(agentId, { maxContextChars: 250 })
-    expect(context).toContain('B') // 最近一天（11日）
-    expect(context).toContain('日志已截断')
+    expect(context).toContain('B') // most recent day (11th)
+    expect(context).toContain('logs truncated')
   })
 
-  test('maxContextChars 足够大时不截断', () => {
+  test('no truncation when maxContextChars is large enough', () => {
     const agentId = createAgentId('mem-no-truncate')
     mkdirSync(getLogsDir(agentId), { recursive: true })
     writeFileSync(getMemoryFile(agentId), 'short memory')
@@ -113,12 +113,12 @@ describe('MemoryManager 增强功能', () => {
     const context = memoryManager.getMemoryContext(agentId, { maxContextChars: 100000 })
     expect(context).toContain('short memory')
     expect(context).toContain('short log')
-    expect(context).not.toContain('截断')
+    expect(context).not.toContain('truncated')
   })
 
-  // === 会话归档测试 ===
+  // === conversation archive tests ===
 
-  test('archiveConversation 创建归档文件', () => {
+  test('archiveConversation creates archive file', () => {
     const agentId = createAgentId('mem-archive')
 
     memoryManager.archiveConversation(
@@ -134,28 +134,28 @@ describe('MemoryManager 增强功能', () => {
     expect(conversations[0]!.size).toBeGreaterThan(0)
   })
 
-  test('getArchivedConversation 返回归档内容', () => {
+  test('getArchivedConversation returns archive content', () => {
     const agentId = createAgentId('mem-archive-get')
 
     memoryManager.archiveConversation(
       agentId,
       'web:chat-1',
       'session-xyz',
-      '对话内容 A B C',
+      'conversation content A B C',
     )
 
     const content = memoryManager.getArchivedConversation(agentId, 'web:chat-1', 'session-xyz')
     expect(content).toContain('session-xyz')
-    expect(content).toContain('对话内容 A B C')
+    expect(content).toContain('conversation content A B C')
   })
 
-  test('getArchivedConversation 不存在时返回空字符串', () => {
+  test('getArchivedConversation returns empty string when not found', () => {
     const agentId = createAgentId('mem-archive-missing')
     const content = memoryManager.getArchivedConversation(agentId, 'web:chat-1', 'nonexistent')
     expect(content).toBe('')
   })
 
-  test('getArchivedConversations 按 chatId 过滤', () => {
+  test('getArchivedConversations filters by chatId', () => {
     const agentId = createAgentId('mem-archive-filter')
 
     memoryManager.archiveConversation(agentId, 'web:chat-1', 'session-1', 'content 1')
@@ -170,13 +170,13 @@ describe('MemoryManager 增强功能', () => {
     expect(chat1Only.every((c) => c.sessionId === 'session-1' || c.sessionId === 'session-3')).toBe(true)
   })
 
-  test('getArchivedConversations 无归档时返回空数组', () => {
+  test('getArchivedConversations returns empty array when no archives exist', () => {
     const agentId = createAgentId('mem-archive-empty')
     const conversations = memoryManager.getArchivedConversations(agentId)
     expect(conversations).toEqual([])
   })
 
-  test('多次归档同一 chatId 的不同 session', () => {
+  test('multiple archives of different sessions for the same chatId', () => {
     const agentId = createAgentId('mem-archive-multi')
 
     memoryManager.archiveConversation(agentId, 'web:chat-1', 'session-a', 'A')

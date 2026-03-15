@@ -1,14 +1,14 @@
 /**
- * IPC Watcher 测试
+ * IPC Watcher Tests
  *
- * 覆盖：
- * - schedule_task 消息分发（含 name/description）
- * - pause_task / resume_task / cancel_task 分发
- * - 缺少字段时抛出错误
- * - 未知消息类型抛出错误
- * - JSON 文件处理（写入 → 读取 → 删除）
- * - 错误文件移到 errors 目录
- * - writeTasksSnapshot 写入快照
+ * Coverage:
+ * - schedule_task message dispatch (including name/description)
+ * - pause_task / resume_task / cancel_task dispatch
+ * - Throws error when required fields are missing
+ * - Throws error on unknown message type
+ * - JSON file processing (write -> read -> delete)
+ * - Error files moved to errors directory
+ * - writeTasksSnapshot writes snapshot
  */
 
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test'
@@ -30,10 +30,10 @@ function cleanIpcDir() {
   try { rmSync(ipcDir, { recursive: true, force: true }) } catch {}
 }
 
-// ===== dispatch 分发逻辑 =====
+// ===== dispatch logic =====
 
-describe('IpcWatcher — dispatch 分发', () => {
-  test('schedule_task 传递 name 和 description', () => {
+describe('IpcWatcher — dispatch', () => {
+  test('schedule_task passes name and description', () => {
     const onScheduleTask = mock(() => {})
     const watcher = new IpcWatcher({
       onScheduleTask,
@@ -42,15 +42,15 @@ describe('IpcWatcher — dispatch 分发', () => {
       onCancelTask: () => {},
     })
 
-    // @ts-ignore — 测试私有方法
+    // @ts-ignore — testing private method
     watcher.dispatch({
       type: 'schedule_task',
       prompt: 'test prompt',
       schedule_type: 'cron',
       schedule_value: '0 9 * * *',
       chatId: 'chat-1',
-      name: '任务名',
-      description: '任务描述',
+      name: 'Task Name',
+      description: 'Task Description',
     }, 'agent-x')
 
     expect(onScheduleTask).toHaveBeenCalledTimes(1)
@@ -60,11 +60,11 @@ describe('IpcWatcher — dispatch 分发', () => {
     expect(arg.scheduleValue).toBe('0 9 * * *')
     expect(arg.agentId).toBe('agent-x')
     expect(arg.chatId).toBe('chat-1')
-    expect(arg.name).toBe('任务名')
-    expect(arg.description).toBe('任务描述')
+    expect(arg.name).toBe('Task Name')
+    expect(arg.description).toBe('Task Description')
   })
 
-  test('schedule_task 不传 name/description 时为 undefined', () => {
+  test('schedule_task without name/description defaults to undefined', () => {
     const onScheduleTask = mock(() => {})
     const watcher = new IpcWatcher({
       onScheduleTask,
@@ -87,7 +87,7 @@ describe('IpcWatcher — dispatch 分发', () => {
     expect(arg.description).toBeUndefined()
   })
 
-  test('schedule_task 缺少必要字段抛出错误', () => {
+  test('schedule_task throws error when required fields are missing', () => {
     const watcher = new IpcWatcher({
       onScheduleTask: () => {},
       onPauseTask: () => {},
@@ -98,15 +98,15 @@ describe('IpcWatcher — dispatch 分发', () => {
     expect(() => {
       // @ts-ignore
       watcher.dispatch({ type: 'schedule_task', prompt: '', schedule_type: 'cron', schedule_value: '0 9 * * *', chatId: 'c' }, 'a')
-    }).toThrow('缺少必要字段')
+    }).toThrow('missing required field')
 
     expect(() => {
       // @ts-ignore
       watcher.dispatch({ type: 'schedule_task', prompt: 'p', schedule_type: '', schedule_value: '0 9 * * *', chatId: 'c' }, 'a')
-    }).toThrow('缺少必要字段')
+    }).toThrow('missing required field')
   })
 
-  test('pause_task 分发', () => {
+  test('pause_task dispatch', () => {
     const onPauseTask = mock(() => {})
     const watcher = new IpcWatcher({
       onScheduleTask: () => {},
@@ -120,7 +120,7 @@ describe('IpcWatcher — dispatch 分发', () => {
     expect(onPauseTask).toHaveBeenCalledWith('task-123')
   })
 
-  test('pause_task 缺少 taskId 抛出错误', () => {
+  test('pause_task throws error when taskId is missing', () => {
     const watcher = new IpcWatcher({
       onScheduleTask: () => {},
       onPauseTask: () => {},
@@ -131,10 +131,10 @@ describe('IpcWatcher — dispatch 分发', () => {
     expect(() => {
       // @ts-ignore
       watcher.dispatch({ type: 'pause_task', taskId: '' }, 'a')
-    }).toThrow('缺少必要字段')
+    }).toThrow('missing required field')
   })
 
-  test('resume_task 分发', () => {
+  test('resume_task dispatch', () => {
     const onResumeTask = mock(() => {})
     const watcher = new IpcWatcher({
       onScheduleTask: () => {},
@@ -148,7 +148,7 @@ describe('IpcWatcher — dispatch 分发', () => {
     expect(onResumeTask).toHaveBeenCalledWith('task-456')
   })
 
-  test('resume_task 缺少 taskId 抛出错误', () => {
+  test('resume_task throws error when taskId is missing', () => {
     const watcher = new IpcWatcher({
       onScheduleTask: () => {},
       onPauseTask: () => {},
@@ -159,10 +159,10 @@ describe('IpcWatcher — dispatch 分发', () => {
     expect(() => {
       // @ts-ignore
       watcher.dispatch({ type: 'resume_task', taskId: '' }, 'a')
-    }).toThrow('缺少必要字段')
+    }).toThrow('missing required field')
   })
 
-  test('cancel_task 分发', () => {
+  test('cancel_task dispatch', () => {
     const onCancelTask = mock(() => {})
     const watcher = new IpcWatcher({
       onScheduleTask: () => {},
@@ -176,7 +176,7 @@ describe('IpcWatcher — dispatch 分发', () => {
     expect(onCancelTask).toHaveBeenCalledWith('task-789')
   })
 
-  test('cancel_task 缺少 taskId 抛出错误', () => {
+  test('cancel_task throws error when taskId is missing', () => {
     const watcher = new IpcWatcher({
       onScheduleTask: () => {},
       onPauseTask: () => {},
@@ -187,10 +187,10 @@ describe('IpcWatcher — dispatch 分发', () => {
     expect(() => {
       // @ts-ignore
       watcher.dispatch({ type: 'cancel_task', taskId: '' }, 'a')
-    }).toThrow('缺少必要字段')
+    }).toThrow('missing required field')
   })
 
-  test('未知消息类型抛出错误', () => {
+  test('unknown message type throws error', () => {
     const watcher = new IpcWatcher({
       onScheduleTask: () => {},
       onPauseTask: () => {},
@@ -201,16 +201,16 @@ describe('IpcWatcher — dispatch 分发', () => {
     expect(() => {
       // @ts-ignore
       watcher.dispatch({ type: 'unknown_type' }, 'a')
-    }).toThrow('未知 IPC 消息类型')
+    }).toThrow('Unknown IPC message type')
   })
 })
 
-// ===== processFile 文件处理 =====
+// ===== processFile file handling =====
 
-describe('IpcWatcher — 文件处理', () => {
+describe('IpcWatcher — file handling', () => {
   afterEach(() => cleanIpcDir())
 
-  test('成功处理 JSON 文件后删除', async () => {
+  test('deletes JSON file after successful processing', async () => {
     const tasksDir = setupAgentTasksDir('test-agent')
     const filePath = join(tasksDir, '1000-abc.json')
     writeFileSync(filePath, JSON.stringify({
@@ -219,7 +219,7 @@ describe('IpcWatcher — 文件处理', () => {
       schedule_type: 'interval',
       schedule_value: '60000',
       chatId: 'chat-1',
-      name: '文件测试',
+      name: 'File Test',
     }))
 
     const onScheduleTask = mock(() => {})
@@ -234,10 +234,10 @@ describe('IpcWatcher — 文件处理', () => {
     await watcher.processFile(filePath, 'test-agent')
 
     expect(onScheduleTask).toHaveBeenCalledTimes(1)
-    expect(existsSync(filePath)).toBe(false) // 文件已删除
+    expect(existsSync(filePath)).toBe(false) // file has been deleted
   })
 
-  test('无效 JSON 移到 errors 目录', async () => {
+  test('moves invalid JSON to errors directory', async () => {
     const tasksDir = setupAgentTasksDir('test-agent')
     const filePath = join(tasksDir, '2000-bad.json')
     writeFileSync(filePath, 'not valid json {{{')
@@ -252,17 +252,17 @@ describe('IpcWatcher — 文件处理', () => {
     // @ts-ignore
     await watcher.processFile(filePath, 'test-agent')
 
-    expect(existsSync(filePath)).toBe(false) // 原文件已删除
+    expect(existsSync(filePath)).toBe(false) // original file has been deleted
     const errorsDir = join(ipcDir, 'errors')
     expect(existsSync(errorsDir)).toBe(true)
     const errorFiles = readdirSync(errorsDir)
     expect(errorFiles.length).toBeGreaterThan(0)
   })
 
-  test('分发出错时移到 errors 目录', async () => {
+  test('moves file to errors directory when dispatch fails', async () => {
     const tasksDir = setupAgentTasksDir('test-agent')
     const filePath = join(tasksDir, '3000-fail.json')
-    // 缺少必要字段会导致 dispatch 抛错
+    // Missing required fields will cause dispatch to throw
     writeFileSync(filePath, JSON.stringify({
       type: 'schedule_task',
       prompt: '',
@@ -292,7 +292,7 @@ describe('IpcWatcher — 文件处理', () => {
 describe('writeTasksSnapshot', () => {
   afterEach(() => cleanIpcDir())
 
-  test('写入快照文件', async () => {
+  test('writes snapshot file', async () => {
     writeTasksSnapshot('snap-agent', [
       { id: 't1', prompt: 'p1', schedule_type: 'interval', schedule_value: '60000', status: 'active', next_run: '2026-03-10T10:00:00.000Z', last_run: null },
       { id: 't2', prompt: 'p2', schedule_type: 'cron', schedule_value: '0 9 * * *', status: 'paused', next_run: null, last_run: '2026-03-09T09:00:00.000Z' },
@@ -308,7 +308,7 @@ describe('writeTasksSnapshot', () => {
     expect(content.tasks[1].status).toBe('paused')
   })
 
-  test('空任务列表写入空数组', async () => {
+  test('writes empty array for empty task list', async () => {
     writeTasksSnapshot('empty-agent', [])
 
     const snapshotPath = join(ipcDir, 'empty-agent', 'current_tasks.json')
@@ -316,7 +316,7 @@ describe('writeTasksSnapshot', () => {
     expect(content.tasks.length).toBe(0)
   })
 
-  test('覆盖已有快照', async () => {
+  test('overwrites existing snapshot', async () => {
     writeTasksSnapshot('overwrite-agent', [
       { id: 't1', prompt: 'old', schedule_type: 'interval', schedule_value: '60000', status: 'active', next_run: null, last_run: null },
     ])
@@ -334,7 +334,7 @@ describe('writeTasksSnapshot', () => {
 // ===== start / stop =====
 
 describe('IpcWatcher start/stop', () => {
-  test('stop 不报错', () => {
+  test('stop does not throw', () => {
     const watcher = new IpcWatcher({
       onScheduleTask: () => {},
       onPauseTask: () => {},
@@ -344,7 +344,7 @@ describe('IpcWatcher start/stop', () => {
     expect(() => watcher.stop()).not.toThrow()
   })
 
-  test('start + stop 正常', () => {
+  test('start + stop works correctly', () => {
     const watcher = new IpcWatcher({
       onScheduleTask: () => {},
       onPauseTask: () => {},
@@ -355,7 +355,7 @@ describe('IpcWatcher start/stop', () => {
     watcher.stop()
   })
 
-  test('重复 start 不创建多个 interval', () => {
+  test('repeated start does not create multiple intervals', () => {
     const watcher = new IpcWatcher({
       onScheduleTask: () => {},
       onPauseTask: () => {},
@@ -363,14 +363,14 @@ describe('IpcWatcher start/stop', () => {
       onCancelTask: () => {},
     })
     watcher.start()
-    watcher.start() // 第二次应直接 return
+    watcher.start() // second call should return immediately
     watcher.stop()
   })
 })
 
-// ===== 新增测试场景 =====
+// ===== additional test scenarios =====
 
-describe('IpcWatcher — dispatch schedule_task 各 schedule_type 验证', () => {
+describe('IpcWatcher — dispatch schedule_task schedule_type validation', () => {
   test('schedule_type=interval + schedule_value=60000', () => {
     const onScheduleTask = mock(() => {})
     const watcher = new IpcWatcher({
@@ -380,7 +380,7 @@ describe('IpcWatcher — dispatch schedule_task 各 schedule_type 验证', () =>
       onCancelTask: () => {},
     })
 
-    // @ts-ignore — 测试私有方法
+    // @ts-ignore — testing private method
     watcher.dispatch({
       type: 'schedule_task',
       prompt: 'interval task',
@@ -409,7 +409,7 @@ describe('IpcWatcher — dispatch schedule_task 各 schedule_type 验证', () =>
 
     const isoDate = '2026-04-01T12:00:00.000Z'
 
-    // @ts-ignore — 测试私有方法
+    // @ts-ignore — testing private method
     watcher.dispatch({
       type: 'schedule_task',
       prompt: 'once task',
@@ -428,8 +428,8 @@ describe('IpcWatcher — dispatch schedule_task 各 schedule_type 验证', () =>
   })
 })
 
-describe('IpcWatcher — dispatch schedule_task 可选字段组合', () => {
-  test('只传 name 不传 description', () => {
+describe('IpcWatcher — dispatch schedule_task optional field combinations', () => {
+  test('passes only name without description', () => {
     const onScheduleTask = mock(() => {})
     const watcher = new IpcWatcher({
       onScheduleTask,
@@ -445,16 +445,16 @@ describe('IpcWatcher — dispatch schedule_task 可选字段组合', () => {
       schedule_type: 'cron',
       schedule_value: '0 9 * * *',
       chatId: 'chat-n',
-      name: '仅名称',
+      name: 'Name Only',
     }, 'agent-n')
 
     expect(onScheduleTask).toHaveBeenCalledTimes(1)
     const arg = onScheduleTask.mock.calls[0][0]
-    expect(arg.name).toBe('仅名称')
+    expect(arg.name).toBe('Name Only')
     expect(arg.description).toBeUndefined()
   })
 
-  test('只传 description 不传 name', () => {
+  test('passes only description without name', () => {
     const onScheduleTask = mock(() => {})
     const watcher = new IpcWatcher({
       onScheduleTask,
@@ -470,18 +470,18 @@ describe('IpcWatcher — dispatch schedule_task 可选字段组合', () => {
       schedule_type: 'cron',
       schedule_value: '0 9 * * *',
       chatId: 'chat-d',
-      description: '仅描述',
+      description: 'Description Only',
     }, 'agent-d')
 
     expect(onScheduleTask).toHaveBeenCalledTimes(1)
     const arg = onScheduleTask.mock.calls[0][0]
     expect(arg.name).toBeUndefined()
-    expect(arg.description).toBe('仅描述')
+    expect(arg.description).toBe('Description Only')
   })
 })
 
-describe('IpcWatcher — dispatch schedule_task 缺少字段', () => {
-  test('缺少 chatId 抛出错误', () => {
+describe('IpcWatcher — dispatch schedule_task missing fields', () => {
+  test('throws error when chatId is missing', () => {
     const watcher = new IpcWatcher({
       onScheduleTask: () => {},
       onPauseTask: () => {},
@@ -497,10 +497,10 @@ describe('IpcWatcher — dispatch schedule_task 缺少字段', () => {
         schedule_type: 'cron',
         schedule_value: '0 9 * * *',
       }, 'agent-no-chat')
-    }).toThrow('缺少必要字段')
+    }).toThrow('missing required field')
   })
 
-  test('缺少 schedule_value 抛出错误', () => {
+  test('throws error when schedule_value is missing', () => {
     const watcher = new IpcWatcher({
       onScheduleTask: () => {},
       onPauseTask: () => {},
@@ -516,14 +516,14 @@ describe('IpcWatcher — dispatch schedule_task 缺少字段', () => {
         schedule_type: 'cron',
         chatId: 'chat-1',
       }, 'agent-no-sv')
-    }).toThrow('缺少必要字段')
+    }).toThrow('missing required field')
   })
 })
 
-describe('IpcWatcher — 文件处理（扩展场景）', () => {
+describe('IpcWatcher — file handling (extended scenarios)', () => {
   afterEach(() => cleanIpcDir())
 
-  test('非 JSON 扩展名文件被忽略', async () => {
+  test('non-JSON extension files are ignored', async () => {
     const tasksDir = setupAgentTasksDir('txt-agent')
     const txtPath = join(tasksDir, '1000-note.txt')
     writeFileSync(txtPath, 'this is plain text')
@@ -536,17 +536,17 @@ describe('IpcWatcher — 文件处理（扩展场景）', () => {
       onCancelTask: () => {},
     })
 
-    // tick 内部通过 filter(f => f.endsWith('.json')) 过滤文件，
-    // 因此 .txt 文件不会传入 processFile
-    // @ts-ignore — 测试私有方法
+    // tick internally filters files via filter(f => f.endsWith('.json')),
+    // so .txt files will not be passed to processFile
+    // @ts-ignore — testing private method
     await watcher.tick()
 
     expect(onScheduleTask).toHaveBeenCalledTimes(0)
-    // .txt 文件应仍然存在（未被处理也未被删除）
+    // .txt file should still exist (not processed, not deleted)
     expect(existsSync(txtPath)).toBe(true)
   })
 
-  test('空 JSON 对象 {} 被移到 errors 目录', async () => {
+  test('empty JSON object {} is moved to errors directory', async () => {
     const tasksDir = setupAgentTasksDir('empty-json-agent')
     const filePath = join(tasksDir, '1000-empty.json')
     writeFileSync(filePath, '{}')
@@ -562,20 +562,20 @@ describe('IpcWatcher — 文件处理（扩展场景）', () => {
     // @ts-ignore
     await watcher.processFile(filePath, 'empty-json-agent')
 
-    // {} 没有 type 字段，dispatch 会抛出 "未知 IPC 消息类型"
+    // {} has no type field, dispatch will throw "Unknown IPC message type"
     expect(onScheduleTask).toHaveBeenCalledTimes(0)
-    expect(existsSync(filePath)).toBe(false) // 原文件已删除
+    expect(existsSync(filePath)).toBe(false) // original file has been deleted
     const errorsDir = join(ipcDir, 'errors')
     expect(existsSync(errorsDir)).toBe(true)
     const errorFiles = readdirSync(errorsDir)
     expect(errorFiles.length).toBeGreaterThan(0)
   })
 
-  test('多个文件处理顺序', async () => {
+  test('multiple files processed in order', async () => {
     const tasksDir = setupAgentTasksDir('multi-agent')
     const calls: string[] = []
 
-    // 创建多个文件，时间戳前缀不同
+    // Create multiple files with different timestamp prefixes
     writeFileSync(join(tasksDir, '2000-b.json'), JSON.stringify({
       type: 'schedule_task',
       prompt: 'second',
@@ -608,19 +608,19 @@ describe('IpcWatcher — 文件处理（扩展场景）', () => {
       onCancelTask: () => {},
     })
 
-    // @ts-ignore — tick 按文件名排序处理
+    // @ts-ignore — tick processes files sorted by filename
     await watcher.tick()
 
     expect(onScheduleTask).toHaveBeenCalledTimes(3)
-    // tick 内 sort() 按文件名排序：1000-a < 2000-b < 3000-c
+    // tick sorts by filename: 1000-a < 2000-b < 3000-c
     expect(calls).toEqual(['first', 'second', 'third'])
   })
 })
 
-describe('writeTasksSnapshot — 扩展场景', () => {
+describe('writeTasksSnapshot — extended scenarios', () => {
   afterEach(() => cleanIpcDir())
 
-  test('包含 name 和 description 字段', () => {
+  test('includes name and description fields', () => {
     writeTasksSnapshot('named-agent', [
       {
         id: 't-named',
@@ -630,8 +630,8 @@ describe('writeTasksSnapshot — 扩展场景', () => {
         status: 'active',
         next_run: '2026-03-11T09:00:00.000Z',
         last_run: null,
-        name: '定时报告',
-        description: '每天9点生成报告',
+        name: 'Scheduled Report',
+        description: 'Generate report daily at 9am',
       } as any,
     ])
 
@@ -640,12 +640,12 @@ describe('writeTasksSnapshot — 扩展场景', () => {
 
     const content = JSON.parse(readFileSync(snapshotPath, 'utf-8'))
     expect(content.tasks.length).toBe(1)
-    expect(content.tasks[0].name).toBe('定时报告')
-    expect(content.tasks[0].description).toBe('每天9点生成报告')
+    expect(content.tasks[0].name).toBe('Scheduled Report')
+    expect(content.tasks[0].description).toBe('Generate report daily at 9am')
     expect(content.tasks[0].id).toBe('t-named')
   })
 
-  test('大量任务（100 个）写入正确', () => {
+  test('correctly writes large number of tasks (100)', () => {
     const tasks = Array.from({ length: 100 }, (_, i) => ({
       id: `task-${i}`,
       prompt: `prompt-${i}`,

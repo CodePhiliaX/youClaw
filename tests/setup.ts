@@ -1,13 +1,13 @@
 /**
- * 测试共享初始化
+ * Shared test initialization
  *
- * 所有测试文件导入此模块来初始化环境、数据库、日志
- * 避免重复初始化导致冲突
+ * All test files import this module to initialize environment, database, and logger.
+ * Avoids duplicate initialization conflicts.
  */
 
 import { Database } from 'bun:sqlite'
 
-// 设置测试环境变量
+// Set test environment variables
 process.env.ANTHROPIC_API_KEY = 'test-key'
 process.env.DATA_DIR = '/tmp/youclaw-test-' + Date.now()
 process.env.LOG_LEVEL = 'error'
@@ -16,12 +16,12 @@ import { loadEnv } from '../src/config/index.ts'
 import { initLogger } from '../src/logger/index.ts'
 import { initDatabase, getDatabase } from '../src/db/index.ts'
 
-// 初始化
+// Initialize
 loadEnv()
 initLogger()
 initDatabase()
 
-/** 清空所有数据表 */
+/** Clear all data tables */
 export function cleanAllTables() {
   const db = getDatabase()
   db.run('DELETE FROM messages')
@@ -31,7 +31,7 @@ export function cleanAllTables() {
   db.run('DELETE FROM sessions')
 }
 
-/** 清空指定表 */
+/** Clear specified tables */
 export function cleanTables(...tables: string[]) {
   const db = getDatabase()
   for (const table of tables) {

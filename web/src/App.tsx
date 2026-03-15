@@ -11,12 +11,12 @@ import { useAppStore } from './stores/app'
 function AuthGuard() {
   const isLoggedIn = useAppStore((s) => s.isLoggedIn)
   const cloudEnabled = useAppStore((s) => s.cloudEnabled)
-  // 离线模式不需要登录
+  // Offline mode does not require login
   if (!cloudEnabled || isLoggedIn) return <Shell><Outlet /></Shell>
   return <Navigate to="/login" replace />
 }
 
-// Tauri devUrl 是 http 协议，可以直接用 BrowserRouter
+// Tauri devUrl uses http protocol, so BrowserRouter works directly
 export default function App() {
   useTheme()
   const isLoggedIn = useAppStore((s) => s.isLoggedIn)

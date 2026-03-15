@@ -27,7 +27,7 @@ export class MessageRouter {
     if (skillsLoader) {
       this.skillsLoader = skillsLoader
     }
-    // 订阅 complete 事件，自动发送回复到对应 channel
+    // Subscribe to complete events, auto-send replies to the corresponding channel
     this.eventBus.subscribe({ types: ['complete'] }, (event) => {
       if (event.type === 'complete') {
         this.handleOutbound(event.chatId, event.fullText)
@@ -43,33 +43,33 @@ export class MessageRouter {
     this.channels = this.channels.filter((ch) => ch.name !== name)
   }
 
-  // 处理入站消息（从任何 channel 进来）
+  // Handle inbound messages (from any channel)
   async handleInbound(message: InboundMessage): Promise<void> {
     const logger = getLogger()
 
-    // 推断 channel 类型（优先用消息自带的 channel 字段，否则遍历已注册 channels 匹配）
+    // Infer channel type (prefer message's channel field, otherwise match against registered channels)
     const channel = message.channel ?? this.inferChannel(message.chatId)
 
-    // 优先使用消息中指定的 agentId（Web API 场景），否则按 chatId 路由
+    // Prefer agentId from message (Web API scenario), otherwise route by chatId
     const managed = message.agentId
       ? this.agentManager.getAgent(message.agentId)
       : this.agentManager.resolveAgent(message.chatId)
     if (!managed) {
-      logger.warn({ chatId: message.chatId, agentId: message.agentId }, '没有找到对应的 agent')
+      logger.warn({ chatId: message.chatId, agentId: message.agentId }, 'No matching agent found')
       return
     }
 
     const { config } = managed
 
-    // 检查 trigger（群聊场景）
+    // Check trigger (group chat scenario)
     if (message.isGroup && config.requiresTrigger !== false) {
       const trigger = config.trigger ? new RegExp(config.trigger, 'i') : null
       if (trigger && !trigger.test(message.content)) {
-        return // 群聊中没被触发，忽略
+        return // not triggered in group chat, ignore
       }
     }
 
-    // 解析 skill 调用（来自消息本身或已由上游解析）
+    // Parse skill invocations (from message itself or already parsed upstream)
     let requestedSkills = message.requestedSkills ?? []
     let contentForAgent = message.content
 
@@ -81,7 +81,7 @@ export class MessageRouter {
       contentForAgent = parsed.cleanContent || message.content
     }
 
-    // 存入数据库（用消息内容前 50 字符作为对话标题）
+    // Save to database (use first 50 chars of message as chat title)
     const chatTitle = message.content.replace(/\n/g, ' ').slice(0, 50)
     upsertChat(message.chatId, config.id, chatTitle, channel)
     saveMessage({
@@ -96,9 +96,9 @@ export class MessageRouter {
       attachments: message.attachments ? JSON.stringify(message.attachments) : undefined,
     })
 
-    logger.info({ agentId: config.id, chatId: message.chatId, requestedSkills }, '路由消息到 agent')
+    logger.info({ agentId: config.id, chatId: message.chatId, requestedSkills }, 'Routing message to agent')
 
-    // 入队处理（传递 requestedSkills）
+    // Enqueue for processing (pass requestedSkills)
     try {
       const reply = await this.agentQueue.enqueue(
         config.id,
@@ -109,7 +109,7 @@ export class MessageRouter {
         message.attachments,
       )
 
-      // 存储 bot 回复
+      // Store bot reply
       saveMessage({
         id: randomUUID(),
         chatId: message.chatId,
@@ -121,20 +121,20 @@ export class MessageRouter {
         isBotMessage: true,
       })
 
-      // 记录到每日日志
+      // Append to daily log
       if (this.memoryManager) {
         try {
           this.memoryManager.appendDailyLog(config.id, message.chatId, message.content, reply, config.memory?.maxLogEntryLength)
         } catch (logErr) {
-          getLogger().error({ error: logErr, agentId: config.id }, '记录每日日志失败')
+          getLogger().error({ error: logErr, agentId: config.id }, 'Failed to append daily log')
         }
       }
     } catch (err) {
-      logger.error({ error: err, chatId: message.chatId }, '消息处理失败')
+      logger.error({ error: err, chatId: message.chatId }, 'Message processing failed')
     }
   }
 
-  // 获取所有已注册 channel 的状态
+  // Get statuses of all registered channels
   getChannelStatuses(): Array<{ name: string; connected: boolean }> {
     return this.channels.map((ch) => ({
       name: ch.name,
@@ -142,7 +142,7 @@ export class MessageRouter {
     }))
   }
 
-  // 根据 chatId 前缀推断 channel 名称
+  // Infer channel name from chatId prefix
   private inferChannel(chatId: string): string {
     for (const ch of this.channels) {
       if (ch.ownsChatId(chatId)) return ch.name
@@ -150,14 +150,14 @@ export class MessageRouter {
     return 'web'
   }
 
-  // 处理出站消息（发送到对应 channel）
+  // Handle outbound messages (send to the corresponding channel)
   private async handleOutbound(chatId: string, text: string) {
     for (const channel of this.channels) {
       if (channel.ownsChatId(chatId)) {
         try {
           await channel.sendMessage(chatId, text)
         } catch (err) {
-          getLogger().error({ error: err, chatId }, 'channel 发送失败')
+          getLogger().error({ error: err, chatId }, 'Channel send failed')
         }
         return
       }

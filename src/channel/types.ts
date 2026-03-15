@@ -1,16 +1,16 @@
 export interface InboundMessage {
   id: string
-  chatId: string          // "tg:123456" 或 "web:uuid" 格式
+  chatId: string          // format: "tg:123456" or "web:uuid"
   sender: string
   senderName: string
   content: string
   timestamp: string
   isGroup: boolean
   channel?: string        // "telegram" | "web" | "api"
-  agentId?: string        // 指定目标 agent（Web API 场景）
-  tags?: string[]         // web 前端传入的路由标签
-  requestedSkills?: string[]  // 显式请求的 skills
-  browserProfileId?: string   // 动态覆盖 agent.yaml 的 browserProfile
+  agentId?: string        // target agent (Web API scenario)
+  tags?: string[]         // routing tags from web frontend
+  requestedSkills?: string[]  // explicitly requested skills
+  browserProfileId?: string   // dynamically override agent.yaml browserProfile
   attachments?: Array<{ filename: string; mediaType: string; data: string; size: number }>
 }
 
@@ -26,7 +26,7 @@ export interface Channel {
 export type OnInboundMessage = (message: InboundMessage) => void
 
 /**
- * Channel 运行时状态
+ * Channel runtime status
  */
 export interface ChannelStatus {
   id: string

@@ -1,4 +1,4 @@
-// 清除 CLAUDECODE 环境变量，避免 Claude Agent SDK 检测到嵌套 session 而拒绝运行
+// Remove CLAUDECODE env var to prevent Claude Agent SDK from detecting a nested session
 delete process.env.CLAUDECODE
 
 import { loadEnv, getEnv } from './config/index.ts'
@@ -14,59 +14,59 @@ import { IpcWatcher, refreshTasksSnapshot } from './ipc/index.ts'
 import { createApp } from './routes/index.ts'
 
 async function main() {
-  // 1. 加载环境变量
+  // 1. Load environment variables
   loadEnv()
   const env = getEnv()
 
-  // 2. 初始化日志
+  // 2. Initialize logger
   const logger = initLogger()
-  logger.info('YouClaw 启动中...')
+  logger.info('YouClaw starting...')
 
-  // 3. 初始化数据库
+  // 3. Initialize database
   initDatabase()
 
-  // 4. 创建 EventBus
+  // 4. Create EventBus
   const eventBus = new EventBus()
 
-  // 5. 创建 SkillsLoader 和 SkillsWatcher
+  // 5. Create SkillsLoader and SkillsWatcher
   const skillsLoader = new SkillsLoader()
-  logger.info({ count: skillsLoader.loadAllSkills().length }, 'Skills 加载完成')
+  logger.info({ count: skillsLoader.loadAllSkills().length }, 'Skills loaded')
 
   const skillsWatcher = new SkillsWatcher(skillsLoader, {
     onReload: (skills) => {
-      logger.info({ count: skills.length }, 'Skills 热更新完成')
+      logger.info({ count: skills.length }, 'Skills hot-reloaded')
     },
   })
   skillsWatcher.start()
 
-  // 5b. 创建 RegistryManager
+  // 5b. Create RegistryManager
   const registryManager = new RegistryManager(skillsLoader)
 
-  // 6. 创建 MemoryManager 和 MemoryIndexer
+  // 6. Create MemoryManager and MemoryIndexer
   const memoryManager = new MemoryManager()
   let memoryIndexer: MemoryIndexer | null = null
   try {
     memoryIndexer = new MemoryIndexer()
     memoryIndexer.initTable()
     memoryIndexer.rebuildIndex()
-    logger.info('记忆搜索索引已构建')
+    logger.info('Memory search index built')
   } catch (err) {
-    logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'FTS5 索引初始化失败，搜索功能不可用')
+    logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'FTS5 index init failed, search unavailable')
   }
 
-  // 7. 创建 SecretsManager
+  // 7. Create SecretsManager
   const secretsManager = new SecretsManager()
   secretsManager.loadFromEnv()
 
-  // 8. 创建 HooksManager
+  // 8. Create HooksManager
   const hooksManager = new HooksManager()
 
-  // 9. 创建 PromptBuilder、AgentCompiler、AgentRouter
+  // 9. Create PromptBuilder, AgentCompiler, AgentRouter
   const promptBuilder = new PromptBuilder(skillsLoader, memoryManager)
   const compiler = new AgentCompiler(promptBuilder)
   const agentRouter = new AgentRouter()
 
-  // 10. 创建 AgentManager（注入所有新模块）
+  // 10. Create AgentManager (inject all new modules)
   const agentManager = new AgentManager(
     eventBus,
     promptBuilder,
@@ -77,23 +77,23 @@ async function main() {
   )
   await agentManager.loadAgents()
 
-  // 11. 创建 AgentQueue
+  // 11. Create AgentQueue
   const agentQueue = new AgentQueue(agentManager)
 
-  // 12. 创建 MessageRouter（带 MemoryManager）
+  // 12. Create MessageRouter (with MemoryManager)
   const router = new MessageRouter(agentManager, agentQueue, eventBus, memoryManager, skillsLoader)
 
-  // 13. 创建 ChannelManager 并加载 channels
+  // 13. Create ChannelManager and load channels
   const channelManager = new ChannelManager(router, (msg) => router.handleInbound(msg), eventBus)
-  await channelManager.seedFromEnv(env)     // 首次启动从 env 迁移
-  await channelManager.loadFromDatabase()   // 加载并连接所有 enabled channel
+  await channelManager.seedFromEnv(env)     // Migrate from env on first launch
+  await channelManager.loadFromDatabase()   // Load and connect all enabled channels
 
-  // 14. 创建 Scheduler 并启动
+  // 14. Create Scheduler and start
   const scheduler = new Scheduler(agentQueue, agentManager, eventBus)
   scheduler.start()
-  logger.info('定时任务调度器已启动')
+  logger.info('Task scheduler started')
 
-  // 15. 创建 IPC Watcher 并启动
+  // 15. Create IPC Watcher and start
   const ipcWatcher = new IpcWatcher({
     onScheduleTask: (data) => {
       const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -117,18 +117,18 @@ async function main() {
         deliveryTarget: data.deliveryTarget,
       })
 
-      // 写入快照
+      // Write snapshot
       refreshSnapshot(data.agentId)
-      logger.info({ taskId, agentId: data.agentId, scheduleType: data.scheduleType }, 'IPC: 定时任务已创建')
+      logger.info({ taskId, agentId: data.agentId, scheduleType: data.scheduleType }, 'IPC: scheduled task created')
     },
     onPauseTask: (taskId) => {
       const task = getTask(taskId)
       if (task) {
         updateTask(taskId, { status: 'paused' })
         refreshSnapshot(task.agent_id)
-        logger.info({ taskId }, 'IPC: 定时任务已暂停')
+        logger.info({ taskId }, 'IPC: scheduled task paused')
       } else {
-        logger.warn({ taskId }, 'IPC: 暂停失败，任务不存在')
+        logger.warn({ taskId }, 'IPC: pause failed, task not found')
       }
     },
     onResumeTask: (taskId) => {
@@ -141,9 +141,9 @@ async function main() {
         })
         updateTask(taskId, { status: 'active', nextRun: nextRun ?? new Date().toISOString() })
         refreshSnapshot(task.agent_id)
-        logger.info({ taskId }, 'IPC: 定时任务已恢复')
+        logger.info({ taskId }, 'IPC: scheduled task resumed')
       } else {
-        logger.warn({ taskId }, 'IPC: 恢复失败，任务不存在')
+        logger.warn({ taskId }, 'IPC: resume failed, task not found')
       }
     },
     onCancelTask: (taskId) => {
@@ -151,41 +151,41 @@ async function main() {
       if (task) {
         deleteTask(taskId)
         refreshSnapshot(task.agent_id)
-        logger.info({ taskId }, 'IPC: 定时任务已取消')
+        logger.info({ taskId }, 'IPC: scheduled task cancelled')
       } else {
-        logger.warn({ taskId }, 'IPC: 取消失败，任务不存在')
+        logger.warn({ taskId }, 'IPC: cancel failed, task not found')
       }
     },
   })
   ipcWatcher.start()
-  logger.info('IPC Watcher 已启动')
+  logger.info('IPC Watcher started')
 
-  /** 刷新指定 agent 的任务快照 */
+  /** Refresh task snapshot for the specified agent */
   function refreshSnapshot(agentId: string) {
     refreshTasksSnapshot(agentId, getTasks)
   }
 
-  // 16. 启动时记忆维护：日志清理 + 快照恢复
+  // 16. Startup memory maintenance: log cleanup + snapshot restore
   for (const agentConfig of agentManager.getAgents()) {
     memoryManager.pruneOldLogs(agentConfig.id, 30)
     memoryManager.restoreFromSnapshot(agentConfig.id)
   }
 
-  // 17. 创建 HTTP 服务
+  // 17. Create HTTP server
   const app = createApp({ agentManager, agentQueue, eventBus, router, channelManager, skillsLoader, registryManager, memoryManager, memoryIndexer, scheduler })
 
   const server = Bun.serve({
     fetch: app.fetch,
     port: env.PORT,
-    hostname: '127.0.0.1',  // 只监听本地，避免 Windows 防火墙弹窗
+    hostname: '127.0.0.1',  // Listen on localhost only to avoid Windows firewall prompts
   })
 
-  logger.info({ port: env.PORT }, `HTTP 服务已启动: http://localhost:${env.PORT}`)
-  logger.info('YouClaw 已就绪')
+  logger.info({ port: env.PORT }, `HTTP server started: http://localhost:${env.PORT}`)
+  logger.info('YouClaw ready')
 
-  // 18. 优雅关闭
+  // 18. Graceful shutdown
   const shutdown = async () => {
-    logger.info('正在关闭...')
+    logger.info('Shutting down...')
     await channelManager.disconnectAll()
     skillsWatcher.stop()
     ipcWatcher.stop()
@@ -199,6 +199,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('启动失败:', err)
+  console.error('Startup failed:', err)
   process.exit(1)
 })

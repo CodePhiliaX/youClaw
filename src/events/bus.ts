@@ -5,7 +5,7 @@ interface Subscriber {
   handler: EventHandler
 }
 
-// 全局事件总线，解耦 Agent 执行和多端输出
+// Global event bus, decoupling Agent execution from multi-channel output
 export class EventBus {
   private subscribers: Set<Subscriber> = new Set()
 
@@ -23,7 +23,7 @@ export class EventBus {
         try {
           sub.handler(event)
         } catch {
-          // 订阅者错误不应影响其他订阅者
+          // Subscriber errors should not affect other subscribers
         }
       }
     }
@@ -42,7 +42,7 @@ export class EventBus {
     return true
   }
 
-  // 当前订阅者数量（调试用）
+  // Current subscriber count (for debugging)
   get subscriberCount(): number {
     return this.subscribers.size
   }

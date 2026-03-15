@@ -11,62 +11,62 @@ import { EventBus } from '../src/events/bus.ts'
 // ---------------------------------------------------------------------------
 
 describe('extractDingTalkTextContent', () => {
-  test('正常文本', () => {
+  test('normal text', () => {
     expect(extractDingTalkTextContent('hello world')).toBe('hello world')
   })
 
-  test('空文本', () => {
+  test('empty text', () => {
     expect(extractDingTalkTextContent('')).toBe('')
   })
 
-  test('空白文本', () => {
+  test('whitespace-only text', () => {
     expect(extractDingTalkTextContent('  \n  ')).toBe('')
   })
 })
 
 describe('stripDingTalkAtMention', () => {
-  test('去除 @bot', () => {
+  test('removes @bot', () => {
     expect(stripDingTalkAtMention('@Bot hello')).toBe('hello')
   })
 
-  test('保留其他内容', () => {
+  test('preserves other content', () => {
     expect(stripDingTalkAtMention('hello world')).toBe('hello world')
   })
 
-  test('多个提及', () => {
+  test('multiple mentions', () => {
     expect(stripDingTalkAtMention('@Bot1 @Bot2 text')).toBe('text')
   })
 
-  test('空文本', () => {
+  test('empty text', () => {
     expect(stripDingTalkAtMention('')).toBe('')
   })
 })
 
 describe('chunkText', () => {
-  test('短文本返回单个分片', () => {
+  test('short text returns a single chunk', () => {
     expect(chunkText('hello', 10)).toEqual(['hello'])
   })
 
-  test('正确拆分', () => {
+  test('splits correctly', () => {
     expect(chunkText('abcdefghij', 3)).toEqual(['abc', 'def', 'ghi', 'j'])
   })
 
-  test('恰好整除', () => {
+  test('evenly divisible', () => {
     expect(chunkText('abcdef', 3)).toEqual(['abc', 'def'])
   })
 
-  test('空字符串', () => {
+  test('empty string', () => {
     expect(chunkText('', 10)).toEqual([''])
   })
 })
 
 describe('isTokenValid', () => {
-  test('有效 token', () => {
+  test('valid token', () => {
     const token = { access_token: 'abc', expires_in: 7200, fetchedAt: Date.now() }
     expect(isTokenValid(token)).toBe(true)
   })
 
-  test('过期 token', () => {
+  test('expired token', () => {
     const token = { access_token: 'abc', expires_in: 7200, fetchedAt: Date.now() - 8000000 }
     expect(isTokenValid(token)).toBe(false)
   })
@@ -75,15 +75,15 @@ describe('isTokenValid', () => {
     expect(isTokenValid(null)).toBe(false)
   })
 
-  test('即将过期（在 buffer 内）', () => {
-    // token 还有 4 分钟过期，buffer 是 5 分钟
+  test('about to expire (within buffer)', () => {
+    // token has 4 minutes left, buffer is 5 minutes
     const token = { access_token: 'abc', expires_in: 7200, fetchedAt: Date.now() - (7200 - 240) * 1000 }
     expect(isTokenValid(token)).toBe(false)
   })
 
-  test('自定义 buffer', () => {
+  test('custom buffer', () => {
     const token = { access_token: 'abc', expires_in: 7200, fetchedAt: Date.now() - 7100 * 1000 }
-    // 100s left, buffer 50s → still valid
+    // 100s left, buffer 50s -> still valid
     expect(isTokenValid(token, 50000)).toBe(true)
   })
 })
@@ -99,7 +99,7 @@ function createMockFetch() {
     const urlStr = url.toString()
     calls.push({ url: urlStr, init })
 
-    // token 请求
+    // token request
     if (urlStr.includes('oauth2/accessToken')) {
       return new Response(JSON.stringify({ accessToken: 'test_token', expireIn: 7200 }), {
         status: 200,
@@ -107,7 +107,7 @@ function createMockFetch() {
       })
     }
 
-    // 1:1 消息
+    // 1:1 message
     if (urlStr.includes('oToMessages')) {
       return new Response(JSON.stringify({ processQueryKey: 'pqk1' }), {
         status: 200,
@@ -115,7 +115,7 @@ function createMockFetch() {
       })
     }
 
-    // 群聊消息
+    // group message
     if (urlStr.includes('groupMessages')) {
       return new Response(JSON.stringify({ processQueryKey: 'pqk2' }), {
         status: 200,
@@ -138,7 +138,7 @@ function createMockStreamClient() {
 
 describe('DingTalkChannel', () => {
   describe('sendMessage', () => {
-    test('1:1 消息使用 oToMessages URL', async () => {
+    test('1:1 message uses oToMessages URL', async () => {
       const { fetch: mockFetch, calls } = createMockFetch()
       const channel = new DingTalkChannel('appkey1', 'secret1', {
         onMessage: mock(() => {}),
@@ -154,7 +154,7 @@ describe('DingTalkChannel', () => {
       expect(msgCall).toBeDefined()
       expect(msgCall!.init?.method).toBe('POST')
 
-      // 验证 header
+      // verify header
       const headers = msgCall!.init?.headers as Record<string, string>
       expect(headers['x-acs-dingtalk-access-token']).toBe('test_token')
 
@@ -163,7 +163,7 @@ describe('DingTalkChannel', () => {
       expect(body.robotCode).toBe('appkey1')
     })
 
-    test('群聊消息使用 groupMessages URL', async () => {
+    test('group message uses groupMessages URL', async () => {
       const { fetch: mockFetch, calls } = createMockFetch()
       const channel = new DingTalkChannel('appkey1', 'secret1', {
         onMessage: mock(() => {}),
@@ -183,7 +183,7 @@ describe('DingTalkChannel', () => {
       expect(body.robotCode).toBe('appkey1')
     })
 
-    test('4000 字符分片', async () => {
+    test('4000 character chunking', async () => {
       const { fetch: mockFetch, calls } = createMockFetch()
       const channel = new DingTalkChannel('appkey1', 'secret1', {
         onMessage: mock(() => {}),
@@ -200,7 +200,7 @@ describe('DingTalkChannel', () => {
       expect(msgCalls.length).toBe(2)
     })
 
-    test('token 过期时自动刷新', async () => {
+    test('auto-refreshes token when expired', async () => {
       const { fetch: mockFetch, calls } = createMockFetch()
       const channel = new DingTalkChannel('appkey1', 'secret1', {
         onMessage: mock(() => {}),
@@ -208,7 +208,7 @@ describe('DingTalkChannel', () => {
         _streamClient: createMockStreamClient(),
       })
 
-      // 设置过期 token
+      // set expired token
       ;(channel as any).accessToken = { access_token: 'old_token', expires_in: 7200, fetchedAt: Date.now() - 8000000 }
 
       await channel.sendMessage('dingtalk:user:staff1', 'hello')
@@ -217,7 +217,7 @@ describe('DingTalkChannel', () => {
       expect(tokenCall).toBeDefined()
     })
 
-    test('正确的 header', async () => {
+    test('correct headers', async () => {
       const { fetch: mockFetch, calls } = createMockFetch()
       const channel = new DingTalkChannel('appkey1', 'secret1', {
         onMessage: mock(() => {}),
@@ -237,7 +237,7 @@ describe('DingTalkChannel', () => {
   })
 
   describe('ownsChatId', () => {
-    test('dingtalk: 前缀返回 true', () => {
+    test('dingtalk: prefix returns true', () => {
       const channel = new DingTalkChannel('k', 's', {
         onMessage: mock(() => {}),
         _fetchFn: mock(async () => new Response()) as any,
@@ -248,7 +248,7 @@ describe('DingTalkChannel', () => {
       expect(channel.ownsChatId('dingtalk:group:conv1')).toBe(true)
     })
 
-    test('非 dingtalk: 前缀返回 false', () => {
+    test('non-dingtalk: prefix returns false', () => {
       const channel = new DingTalkChannel('k', 's', {
         onMessage: mock(() => {}),
         _fetchFn: mock(async () => new Response()) as any,
@@ -262,7 +262,7 @@ describe('DingTalkChannel', () => {
   })
 
   describe('isConnected', () => {
-    test('初始状态为 false', () => {
+    test('initial state is false', () => {
       const channel = new DingTalkChannel('k', 's', {
         onMessage: mock(() => {}),
         _fetchFn: mock(async () => new Response()) as any,
@@ -274,7 +274,7 @@ describe('DingTalkChannel', () => {
   })
 
   describe('EventBus integration', () => {
-    test('eventBus 订阅在 disconnect 后清理', async () => {
+    test('eventBus subscription is cleaned up after disconnect', async () => {
       const eventBus = new EventBus()
       const channel = new DingTalkChannel('k', 's', {
         onMessage: mock(() => {}),
@@ -283,15 +283,15 @@ describe('DingTalkChannel', () => {
         _streamClient: createMockStreamClient(),
       })
 
-      // 构造阶段不订阅 eventBus
+      // no eventBus subscription during construction
       expect(eventBus.subscriberCount).toBe(0)
 
-      // disconnect 不应抛异常
+      // disconnect should not throw
       await channel.disconnect()
       expect(eventBus.subscriberCount).toBe(0)
     })
 
-    test('手动模拟 eventBus 订阅后 disconnect 清理', async () => {
+    test('manually simulated eventBus subscription is cleaned up after disconnect', async () => {
       const eventBus = new EventBus()
       const channel = new DingTalkChannel('k', 's', {
         onMessage: mock(() => {}),
@@ -300,7 +300,7 @@ describe('DingTalkChannel', () => {
         _streamClient: createMockStreamClient(),
       })
 
-      // 手动模拟 connect 中的订阅逻辑
+      // manually simulate the subscription logic from connect
       const unsub = eventBus.subscribe(
         { types: ['complete', 'error'] },
         () => {},
@@ -315,7 +315,7 @@ describe('DingTalkChannel', () => {
   })
 
   describe('sendMessage edge cases', () => {
-    test('未知 chatId 格式不发送', async () => {
+    test('does not send for unknown chatId format', async () => {
       const { fetch: mockFetch, calls } = createMockFetch()
       const channel = new DingTalkChannel('k', 's', {
         onMessage: mock(() => {}),

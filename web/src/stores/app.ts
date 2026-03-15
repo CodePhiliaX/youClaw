@@ -84,11 +84,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       set({ authLoading: true })
       const user = await getAuthUser()
-      // 后端未返回名称时，通过用户 id 拼一个默认用户名
+      // Generate a default username from user id if backend returns no name
       if (!user.name) {
         user.name = `User_${user.id.slice(0, 6)}`
       }
-      // 后端未返回头像时，使用默认头像
+      // Use default avatar if backend returns none
       if (!user.avatar) {
         user.avatar = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user.name)}`
       }
@@ -101,7 +101,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   login: async () => {
     try {
       const { loginUrl } = await getAuthLoginUrl()
-      // 用浏览器打开登录页
+      // Open login page in browser
       if (isTauri) {
         const { openUrl } = await import('@tauri-apps/plugin-opener')
         await openUrl(loginUrl)
@@ -109,7 +109,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         window.open(loginUrl, '_blank')
       }
 
-      // 轮询等待登录完成
+      // Poll until login completes
       set({ authLoading: true })
       const pollInterval = setInterval(async () => {
         try {
@@ -120,11 +120,11 @@ export const useAppStore = create<AppState>((set, get) => ({
             await get().fetchCreditBalance()
           }
         } catch {
-          // 继续轮询
+          // Continue polling
         }
       }, 2000)
 
-      // 60 秒超时
+      // 60 second timeout
       setTimeout(() => {
         clearInterval(pollInterval)
         set({ authLoading: false })
@@ -139,7 +139,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       await authLogout()
     } catch {
-      // 即使远程注销失败也清理本地状态
+      // Clear local state even if remote logout fails
     }
     set({ user: null, isLoggedIn: false, creditBalance: null })
   },
@@ -171,7 +171,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         window.open(payUrl, '_blank')
       }
 
-      // 轮询检测余额变化
+      // Poll for balance changes
       const oldBalance = get().creditBalance
       const pollInterval = setInterval(async () => {
         try {
@@ -181,11 +181,11 @@ export const useAppStore = create<AppState>((set, get) => ({
             set({ creditBalance: balance })
           }
         } catch {
-          // 继续轮询
+          // Continue polling
         }
       }, 3000)
 
-      // 120 秒超时停止轮询
+      // Stop polling after 120 second timeout
       setTimeout(() => clearInterval(pollInterval), 120000)
     } catch (err) {
       console.error('Open pay page failed:', err)
@@ -206,7 +206,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     })
     applyThemeToDOM(resolvedTheme)
 
-    // 检查云服务状态 & 模型配置
+    // Check cloud service status & model configuration
     try {
       const { enabled } = await getCloudStatus()
       set({ cloudEnabled: enabled })
@@ -218,14 +218,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
-      // 拉取模型设置，判断是否可用
+      // Fetch model settings and check availability
       const settings = await getSettings()
       const { provider } = settings.activeModel
 
       if (!enabled && (provider === 'builtin' || provider === 'cloud')) {
-        // 离线模式下内置/云模型不可用，自动切换到 custom
+        // Built-in/cloud models unavailable in offline mode, auto-switch to custom
         await updateSettings({ activeModel: { provider: 'custom' } })
-        // 有自定义模型才算 ready
+        // Only ready if custom models exist
         set({ modelReady: settings.customModels.length > 0 })
       } else if (provider === 'custom') {
         const model = settings.activeModel.id
@@ -233,11 +233,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           : settings.customModels[0]
         set({ modelReady: !!model })
       } else {
-        // builtin/cloud 在线模式下可用
+        // builtin/cloud available in online mode
         set({ modelReady: true })
       }
     } catch {
-      // 后端未就绪，忽略
+      // Backend not ready, ignore
     }
   },
 }))

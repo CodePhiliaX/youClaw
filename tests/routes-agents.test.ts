@@ -54,7 +54,7 @@ describe('agents routes', () => {
     tempWorkspaces.length = 0
   })
 
-  test('GET /agents 返回配置和状态', async () => {
+  test('GET /agents returns config and state', async () => {
     const app = createAgentsRoutes({
       getAgents: () => [{ id: 'agent-1', name: 'Agent 1', workspaceDir: '/tmp/a1' }],
       getAgent: () => ({
@@ -75,7 +75,7 @@ describe('agents routes', () => {
     expect(body[0]?.state.totalProcessed).toBe(3)
   })
 
-  test('docs 接口只返回允许的文档，并支持读取和更新', async () => {
+  test('docs endpoint only returns allowed documents, and supports read and update', async () => {
     const workspaceDir = mkdtempSync(join(tmpdir(), 'youclaw-agent-docs-'))
     tempWorkspaces.push(workspaceDir)
     writeFileSync(resolve(workspaceDir, 'AGENT.md'), '# Agent')
@@ -112,7 +112,7 @@ describe('agents routes', () => {
     expect(invalidRes.status).toBe(400)
   })
 
-  test('POST /agents 创建新 agent 并复制模板文件', async () => {
+  test('POST /agents creates a new agent and copies template files', async () => {
     const manager = await createRealManager()
     const app = createAgentsRoutes(manager)
     const agentId = createAgentId('route-create')
@@ -139,7 +139,7 @@ describe('agents routes', () => {
     expect(manager.getAgent(agentId)?.config.name).toBe('Route Create Agent')
   })
 
-  test('PUT /agents/:id 更新 agent.yaml，但不会改动 id', async () => {
+  test('PUT /agents/:id updates agent.yaml but does not change id', async () => {
     const manager = await createRealManager()
     const app = createAgentsRoutes(manager)
     const agentId = createAgentId('route-update')
@@ -173,7 +173,7 @@ describe('agents routes', () => {
     expect(yaml.trigger).toBe('^@bot')
   })
 
-  test('DELETE /agents/:id 禁止删除 default，允许删除普通 agent', async () => {
+  test('DELETE /agents/:id forbids deleting default, allows deleting regular agent', async () => {
     const manager = await createRealManager()
     const app = createAgentsRoutes(manager)
     const agentId = createAgentId('route-delete')

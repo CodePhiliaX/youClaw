@@ -48,7 +48,7 @@ function createChannel(overrides: Partial<Channel> = {}): Channel {
 describe('MessageRouter.handleInbound', () => {
   beforeEach(() => cleanTables('messages', 'chats'))
 
-  test('无匹配 agent 时忽略消息', async () => {
+  test('ignores message when no matching agent', async () => {
     const resolveAgent = mock(() => undefined)
     const enqueue = mock(() => Promise.resolve('unused'))
     const router = new MessageRouter(
@@ -65,7 +65,7 @@ describe('MessageRouter.handleInbound', () => {
     expect(getChats()).toEqual([])
   })
 
-  test('群聊未命中 trigger 时不会入队或写库', async () => {
+  test('does not enqueue or persist when group message misses trigger', async () => {
     const enqueue = mock(() => Promise.resolve('unused'))
     const router = new MessageRouter(
       {
@@ -78,7 +78,7 @@ describe('MessageRouter.handleInbound', () => {
     await router.handleInbound(createMessage({
       chatId: 'tg:group-1',
       isGroup: true,
-      content: '普通群消息',
+      content: 'ordinary group message',
     }))
 
     expect(enqueue).toHaveBeenCalledTimes(0)
@@ -86,7 +86,7 @@ describe('MessageRouter.handleInbound', () => {
     expect(getChats()).toEqual([])
   })
 
-  test('自动解析 skill 调用，保存消息，并记录 daily log', async () => {
+  test('auto-parses skill invocations, saves message, and records daily log', async () => {
     const enqueue = mock(() => Promise.resolve('router reply'))
     const appendDailyLog = mock(() => {})
     const loadAllSkills = mock(() => [
@@ -131,7 +131,7 @@ describe('MessageRouter.handleInbound', () => {
     expect(messages.some((message) => message.content === 'router reply')).toBe(true)
   })
 
-  test('显式 requestedSkills 优先，不再重新解析前缀', async () => {
+  test('explicit requestedSkills take priority, prefix is not re-parsed', async () => {
     const enqueue = mock(() => Promise.resolve('ok'))
     const loadAllSkills = mock(() => [{ name: 'pdf' }])
     const router = new MessageRouter(
@@ -155,8 +155,8 @@ describe('MessageRouter.handleInbound', () => {
   })
 })
 
-describe('MessageRouter complete 事件出站', () => {
-  test('只向拥有 chatId 的 channel 发送完成消息', async () => {
+describe('MessageRouter complete event outbound', () => {
+  test('sends completion message only to the channel that owns the chatId', async () => {
     const eventBus = new EventBus()
     const firstSend = mock(() => Promise.resolve())
     const secondSend = mock(() => Promise.resolve())

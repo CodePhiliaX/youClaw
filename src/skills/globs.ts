@@ -2,12 +2,12 @@ import { readdirSync } from 'node:fs'
 import { minimatch } from 'minimatch'
 import type { Skill } from './types.ts'
 
-// 扫描时排除的目录和文件
+// Directories and files excluded during scanning
 const EXCLUDED = new Set(['.git', 'node_modules', '.DS_Store', 'data'])
 
 /**
- * 扫描工作空间目录，返回所有文件的相对路径列表
- * 排除 .git、node_modules、.DS_Store、data/
+ * Scan workspace directory and return relative paths of all files.
+ * Excludes .git, node_modules, .DS_Store, data/.
  */
 export function scanWorkspaceFiles(workspaceDir: string): string[] {
   try {
@@ -17,14 +17,14 @@ export function scanWorkspaceFiles(workspaceDir: string): string[] {
     for (const entry of entries) {
       if (!entry.isFile()) continue
 
-      // 构建相对路径
+      // Build relative path
       const parentPath = entry.parentPath ?? (entry as any).path ?? ''
       const relativeDir = parentPath
         ? parentPath.replace(workspaceDir, '').replace(/^\//, '')
         : ''
       const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name
 
-      // 检查路径中是否包含排除目录
+      // Check if path contains an excluded directory
       const parts = relativePath.split('/')
       if (parts.some((p) => EXCLUDED.has(p))) continue
 
@@ -38,9 +38,9 @@ export function scanWorkspaceFiles(workspaceDir: string): string[] {
 }
 
 /**
- * 检查 skill 的 globs 是否匹配工作空间中的文件
- * - 无 globs 或空数组 → 无条件纳入（返回 true）
- * - 否则用 Bun.Glob 检查是否有文件匹配任一 glob 模式
+ * Check if a skill's globs match any files in the workspace.
+ * - No globs or empty array -> unconditionally included (returns true)
+ * - Otherwise checks if any file matches at least one glob pattern
  */
 export function matchSkillGlobs(skill: Skill, filePaths: string[]): boolean {
   const globs = skill.frontmatter.globs

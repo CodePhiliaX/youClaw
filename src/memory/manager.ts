@@ -63,17 +63,17 @@ export class MemoryManager {
     }
   }
 
-  // ===== 全局 Memory =====
+  // ===== Global Memory =====
 
   /**
-   * 获取全局 MEMORY.md 内容
+   * Get global MEMORY.md content
    */
   getGlobalMemory(): string {
     return this.getMemory(GLOBAL_AGENT_ID)
   }
 
   /**
-   * 更新全局 MEMORY.md
+   * Update global MEMORY.md
    */
   updateGlobalMemory(content: string): void {
     this.updateMemory(GLOBAL_AGENT_ID, content)
@@ -82,7 +82,7 @@ export class MemoryManager {
   // ===== Agent Memory =====
 
   /**
-   * 获取 agent 的 MEMORY.md 内容
+   * Get agent MEMORY.md content
    */
   getMemory(agentId: string): string {
     const filePath = this.getMemoryFilePath(agentId)
@@ -95,17 +95,17 @@ export class MemoryManager {
   }
 
   /**
-   * 更新 agent 的 MEMORY.md
+   * Update agent MEMORY.md
    */
   updateMemory(agentId: string, content: string): void {
     this.ensureMemoryDir(agentId)
     const filePath = this.getMemoryFilePath(agentId)
     writeFileSync(filePath, content, 'utf-8')
-    getLogger().info({ agentId }, 'MEMORY.md 已更新')
+    getLogger().info({ agentId }, 'MEMORY.md updated')
   }
 
   /**
-   * 截断文本到指定长度
+   * Truncate text to specified length
    */
   private truncate(text: string, maxLength: number): string {
     if (text.length <= maxLength) return text
@@ -113,7 +113,7 @@ export class MemoryManager {
   }
 
   /**
-   * 追加每日日志（支持截断）
+   * Append daily log (with truncation support)
    */
   appendDailyLog(agentId: string, chatId: string, userMessage: string, botReply: string, maxLogEntryLength?: number): void {
     this.ensureLogsDir(agentId)
@@ -137,11 +137,11 @@ export class MemoryManager {
     }
 
     writeFileSync(logPath, existing + entry, 'utf-8')
-    getLogger().debug({ agentId, date }, '每日日志已追加')
+    getLogger().debug({ agentId, date }, 'daily log appended')
   }
 
   /**
-   * 获取每日日志列表（返回日期数组，降序排列）
+   * Get daily log list (returns date array, descending order)
    */
   getDailyLogDates(agentId: string): string[] {
     const logsDir = this.getLogsDir(agentId)
@@ -158,7 +158,7 @@ export class MemoryManager {
   }
 
   /**
-   * 获取某天的日志内容
+   * Get log content for a specific date
    */
   getDailyLog(agentId: string, date: string): string {
     const logPath = resolve(this.getLogsDir(agentId), `${date}.md`)
@@ -171,7 +171,7 @@ export class MemoryManager {
   }
 
   /**
-   * 清理超期日志文件
+   * Prune expired log files
    */
   pruneOldLogs(agentId: string, retainDays: number = 30): number {
     const logsDir = this.getLogsDir(agentId)
@@ -192,14 +192,14 @@ export class MemoryManager {
     }
 
     if (deleted > 0) {
-      getLogger().info({ agentId, deleted, retainDays }, '旧日志已清理')
+      getLogger().info({ agentId, deleted, retainDays }, 'old logs pruned')
     }
     return deleted
   }
 
   /**
-   * 获取记忆上下文（注入到系统提示词中）
-   * 支持可配置的天数和字符限制
+   * Get memory context (injected into system prompt)
+   * Supports configurable day count and character limit
    */
   getMemoryContext(agentId: string, options?: MemoryContextOptions): string {
     const recentDays = options?.recentDays ?? 3
@@ -216,12 +216,12 @@ export class MemoryManager {
     for (const date of recentDates) {
       const log = this.getDailyLog(agentId, date)
       if (log) {
-        // 检查是否超出字符限制
+        // Check if character limit exceeded
         if (totalChars + log.length > maxContextChars) {
-          // 截断最后一段日志
+          // Truncate the last log segment
           const remaining = maxContextChars - totalChars
           if (remaining > 100) {
-            recentLogs += log.slice(0, remaining) + '\n...[日志已截断]\n'
+            recentLogs += log.slice(0, remaining) + '\n...[logs truncated]\n'
           }
           break
         }
@@ -243,10 +243,10 @@ export class MemoryManager {
     return parts.join('\n')
   }
 
-  // ===== 对话存档 =====
+  // ===== Conversation Archives =====
 
   /**
-   * 获取对话存档列表
+   * Get conversation archive list
    */
   getConversationArchives(agentId: string): Array<{ filename: string; date: string }> {
     const dir = this.getConversationsDir(agentId)
@@ -263,10 +263,10 @@ export class MemoryManager {
   }
 
   /**
-   * 读取单个对话存档
+   * Read a single conversation archive
    */
   getConversationArchive(agentId: string, filename: string): string {
-    // 安全检查：防止路径遍历
+    // Security check: prevent path traversal
     if (filename.includes('..') || filename.includes('/')) return ''
 
     const filePath = resolve(this.getConversationsDir(agentId), filename)
@@ -276,19 +276,19 @@ export class MemoryManager {
   }
 
   /**
-   * 写入对话存档
+   * Save conversation archive
    */
   saveConversationArchive(agentId: string, filename: string, content: string): void {
     this.ensureConversationsDir(agentId)
     const filePath = resolve(this.getConversationsDir(agentId), filename)
     writeFileSync(filePath, content, 'utf-8')
-    getLogger().info({ agentId, filename }, '对话存档已保存')
+    getLogger().info({ agentId, filename }, 'conversation archive saved')
   }
 
-  // ===== 快照 =====
+  // ===== Snapshots =====
 
   /**
-   * 导出 agent 的核心记忆快照
+   * Export agent core memory snapshot
    */
   exportSnapshot(agentId: string): string {
     const globalMemory = this.getGlobalMemory()
@@ -307,7 +307,7 @@ export class MemoryManager {
     }
 
     parts.push('## Long-term Memory\n')
-    parts.push(longTermMemory || '*（空）*')
+    parts.push(longTermMemory || '*(empty)*')
     parts.push('')
 
     if (recentDates.length > 0) {
@@ -326,19 +326,19 @@ export class MemoryManager {
   }
 
   /**
-   * 保存快照文件
+   * Save snapshot file
    */
   saveSnapshot(agentId: string): string {
     const content = this.exportSnapshot(agentId)
     this.ensureMemoryDir(agentId)
     const filePath = this.getSnapshotFilePath(agentId)
     writeFileSync(filePath, content, 'utf-8')
-    getLogger().info({ agentId }, 'MEMORY_SNAPSHOT.md 已保存')
+    getLogger().info({ agentId }, 'MEMORY_SNAPSHOT.md saved')
     return content
   }
 
   /**
-   * 获取快照内容
+   * Get snapshot content
    */
   getSnapshot(agentId: string): string {
     const filePath = this.getSnapshotFilePath(agentId)
@@ -347,7 +347,7 @@ export class MemoryManager {
   }
 
   /**
-   * 从快照恢复（当 MEMORY.md 为空但 MEMORY_SNAPSHOT.md 存在时）
+   * Restore from snapshot (when MEMORY.md is empty but MEMORY_SNAPSHOT.md exists)
    */
   restoreFromSnapshot(agentId: string): boolean {
     const memory = this.getMemory(agentId)
@@ -359,9 +359,9 @@ export class MemoryManager {
     const match = snapshot.match(/## Long-term Memory\n\n([\s\S]*?)(?=\n## |$)/)
     const content = match?.[1]?.trim()
 
-    if (content && content !== '*（空）*') {
+    if (content && content !== '*(empty)*') {
       this.updateMemory(agentId, content)
-      getLogger().info({ agentId }, '已从 MEMORY_SNAPSHOT.md 恢复记忆')
+      getLogger().info({ agentId }, 'memory restored from MEMORY_SNAPSHOT.md')
       return true
     }
 
@@ -369,7 +369,7 @@ export class MemoryManager {
   }
 
   /**
-   * 归档会话
+   * Archive conversation
    */
   archiveConversation(agentId: string, chatId: string, sessionId: string, content: string): void {
     const logger = getLogger()
@@ -383,14 +383,14 @@ export class MemoryManager {
     const filename = `${sessionId}.md`
     const filePath = resolve(dir, filename)
 
-    const header = `# 会话归档\n- Session: ${sessionId}\n- Chat: ${chatId}\n- Date: ${date}\n\n---\n\n`
+    const header = `# Conversation Archive\n- Session: ${sessionId}\n- Chat: ${chatId}\n- Date: ${date}\n\n---\n\n`
     writeFileSync(filePath, header + content, 'utf-8')
 
-    logger.info({ agentId, chatId, sessionId }, '会话已归档')
+    logger.info({ agentId, chatId, sessionId }, 'conversation archived')
   }
 
   /**
-   * 获取归档会话列表
+   * Get archived conversation list
    */
   getArchivedConversations(agentId: string, chatId?: string): ArchivedConversation[] {
     const results: ArchivedConversation[] = []
@@ -432,7 +432,7 @@ export class MemoryManager {
   }
 
   /**
-   * 获取归档会话内容
+   * Get archived conversation content
    */
   getArchivedConversation(agentId: string, chatId: string, sessionId: string): string {
     const dir = this.getConversationsDir(agentId, chatId)

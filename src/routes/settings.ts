@@ -3,11 +3,11 @@ import { getSettings, updateSettings, getActiveModelConfig } from '../settings/m
 
 const app = new Hono()
 
-// GET /settings — 返回完整 settings（apiKey 脱敏）
+// GET /settings — return full settings (apiKey masked)
 app.get('/settings', (c) => {
   const settings = getSettings()
 
-  // apiKey 脱敏：只保留后 4 位
+  // Mask apiKey: keep only last 4 characters
   const masked = {
     ...settings,
     customModels: settings.customModels.map((m) => ({
@@ -19,11 +19,11 @@ app.get('/settings', (c) => {
   return c.json(masked)
 })
 
-// PATCH /settings — 局部更新
+// PATCH /settings — partial update
 app.patch('/settings', async (c) => {
   const body = await c.req.json() as Record<string, unknown>
 
-  // 只取 body 中实际传了的字段，避免 Zod default 值覆盖已有数据
+  // Only pick fields actually present in body to avoid Zod defaults overwriting existing data
   const current = getSettings()
   const partial: Record<string, unknown> = {}
 
@@ -32,7 +32,7 @@ app.patch('/settings', async (c) => {
   }
 
   if ('customModels' in body && Array.isArray(body.customModels)) {
-    // 保留脱敏 apiKey 对应的原始值
+    // Preserve original apiKey for masked values
     const existingMap = new Map(current.customModels.map((m) => [m.id, m.apiKey]))
     partial.customModels = (body.customModels as Array<Record<string, unknown>>).map((m) => {
       const apiKey = String(m.apiKey ?? '')
@@ -45,7 +45,7 @@ app.patch('/settings', async (c) => {
 
   const updated = updateSettings(partial)
 
-  // 返回脱敏后的结果
+  // Return masked result
   const masked = {
     ...updated,
     customModels: updated.customModels.map((m) => ({
@@ -57,7 +57,7 @@ app.patch('/settings', async (c) => {
   return c.json(masked)
 })
 
-// GET /settings/active-model — 返回当前激活模型的完整配置（内部用，不脱敏）
+// GET /settings/active-model — return full config of active model (internal use, unmasked)
 app.get('/settings/active-model', (c) => {
   const config = getActiveModelConfig()
   if (!config) {

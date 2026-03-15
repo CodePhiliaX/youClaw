@@ -4,37 +4,37 @@ export interface SkillFrontmatter {
   name: string
   description: string
   version?: string
-  os?: string[]           // 支持的操作系统，如 ["darwin", "linux"]
-  dependencies?: string[] // 需要的可执行文件，如 ["chrome", "node"]
-  env?: string[]          // 需要的环境变量，如 ["MINIMAX_API_KEY"]
-  tools?: string[]        // 提供的工具
-  tags?: string[]         // 标签分类，如 ["coding", "search"]
-  globs?: string[]        // 匹配的文件模式，如 ["*.py", "*.ts"]
-  priority?: SkillPriority // 优先级：critical > normal > low
-  install?: Record<string, string> // 安装指南，如 { brew: "brew install chrome", apt: "apt install chromium" }
+  os?: string[]           // Supported OS platforms, e.g. ["darwin", "linux"]
+  dependencies?: string[] // Required executables, e.g. ["chrome", "node"]
+  env?: string[]          // Required environment variables, e.g. ["MINIMAX_API_KEY"]
+  tools?: string[]        // Provided tools
+  tags?: string[]         // Tag categories, e.g. ["coding", "search"]
+  globs?: string[]        // File patterns to match, e.g. ["*.py", "*.ts"]
+  priority?: SkillPriority // Priority: critical > normal > low
+  install?: Record<string, string> // Install instructions, e.g. { brew: "brew install chrome", apt: "apt install chromium" }
 
-  // 扩展字段
-  requires?: string[]      // 依赖哪些其他 skill
-  conflicts?: string[]     // 与哪些 skill 冲突
-  setup?: string           // 安装后执行的命令
-  teardown?: string        // 卸载前执行的命令
-  source?: string          // 来源 URL（用于远程安装）
+  // Extension fields
+  requires?: string[]      // Other skills this skill depends on
+  conflicts?: string[]     // Skills that conflict with this one
+  setup?: string           // Command to run after installation
+  teardown?: string        // Command to run before uninstallation
+  source?: string          // Source URL (for remote installation)
 }
 
-/** 单项依赖检查结果 */
+/** Single dependency check result */
 export interface DependencyCheckResult {
   name: string
   found: boolean
-  path?: string  // 找到时的可执行文件路径
+  path?: string  // Executable path when found
 }
 
-/** 单项环境变量检查结果 */
+/** Single environment variable check result */
 export interface EnvCheckResult {
   name: string
   found: boolean
 }
 
-/** 细粒度资格检查详情 */
+/** Detailed eligibility check results */
 export interface EligibilityDetail {
   os: { passed: boolean; current: string; required?: string[] }
   dependencies: { passed: boolean; results: DependencyCheckResult[] }
@@ -43,27 +43,27 @@ export interface EligibilityDetail {
 
 export interface Skill {
   name: string
-  source: 'builtin' | 'workspace' | 'user' // 来源层级
+  source: 'builtin' | 'workspace' | 'user' // Source tier
   frontmatter: SkillFrontmatter
-  content: string          // SKILL.md 内容（去掉 frontmatter 后的部分）
-  path: string             // 文件路径
-  eligible: boolean        // 资格检查结果
-  eligibilityErrors: string[] // 资格检查失败原因
-  eligibilityDetail: EligibilityDetail // 细粒度资格检查详情
-  loadedAt: number         // 加载时间戳（ms）
-  enabled: boolean         // 用户是否启用（默认 true）
+  content: string          // SKILL.md body (frontmatter stripped)
+  path: string             // File path
+  eligible: boolean        // Eligibility check result
+  eligibilityErrors: string[] // Eligibility check failure reasons
+  eligibilityDetail: EligibilityDetail // Detailed eligibility check results
+  loadedAt: number         // Load timestamp (ms)
+  enabled: boolean         // Whether user has enabled this skill (default true)
   usable: boolean          // eligible && enabled
-  registryMeta?: SkillRegistryMeta // 从 .registry.json 读取的元数据
+  registryMeta?: SkillRegistryMeta // Metadata from .registry.json
 }
 
-/** Agent Skills 视图 */
+/** Agent skills view */
 export interface AgentSkillsView {
-  available: Skill[]       // 该 agent 可用的所有 skills
-  enabled: Skill[]         // 已启用的（在 agent.yaml skills 列表中）
-  eligible: Skill[]        // 通过资格检查的
+  available: Skill[]       // All skills available to this agent
+  enabled: Skill[]         // Enabled skills (listed in agent.yaml skills)
+  eligible: Skill[]        // Skills that passed eligibility checks
 }
 
-/** Registry 元数据（.registry.json） */
+/** Registry metadata (.registry.json) */
 export interface SkillRegistryMeta {
   source: string
   slug: string
@@ -71,14 +71,14 @@ export interface SkillRegistryMeta {
   displayName: string
 }
 
-/** Skills 配置 */
+/** Skills configuration */
 export interface SkillsConfig {
-  maxSkillCount: number       // 最大 skill 数量
-  maxTotalChars: number       // 所有 skill 内容总字符限制
-  maxSingleSkillChars: number // 单个 skill 内容字符限制
+  maxSkillCount: number       // Maximum number of skills
+  maxTotalChars: number       // Total character limit for all skill content
+  maxSingleSkillChars: number // Character limit for a single skill
 }
 
-/** 默认配置 */
+/** Default configuration */
 export const DEFAULT_SKILLS_CONFIG: SkillsConfig = {
   maxSkillCount: 50,
   maxTotalChars: 30000,

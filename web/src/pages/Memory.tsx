@@ -27,7 +27,7 @@ type SearchResult = {
   rank: number
 }
 
-// 特殊标记：表示全局 Memory
+// Special marker: represents global Memory
 const GLOBAL_ID = '__global__'
 
 export function Memory() {
@@ -42,20 +42,20 @@ export function Memory() {
   const [expandedDate, setExpandedDate] = useState<string | null>(null)
   const [logContent, setLogContent] = useState<Record<string, string>>({})
 
-  // 对话存档
+  // Conversation archives
   const [archives, setArchives] = useState<ConversationArchive[]>([])
   const [expandedArchive, setExpandedArchive] = useState<string | null>(null)
   const [archiveContent, setArchiveContent] = useState<Record<string, string>>({})
 
-  // 搜索
+  // Search
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
 
-  // 右栏 tab
+  // Right panel tab
   const [rightTab, setRightTab] = useState<'logs' | 'archives' | 'search'>('logs')
 
-  // 加载 agents 列表
+  // Load agents list
   useEffect(() => {
     getAgents()
       .then((list) => {
@@ -67,15 +67,15 @@ export function Memory() {
       .catch(() => {})
   }, [])
 
-  // 是否选中全局 Memory
+  // Whether global Memory is selected
   const isGlobal = selectedAgentId === GLOBAL_ID
 
-  // 当选择 agent 变化时，加载记忆和日志
+  // Load memory and logs when selected agent changes
   const loadMemoryData = useCallback((agentId: string) => {
     if (!agentId) return
 
     if (agentId === GLOBAL_ID) {
-      // 全局 Memory
+      // Global Memory
       getGlobalMemory()
         .then((res) => {
           setMemoryContent(res.content)
@@ -123,7 +123,7 @@ export function Memory() {
     }
   }, [selectedAgentId, loadMemoryData])
 
-  // 保存 MEMORY.md
+  // Save MEMORY.md
   const handleSave = async () => {
     if (!selectedAgentId) return
     setIsSaving(true)
@@ -136,13 +136,13 @@ export function Memory() {
       setMemoryContent(editContent)
       setIsEditing(false)
     } catch {
-      // 静默处理
+      // Silently handle error
     } finally {
       setIsSaving(false)
     }
   }
 
-  // 展开/收起日志
+  // Expand/collapse logs
   const toggleDate = async (date: string) => {
     if (expandedDate === date) {
       setExpandedDate(null)
@@ -161,7 +161,7 @@ export function Memory() {
     }
   }
 
-  // 展开/收起存档
+  // Expand/collapse archives
   const toggleArchive = async (filename: string) => {
     if (expandedArchive === filename) {
       setExpandedArchive(null)
@@ -180,7 +180,7 @@ export function Memory() {
     }
   }
 
-  // 搜索
+  // Search
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
     setIsSearching(true)
@@ -196,7 +196,7 @@ export function Memory() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* 顶部：Agent 选择器 */}
+      {/* Top: Agent selector */}
       <div className="flex items-center gap-3 p-4 border-b border-border">
         <Brain className="h-5 w-5 text-muted-foreground" />
         <h1 className="text-sm font-semibold">{t.memory.title}</h1>
@@ -217,9 +217,9 @@ export function Memory() {
         </select>
       </div>
 
-      {/* 主内容：左右分栏 */}
+      {/* Main content: Left/right split */}
       <div className="flex flex-1 overflow-hidden">
-        {/* 左栏：MEMORY.md */}
+        {/* Left: MEMORY.md */}
         <div className="flex-1 flex flex-col border-r border-border min-w-0">
           <div className="flex items-center justify-between p-3 border-b border-border">
             <div className="flex items-center gap-2">
@@ -288,9 +288,9 @@ export function Memory() {
           </div>
         </div>
 
-        {/* 右栏：日志 / 对话存档 / 搜索 */}
+        {/* Right: Logs / Archives / Search */}
         <div className="w-[380px] flex flex-col min-w-0">
-          {/* Tab 切换 */}
+          {/* Tab toggle */}
           {!isGlobal && (
             <div className="flex border-b border-border">
               <button
@@ -330,7 +330,7 @@ export function Memory() {
           )}
 
           <div className="flex-1 overflow-y-auto">
-            {/* 全局模式：只显示搜索 */}
+            {/* Global mode: search only */}
             {isGlobal ? (
               <div className="p-3">
                 <div className="flex gap-2 mb-3">

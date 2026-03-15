@@ -11,38 +11,38 @@ priority: normal
 
 # Web Search
 
-通过 MiniMax MCP Server 提供的 `web_search` 工具搜索互联网获取实时信息。
+Search the internet for real-time information using the `web_search` tool provided by MiniMax MCP Server.
 
-## 使用时机
+## When to Use
 
-当用户需要以下信息时使用 web_search：
+Use web_search when the user needs:
 
-- 最新新闻、事件、天气
-- 实时数据（股价、汇率、体育比分等）
-- 你的训练数据可能过时的事实
-- 特定产品、服务的最新信息
-- 技术文档的最新版本
+- Latest news, events, or weather
+- Real-time data (stock prices, exchange rates, sports scores, etc.)
+- Facts that may be outdated in your training data
+- Up-to-date information about specific products or services
+- Latest versions of technical documentation
 
-## 搜索策略
+## Search Strategy
 
-1. **构造有效关键词**：简短、精准，去掉虚词。技术问题优先用英文搜索
-2. **加时间限定**：如果需要最新信息，在关键词中加入年份或 "latest"
-3. **多步搜索**：先搜概览性关键词，根据结果再细化搜索
-4. **交叉验证**：重要事实至少从两个来源确认
+1. **Craft effective keywords**: Keep them short and precise, remove filler words. Prefer English for technical queries
+2. **Add time constraints**: Include the year or "latest" in keywords when seeking current information
+3. **Multi-step search**: Start with broad overview keywords, then refine based on results
+4. **Cross-verify**: Confirm important facts from at least two sources
 
-## 输出规范
+## Output Guidelines
 
-- 在回答中注明信息来源（URL）
-- 区分事实和推测
-- 如果搜索结果不足以回答问题，如实告知
-- 不要大段复制粘贴搜索结果，提炼关键信息
+- Cite sources (URLs) in your response
+- Distinguish between facts and speculation
+- If search results are insufficient to answer the question, state so honestly
+- Do not copy-paste large blocks of search results; distill the key information
 
-## 示例
+## Example
 
-用户: "Bun 最新版本是什么？"
+User: "What is the latest version of Bun?"
 
-搜索策略:
+Search strategy:
 1. `web_search("Bun latest release 2026")`
-2. 如果需要详细信息，用 `WebFetch` 抓取 release notes 页面
+2. If more details are needed, use `WebFetch` to retrieve the release notes page
 
-回答: 包含版本号、发布日期、关键变更，附上来源链接。
+Response: Include version number, release date, key changes, and source links.

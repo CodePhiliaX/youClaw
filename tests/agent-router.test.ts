@@ -46,7 +46,7 @@ describe('AgentRouter', () => {
     router = new AgentRouter()
   })
 
-  test('无 bindings 时 fallback 到 default agent', () => {
+  test('falls back to default agent when no bindings exist', () => {
     const agents = buildAgentsMap(
       createAgent('default'),
       createAgent('other'),
@@ -57,7 +57,7 @@ describe('AgentRouter', () => {
     expect(result?.config.id).toBe('default')
   })
 
-  test('无 default agent 时 fallback 到第一个 agent', () => {
+  test('falls back to first agent when no default agent exists', () => {
     const agents = buildAgentsMap(
       createAgent('custom-1'),
     )
@@ -67,13 +67,13 @@ describe('AgentRouter', () => {
     expect(result?.config.id).toBe('custom-1')
   })
 
-  test('无任何 agent 时返回 undefined', () => {
+  test('returns undefined when no agents exist', () => {
     router.buildRouteTable(new Map())
     const result = router.resolve({ channel: 'web', chatId: 'web:abc' })
     expect(result).toBeUndefined()
   })
 
-  test('chatIds 精确匹配', () => {
+  test('chatIds exact match', () => {
     const agents = buildAgentsMap(
       createAgent('default'),
       createAgent('support', [
@@ -83,11 +83,11 @@ describe('AgentRouter', () => {
     router.buildRouteTable(agents)
 
     expect(router.resolve({ channel: 'telegram', chatId: 'tg:222' })?.config.id).toBe('support')
-    // 不匹配的 chatId fallback 到 default
+    // non-matching chatId falls back to default
     expect(router.resolve({ channel: 'telegram', chatId: 'tg:999' })?.config.id).toBe('default')
   })
 
-  test('chatIds 不匹配时不会 fallback 到同 binding 的其他条件', () => {
+  test('non-matching chatIds do not fall back to other conditions in same binding', () => {
     const agents = buildAgentsMap(
       createAgent('default'),
       createAgent('specific', [
@@ -96,11 +96,11 @@ describe('AgentRouter', () => {
     )
     router.buildRouteTable(agents)
 
-    // tg:222 不在 chatIds 中，应该 fallback 到 default 而非 specific
+    // tg:222 is not in chatIds, should fall back to default not specific
     expect(router.resolve({ channel: 'telegram', chatId: 'tg:222' })?.config.id).toBe('default')
   })
 
-  test('channel 渠道匹配', () => {
+  test('channel matching', () => {
     const agents = buildAgentsMap(
       createAgent('default'),
       createAgent('web-agent', [
@@ -116,7 +116,7 @@ describe('AgentRouter', () => {
     expect(router.resolve({ channel: 'telegram', chatId: 'tg:123' })?.config.id).toBe('tg-agent')
   })
 
-  test('channel 不匹配时跳过该 binding', () => {
+  test('skips binding when channel does not match', () => {
     const agents = buildAgentsMap(
       createAgent('default'),
       createAgent('web-only', [
@@ -125,11 +125,11 @@ describe('AgentRouter', () => {
     )
     router.buildRouteTable(agents)
 
-    // telegram 渠道不匹配 web-only 的 binding
+    // telegram channel does not match web-only binding
     expect(router.resolve({ channel: 'telegram', chatId: 'tg:123' })?.config.id).toBe('default')
   })
 
-  test('通配符 channel "*" 匹配所有渠道', () => {
+  test('wildcard channel "*" matches all channels', () => {
     const agents = buildAgentsMap(
       createAgent('catch-all', [
         { channel: '*', priority: 0 },
@@ -142,7 +142,7 @@ describe('AgentRouter', () => {
     expect(router.resolve({ channel: 'api', chatId: 'api:xyz' })?.config.id).toBe('catch-all')
   })
 
-  test('tags 标签匹配', () => {
+  test('tags matching', () => {
     const agents = buildAgentsMap(
       createAgent('default'),
       createAgent('support', [
@@ -151,15 +151,15 @@ describe('AgentRouter', () => {
     )
     router.buildRouteTable(agents)
 
-    // 匹配 tag
+    // matching tag
     expect(router.resolve({ channel: 'web', chatId: 'web:abc', tags: ['support'] })?.config.id).toBe('support')
-    // 无 tag 不匹配
+    // no tag does not match
     expect(router.resolve({ channel: 'web', chatId: 'web:abc' })?.config.id).toBe('default')
-    // 不同的 tag 不匹配
+    // different tag does not match
     expect(router.resolve({ channel: 'web', chatId: 'web:abc', tags: ['billing'] })?.config.id).toBe('default')
   })
 
-  test('condition.isGroup 匹配', () => {
+  test('condition.isGroup matching', () => {
     const agents = buildAgentsMap(
       createAgent('default'),
       createAgent('group-handler', [
@@ -172,7 +172,7 @@ describe('AgentRouter', () => {
     expect(router.resolve({ channel: 'telegram', chatId: 'tg:123', isGroup: false })?.config.id).toBe('default')
   })
 
-  test('condition.sender 匹配', () => {
+  test('condition.sender matching', () => {
     const agents = buildAgentsMap(
       createAgent('default'),
       createAgent('vip', [
@@ -185,23 +185,23 @@ describe('AgentRouter', () => {
     expect(router.resolve({ channel: 'telegram', chatId: 'tg:123', sender: 'user-normal' })?.config.id).toBe('default')
   })
 
-  test('condition.trigger 正则匹配', () => {
+  test('condition.trigger regex matching', () => {
     const agents = buildAgentsMap(
       createAgent('default'),
       createAgent('translate', [
-        { channel: '*', condition: { trigger: '^(翻译|translate)' }, priority: 50 },
+        { channel: '*', condition: { trigger: '^(trans|translate)' }, priority: 50 },
       ]),
     )
     router.buildRouteTable(agents)
 
-    expect(router.resolve({ channel: 'web', chatId: 'web:abc', content: '翻译这段话' })?.config.id).toBe('translate')
+    expect(router.resolve({ channel: 'web', chatId: 'web:abc', content: 'translate this paragraph' })?.config.id).toBe('translate')
     expect(router.resolve({ channel: 'web', chatId: 'web:abc', content: 'Translate this' })?.config.id).toBe('translate')
-    expect(router.resolve({ channel: 'web', chatId: 'web:abc', content: '你好' })?.config.id).toBe('default')
-    // 无 content 时不匹配 trigger 条件
+    expect(router.resolve({ channel: 'web', chatId: 'web:abc', content: 'hello' })?.config.id).toBe('default')
+    // no content does not match trigger condition
     expect(router.resolve({ channel: 'web', chatId: 'web:abc' })?.config.id).toBe('default')
   })
 
-  test('priority 数值越高越优先', () => {
+  test('higher priority number takes precedence', () => {
     const agents = buildAgentsMap(
       createAgent('low', [
         { channel: 'web', priority: 10 },
@@ -215,7 +215,7 @@ describe('AgentRouter', () => {
     expect(router.resolve({ channel: 'web', chatId: 'web:abc' })?.config.id).toBe('high')
   })
 
-  test('chatIds 精确匹配 > channel 匹配 > 通配符', () => {
+  test('chatIds exact match > channel match > wildcard', () => {
     const agents = buildAgentsMap(
       createAgent('wildcard', [
         { channel: '*', priority: 0 },
@@ -234,7 +234,7 @@ describe('AgentRouter', () => {
     expect(router.resolve({ channel: 'api', chatId: 'api:xyz' })?.config.id).toBe('wildcard')
   })
 
-  test('多个 bindings 同一 agent', () => {
+  test('multiple bindings on the same agent', () => {
     const agents = buildAgentsMap(
       createAgent('default'),
       createAgent('multi', [
@@ -249,7 +249,7 @@ describe('AgentRouter', () => {
     expect(router.resolve({ channel: 'web', chatId: 'web:abc' })?.config.id).toBe('default')
   })
 
-  test('getRouteTable 返回完整路由表', () => {
+  test('getRouteTable returns the complete route table', () => {
     const agents = buildAgentsMap(
       createAgent('a', [
         { channel: 'web', priority: 10 },
@@ -263,17 +263,17 @@ describe('AgentRouter', () => {
     const table = router.getRouteTable()
     expect(table.length).toBe(2)
 
-    // 按 priority 降序
+    // sorted by priority descending
     expect(table[0]!.agentId).toBe('b')
     expect(table[0]!.binding.priority).toBe(100)
     expect(table[1]!.agentId).toBe('a')
     expect(table[1]!.binding.priority).toBe(10)
 
-    // 包含 agentName
+    // includes agentName
     expect(table[0]!.agentName).toBe('Agent b')
   })
 
-  test('空路由表返回空数组', () => {
+  test('empty route table returns empty array', () => {
     router.buildRouteTable(new Map())
     expect(router.getRouteTable()).toEqual([])
   })

@@ -6,16 +6,16 @@ import { getPaths } from '../config/index.ts'
 import type { AgentManager } from '../agent/index.ts'
 import { DEFAULT_WORKSPACE_DOCS, DEFAULT_MEMORY_MD } from '../agent/index.ts'
 
-// 允许通过 API 读写的工作空间文档
+// Workspace documents accessible via API
 const ALLOWED_DOCS = ['SOUL.md', 'AGENT.md', 'USER.md', 'TOOLS.md']
 
 export function createAgentsRoutes(agentManager: AgentManager) {
   const agents = new Hono()
 
-  // GET /api/agents — 列出所有 agents（含状态信息）
+  // GET /api/agents — list all agents (with state info)
   agents.get('/agents', (c) => {
     const configs = agentManager.getAgents()
-    // 附加每个 agent 的状态信息
+    // Attach state info for each agent
     const agentsWithState = configs.map((config) => {
       const instance = agentManager.getAgent(config.id)
       return {
@@ -26,7 +26,7 @@ export function createAgentsRoutes(agentManager: AgentManager) {
     return c.json(agentsWithState)
   })
 
-  // GET /api/agents/:id — 获取单个 agent 详情（含增强状态）
+  // GET /api/agents/:id — get single agent details (with enhanced state)
   agents.get('/agents/:id', (c) => {
     const id = c.req.param('id')
     const instance = agentManager.getAgent(id)
@@ -41,7 +41,7 @@ export function createAgentsRoutes(agentManager: AgentManager) {
     })
   })
 
-  // GET /api/agents/:id/docs — 列出工作空间所有文档文件及其内容
+  // GET /api/agents/:id/docs — list all workspace documents with content
   agents.get('/agents/:id/docs', (c) => {
     const id = c.req.param('id')
     const instance = agentManager.getAgent(id)
@@ -63,13 +63,13 @@ export function createAgentsRoutes(agentManager: AgentManager) {
     return c.json(docs)
   })
 
-  // GET /api/agents/:id/docs/:filename — 读取指定文档内容
+  // GET /api/agents/:id/docs/:filename — read specific document content
   agents.get('/agents/:id/docs/:filename', (c) => {
     const id = c.req.param('id')
     const filename = c.req.param('filename')
 
     if (!ALLOWED_DOCS.includes(filename)) {
-      return c.json({ error: `不允许访问的文件: ${filename}，允许的文件: ${ALLOWED_DOCS.join(', ')}` }, 400)
+      return c.json({ error: `File not allowed: ${filename}. Allowed files: ${ALLOWED_DOCS.join(', ')}` }, 400)
     }
 
     const instance = agentManager.getAgent(id)
@@ -81,20 +81,20 @@ export function createAgentsRoutes(agentManager: AgentManager) {
     const filePath = resolve(instance.workspaceDir, filename)
 
     if (!existsSync(filePath)) {
-      return c.json({ error: `文件不存在: ${filename}` }, 404)
+      return c.json({ error: `File not found: ${filename}` }, 404)
     }
 
     const content = readFileSync(filePath, 'utf-8')
     return c.json({ filename, content })
   })
 
-  // PUT /api/agents/:id/docs/:filename — 更新指定文档内容
+  // PUT /api/agents/:id/docs/:filename — update specific document content
   agents.put('/agents/:id/docs/:filename', async (c) => {
     const id = c.req.param('id')
     const filename = c.req.param('filename')
 
     if (!ALLOWED_DOCS.includes(filename)) {
-      return c.json({ error: `不允许访问的文件: ${filename}，允许的文件: ${ALLOWED_DOCS.join(', ')}` }, 400)
+      return c.json({ error: `File not allowed: ${filename}. Allowed files: ${ALLOWED_DOCS.join(', ')}` }, 400)
     }
 
     const instance = agentManager.getAgent(id)
@@ -106,7 +106,7 @@ export function createAgentsRoutes(agentManager: AgentManager) {
     const body = await c.req.json<{ content: string }>()
 
     if (typeof body.content !== 'string') {
-      return c.json({ error: '请求体必须包含 content 字段（字符串）' }, 400)
+      return c.json({ error: 'Request body must include a "content" field (string)' }, 400)
     }
 
     const filePath = resolve(instance.workspaceDir, filename)
@@ -115,38 +115,38 @@ export function createAgentsRoutes(agentManager: AgentManager) {
     return c.json({ filename, content: body.content })
   })
 
-  // POST /api/agents — 创建新 agent
+  // POST /api/agents — create a new agent
   agents.post('/agents', async (c) => {
     const body = await c.req.json<{ id: string; name: string; model?: string }>()
 
     if (!body.id || typeof body.id !== 'string') {
-      return c.json({ error: '请求体必须包含 id 字段（字符串）' }, 400)
+      return c.json({ error: 'Request body must include an "id" field (string)' }, 400)
     }
 
     if (!body.name || typeof body.name !== 'string') {
-      return c.json({ error: '请求体必须包含 name 字段（字符串）' }, 400)
+      return c.json({ error: 'Request body must include a "name" field (string)' }, 400)
     }
 
-    // 校验 id 格式，只允许字母数字、连字符、下划线
+    // Validate id format: only alphanumeric, hyphens, and underscores allowed
     if (!/^[a-zA-Z0-9_-]+$/.test(body.id)) {
-      return c.json({ error: 'id 只允许字母、数字、连字符和下划线' }, 400)
+      return c.json({ error: 'id may only contain letters, digits, hyphens, and underscores' }, 400)
     }
 
     const paths = getPaths()
     const agentDir = resolve(paths.agents, body.id)
 
-    // 检查是否已存在
+    // Check if already exists
     if (existsSync(agentDir)) {
-      return c.json({ error: `Agent "${body.id}" 已存在` }, 409)
+      return c.json({ error: `Agent "${body.id}" already exists` }, 409)
     }
 
-    // 创建 agent 目录
+    // Create agent directory
     mkdirSync(agentDir, { recursive: true })
 
-    // 创建 memory 子目录
+    // Create memory subdirectory
     mkdirSync(resolve(agentDir, 'memory'), { recursive: true })
 
-    // 写入 agent.yaml
+    // Write agent.yaml
     const config: Record<string, unknown> = {
       id: body.id,
       name: body.name,
@@ -157,7 +157,7 @@ export function createAgentsRoutes(agentManager: AgentManager) {
 
     writeFileSync(resolve(agentDir, 'agent.yaml'), stringifyYaml(config))
 
-    // 从内置模板初始化工作空间文档
+    // Initialize workspace documents from built-in templates
     for (const filename of ALLOWED_DOCS) {
       const targetFilePath = resolve(agentDir, filename)
       const content = DEFAULT_WORKSPACE_DOCS[filename] ?? `# ${basename(filename, '.md')}\n`
@@ -165,14 +165,14 @@ export function createAgentsRoutes(agentManager: AgentManager) {
     }
     writeFileSync(resolve(agentDir, 'memory', 'MEMORY.md'), DEFAULT_MEMORY_MD)
 
-    // 重新加载 agents
+    // Reload agents
     await agentManager.reloadAgents()
 
     const instance = agentManager.getAgent(body.id)
     return c.json(instance ? { ...instance.config, state: instance.state } : config, 201)
   })
 
-  // PUT /api/agents/:id — 更新 agent.yaml 配置
+  // PUT /api/agents/:id — update agent.yaml config
   agents.put('/agents/:id', async (c) => {
     const id = c.req.param('id')
     const instance = agentManager.getAgent(id)
@@ -184,35 +184,35 @@ export function createAgentsRoutes(agentManager: AgentManager) {
     const configPath = resolve(instance.workspaceDir, 'agent.yaml')
 
     if (!existsSync(configPath)) {
-      return c.json({ error: 'agent.yaml 不存在' }, 404)
+      return c.json({ error: 'agent.yaml not found' }, 404)
     }
 
     const body = await c.req.json<Record<string, unknown>>()
 
-    // 读取现有配置
+    // Read existing config
     const existingYaml = readFileSync(configPath, 'utf-8')
     const existingConfig = parseYaml(existingYaml) as Record<string, unknown>
 
-    // 合并配置（不允许修改 id）
+    // Merge config (id cannot be changed)
     const merged = { ...existingConfig, ...body, id }
 
-    // 写回 agent.yaml
+    // Write back agent.yaml
     writeFileSync(configPath, stringifyYaml(merged))
 
-    // 重新加载 agents
+    // Reload agents
     await agentManager.reloadAgents()
 
     const updated = agentManager.getAgent(id)
     return c.json(updated ? { ...updated.config, state: updated.state } : merged)
   })
 
-  // DELETE /api/agents/:id — 删除 agent
+  // DELETE /api/agents/:id — delete an agent
   agents.delete('/agents/:id', async (c) => {
     const id = c.req.param('id')
 
-    // 不允许删除 default agent
+    // Cannot delete the default agent
     if (id === 'default') {
-      return c.json({ error: '不允许删除默认 agent' }, 403)
+      return c.json({ error: 'Cannot delete the default agent' }, 403)
     }
 
     const instance = agentManager.getAgent(id)
@@ -221,16 +221,16 @@ export function createAgentsRoutes(agentManager: AgentManager) {
       return c.json({ error: 'Agent not found' }, 404)
     }
 
-    // 递归删除 agent 目录
+    // Recursively delete agent directory
     rmSync(instance.workspaceDir, { recursive: true, force: true })
 
-    // 重新加载 agents
+    // Reload agents
     await agentManager.reloadAgents()
 
-    return c.json({ message: `Agent "${id}" 已删除` })
+    return c.json({ message: `Agent "${id}" deleted` })
   })
 
-  // GET /api/routes — 汇总路由表
+  // GET /api/routes — aggregate route table
   agents.get('/routes', (c) => {
     const router = agentManager.getRouter()
     if (!router) {

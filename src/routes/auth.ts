@@ -5,20 +5,20 @@ import { getLogger } from '../logger/index.ts'
 
 const AUTH_TOKEN_KEY = 'auth_token'
 
-// 从 kv_state 读取 token
+// Read token from kv_state
 export function getAuthToken(): string | null {
   const db = getDatabase()
   const row = db.query("SELECT value FROM kv_state WHERE key = ?").get(AUTH_TOKEN_KEY) as { value: string } | null
   return row?.value ?? null
 }
 
-// 保存 token 到 kv_state
+// Save token to kv_state
 function saveAuthToken(token: string): void {
   const db = getDatabase()
   db.run("INSERT OR REPLACE INTO kv_state (key, value) VALUES (?, ?)", [AUTH_TOKEN_KEY, token])
 }
 
-// 清除 token
+// Clear token
 function clearAuthToken(): void {
   const db = getDatabase()
   db.run("DELETE FROM kv_state WHERE key = ?", [AUTH_TOKEN_KEY])
@@ -27,7 +27,7 @@ function clearAuthToken(): void {
 export function createAuthRoutes() {
   const app = new Hono()
 
-  // GET /auth/cloud-status — 前端判断是否启用云服务
+  // GET /auth/cloud-status — Check if cloud service is enabled
   app.get('/auth/cloud-status', (c) => {
     const env = getEnv()
     return c.json({
@@ -35,7 +35,7 @@ export function createAuthRoutes() {
     })
   })
 
-  // GET /auth/login — 返回登录 URL（前端用浏览器打开）
+  // GET /auth/login — Return login URL (frontend opens in browser)
   app.get('/auth/login', (c) => {
     const websiteUrl = getEnv().YOUCLAW_WEBSITE_URL
     if (!websiteUrl) {
@@ -47,7 +47,7 @@ export function createAuthRoutes() {
     return c.json({ loginUrl })
   })
 
-  // GET /auth/callback — 接收官网回调的 token
+  // GET /auth/callback — Receive token from website callback
   app.get('/auth/callback', (c) => {
     const token = c.req.query('token')
     const logger = getLogger()
@@ -73,7 +73,7 @@ export function createAuthRoutes() {
     `)
   })
 
-  // GET /auth/user — 获取用户信息
+  // GET /auth/user — Fetch user info
   app.get('/auth/user', async (c) => {
     const apiUrl = getEnv().YOUCLAW_API_URL
     if (!apiUrl) {
@@ -98,7 +98,7 @@ export function createAuthRoutes() {
       }
 
       const data = await res.json() as { success?: boolean; data?: { id?: number; displayName?: string; avatar?: string; email?: string } | null }
-      // 官网返回 { success: true, data: null } 表示 token 无效
+      // Website returns { success: true, data: null } when token is invalid
       if (!data.data) {
         clearAuthToken()
         return c.json({ error: 'Token expired' }, 401)
@@ -117,21 +117,21 @@ export function createAuthRoutes() {
     }
   })
 
-  // POST /auth/logout — 退出登录
+  // POST /auth/logout — Log out
   app.post('/auth/logout', async (c) => {
     const token = getAuthToken()
     const logger = getLogger()
     const apiUrl = getEnv().YOUCLAW_API_URL
 
     if (token && apiUrl) {
-      // 通知官网后端注销
+      // Notify website backend to revoke session
       try {
         await fetch(`${apiUrl}/api/oauth/logout`, {
           method: 'POST',
           headers: { rdxtoken: token },
         })
       } catch {
-        // 注销失败不影响本地清理
+        // Remote logout failure does not block local cleanup
       }
     }
 
@@ -140,7 +140,7 @@ export function createAuthRoutes() {
     return c.json({ ok: true })
   })
 
-  // GET /auth/pay-url — 返回支付页 URL
+  // GET /auth/pay-url — Return payment page URL
   app.get('/auth/pay-url', (c) => {
     const websiteUrl = getEnv().YOUCLAW_WEBSITE_URL
     if (!websiteUrl) {
@@ -152,7 +152,7 @@ export function createAuthRoutes() {
     return c.json({ payUrl })
   })
 
-  // GET /auth/pay-callback — 接收支付成功回调
+  // GET /auth/pay-callback — Receive payment success callback
   app.get('/auth/pay-callback', (c) => {
     const status = c.req.query('status')
     const orderId = c.req.query('order_id')
@@ -178,7 +178,7 @@ export function createAuthRoutes() {
     `)
   })
 
-  // POST /auth/upload — 代理文件上传到 ReadmeX
+  // POST /auth/upload — Proxy file upload to ReadmeX
   app.post('/auth/upload', async (c) => {
     const apiUrl = getEnv().YOUCLAW_API_URL
     if (!apiUrl) {
@@ -215,7 +215,7 @@ export function createAuthRoutes() {
     }
   })
 
-  // POST /auth/update-profile — 修改用户名和头像
+  // POST /auth/update-profile — Update username and avatar
   app.post('/auth/update-profile', async (c) => {
     const apiUrl = getEnv().YOUCLAW_API_URL
     if (!apiUrl) {
@@ -244,7 +244,7 @@ export function createAuthRoutes() {
 
       const data = await res.json() as { data?: { id?: number; displayName?: string; avatar?: string; email?: string } }
       const u = data.data
-      // 映射为前端 AuthUser 格式
+      // Map to frontend AuthUser format
       return c.json({
         id: u?.id ? String(u.id) : '',
         name: u?.displayName ?? '',
@@ -258,7 +258,7 @@ export function createAuthRoutes() {
     }
   })
 
-  // GET /auth/status — 检查登录状态（前端轮询用）
+  // GET /auth/status — Check login status (frontend polling)
   app.get('/auth/status', (c) => {
     const token = getAuthToken()
     return c.json({ loggedIn: !!token })

@@ -43,7 +43,7 @@ export function createApp(deps: AppDeps) {
   const { agentManager, agentQueue, eventBus, router, channelManager, skillsLoader, registryManager, memoryManager, memoryIndexer, scheduler } = deps
   const app = new Hono()
 
-  // CORS — 允许 Vite dev server + Tauri WebView
+  // CORS — allow Vite dev server + Tauri WebView
   app.use('/*', cors({
     origin: [
       'http://localhost:5173',
@@ -56,7 +56,7 @@ export function createApp(deps: AppDeps) {
     allowHeaders: ['Content-Type'],
   }))
 
-  // 挂载路由
+  // Mount routes
   app.route('/api', health)
   app.route('/api', createAgentsRoutes(agentManager))
   app.route('/api', createMessagesRoutes(agentManager, agentQueue, router))

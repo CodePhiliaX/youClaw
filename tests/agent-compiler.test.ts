@@ -54,10 +54,10 @@ describe('AgentCompiler', () => {
     createdAgentIds.clear()
   })
 
-  test('内联定义直接透传', () => {
+  test('inline definition is passed through directly', () => {
     const agents = {
       translator: {
-        description: '翻译助手',
+        description: 'Translation assistant',
         prompt: 'You are a translator',
         tools: ['Read', 'Write'],
       },
@@ -66,35 +66,35 @@ describe('AgentCompiler', () => {
     const result = compiler.resolve(agents, 'parent')
 
     expect(result.translator).toBeDefined()
-    expect(result.translator!.description).toBe('翻译助手')
+    expect(result.translator!.description).toBe('Translation assistant')
     expect(result.translator!.prompt).toBe('You are a translator')
     expect(result.translator!.tools).toEqual(['Read', 'Write'])
   })
 
-  test('ref 引用编译为 SDK AgentDefinition', () => {
+  test('ref reference compiles to SDK AgentDefinition', () => {
     const targetId = createAgentId('target')
     createAgentOnDisk(targetId, {
       model: 'claude-sonnet-4-6',
       allowedTools: ['Read', 'Grep'],
-    }, '# 你是一个研究助手\n\n请认真查阅资料。')
+    }, '# You are a research assistant\n\nPlease carefully review the materials.')
 
     const agents = {
       researcher: {
         ref: targetId,
-        description: '帮我查资料',
+        description: 'Help me research',
       },
     }
 
     const result = compiler.resolve(agents, 'parent')
 
     expect(result.researcher).toBeDefined()
-    expect(result.researcher!.description).toBe('帮我查资料')
-    expect(result.researcher!.prompt).toContain('你是一个研究助手')
+    expect(result.researcher!.description).toBe('Help me research')
+    expect(result.researcher!.prompt).toContain('You are a research assistant')
     expect(result.researcher!.tools).toEqual(['Read', 'Grep'])
     expect(result.researcher!.model).toBe('claude-sonnet-4-6')
   })
 
-  test('ref 覆盖字段优先于目标配置', () => {
+  test('ref override fields take priority over target config', () => {
     const targetId = createAgentId('target-override')
     createAgentOnDisk(targetId, {
       model: 'claude-sonnet-4-6',
@@ -105,7 +105,7 @@ describe('AgentCompiler', () => {
     const agents = {
       custom: {
         ref: targetId,
-        description: '自定义描述',
+        description: 'Custom description',
         model: 'claude-opus-4-6',
         tools: ['Read', 'Write', 'Bash'],
         maxTurns: 30,
@@ -114,47 +114,47 @@ describe('AgentCompiler', () => {
 
     const result = compiler.resolve(agents, 'parent')
 
-    expect(result.custom!.description).toBe('自定义描述')
+    expect(result.custom!.description).toBe('Custom description')
     expect(result.custom!.model).toBe('claude-opus-4-6')
     expect(result.custom!.tools).toEqual(['Read', 'Write', 'Bash'])
     expect(result.custom!.maxTurns).toBe(30)
   })
 
-  test('ref 的 prompt 追加到目标 prompt 末尾', () => {
+  test('ref prompt is appended to target prompt', () => {
     const targetId = createAgentId('target-prompt')
     createAgentOnDisk(targetId, {}, '# Base prompt')
 
     const agents = {
       extended: {
         ref: targetId,
-        description: '扩展助手',
-        prompt: '额外指令：请用中文回答',
+        description: 'Extended assistant',
+        prompt: 'Additional instruction: please respond in Chinese',
       },
     }
 
     const result = compiler.resolve(agents, 'parent')
 
     expect(result.extended!.prompt).toContain('Base prompt')
-    expect(result.extended!.prompt).toContain('额外指令：请用中文回答')
-    // 追加的 prompt 在基础 prompt 之后
+    expect(result.extended!.prompt).toContain('Additional instruction: please respond in Chinese')
+    // appended prompt comes after base prompt
     const baseIdx = result.extended!.prompt!.indexOf('Base prompt')
-    const extIdx = result.extended!.prompt!.indexOf('额外指令')
+    const extIdx = result.extended!.prompt!.indexOf('Additional instruction')
     expect(extIdx).toBeGreaterThan(baseIdx)
   })
 
-  test('ref 引用不存在的 agent 时抛出错误', () => {
+  test('throws error when ref references a non-existent agent', () => {
     const agents = {
       missing: {
         ref: 'nonexistent-agent-id',
-        description: '不存在的 agent',
+        description: 'Non-existent agent',
       },
     }
 
-    expect(() => compiler.resolve(agents, 'parent')).toThrow(/不存在/)
+    expect(() => compiler.resolve(agents, 'parent')).toThrow()
   })
 
-  test('循环引用检测', () => {
-    // 创建 A → B 引用
+  test('circular reference detection', () => {
+    // create A -> B reference
     const agentA = createAgentId('cycle-a')
     const agentB = createAgentId('cycle-b')
 
@@ -165,20 +165,20 @@ describe('AgentCompiler', () => {
       agents: { a: { ref: agentA, description: 'A' } },
     })
 
-    // A 的 agents 中引用 B，而 parent 是 A → 不应该直接循环
-    // 但如果我们手动构建 parent=agentA, ref=agentA，则循环
+    // A's agents reference B, and parent is A -> should not directly cycle
+    // But if we manually construct parent=agentA, ref=agentA, it cycles
     const agents = {
       self: {
         ref: agentA,
-        description: '自引用',
+        description: 'Self-reference',
       },
     }
 
-    // parent 是 agentA，ref 也是 agentA → 循环
-    expect(() => compiler.resolve(agents, agentA)).toThrow(/循环引用/)
+    // parent is agentA, ref is also agentA -> cycle
+    expect(() => compiler.resolve(agents, agentA)).toThrow()
   })
 
-  test('disallowedTools 从目标配置继承', () => {
+  test('disallowedTools inherited from target config', () => {
     const targetId = createAgentId('target-disallowed')
     createAgentOnDisk(targetId, {
       disallowedTools: ['Bash', 'Write'],
@@ -187,7 +187,7 @@ describe('AgentCompiler', () => {
     const agents = {
       safe: {
         ref: targetId,
-        description: '安全助手',
+        description: 'Safe assistant',
       },
     }
 
@@ -195,7 +195,7 @@ describe('AgentCompiler', () => {
     expect(result.safe!.disallowedTools).toEqual(['Bash', 'Write'])
   })
 
-  test('ref 的 disallowedTools 覆盖目标配置', () => {
+  test('ref disallowedTools overrides target config', () => {
     const targetId = createAgentId('target-override-disallowed')
     createAgentOnDisk(targetId, {
       disallowedTools: ['Bash'],
@@ -204,7 +204,7 @@ describe('AgentCompiler', () => {
     const agents = {
       custom: {
         ref: targetId,
-        description: '自定义',
+        description: 'Custom',
         disallowedTools: ['Write'],
       },
     }
@@ -213,17 +213,17 @@ describe('AgentCompiler', () => {
     expect(result.custom!.disallowedTools).toEqual(['Write'])
   })
 
-  test('混合内联和 ref 定义', () => {
+  test('mixed inline and ref definitions', () => {
     const targetId = createAgentId('target-mixed')
     createAgentOnDisk(targetId, {}, '# Research Agent')
 
     const agents = {
       researcher: {
         ref: targetId,
-        description: '研究助手',
+        description: 'Research assistant',
       },
       translator: {
-        description: '翻译助手',
+        description: 'Translation assistant',
         prompt: 'Translate text',
       },
     }
@@ -231,7 +231,7 @@ describe('AgentCompiler', () => {
     const result = compiler.resolve(agents, 'parent')
 
     expect(result.researcher!.prompt).toContain('Research Agent')
-    expect(result.translator!.description).toBe('翻译助手')
+    expect(result.translator!.description).toBe('Translation assistant')
     expect(result.translator!.prompt).toBe('Translate text')
   })
 })

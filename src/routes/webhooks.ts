@@ -6,14 +6,14 @@ import { WeComChannel } from '../channel/wecom.ts'
 export function createWebhooksRoutes(channelManager: ChannelManager): Hono {
   const webhooks = new Hono()
 
-  // 企业微信 URL 验证（GET）
+  // WeCom URL verification (GET)
   webhooks.get('/webhooks/wecom/:channelId', async (c) => {
     const logger = getLogger()
     const channelId = c.req.param('channelId')
 
     const instance = channelManager.getChannelInstance(channelId)
     if (!instance || !(instance instanceof WeComChannel)) {
-      logger.warn({ channelId }, 'Webhook: 未找到企业微信 channel 实例')
+      logger.warn({ channelId }, 'Webhook: WeCom channel instance not found')
       return c.text('Channel not found', 404)
     }
 
@@ -27,18 +27,18 @@ export function createWebhooksRoutes(channelManager: ChannelManager): Hono {
       return c.text(result.echostr!)
     }
 
-    logger.warn({ channelId, error: result.error }, 'Webhook 验证失败')
+    logger.warn({ channelId, error: result.error }, 'Webhook verification failed')
     return c.text('Verification failed', 403)
   })
 
-  // 企业微信消息回调（POST）
+  // WeCom message callback (POST)
   webhooks.post('/webhooks/wecom/:channelId', async (c) => {
     const logger = getLogger()
     const channelId = c.req.param('channelId')
 
     const instance = channelManager.getChannelInstance(channelId)
     if (!instance || !(instance instanceof WeComChannel)) {
-      logger.warn({ channelId }, 'Webhook: 未找到企业微信 channel 实例')
+      logger.warn({ channelId }, 'Webhook: WeCom channel instance not found')
       return c.text('Channel not found', 404)
     }
 
@@ -54,7 +54,7 @@ export function createWebhooksRoutes(channelManager: ChannelManager): Hono {
       return c.text('success')
     }
 
-    logger.warn({ channelId, error: result.error }, 'Webhook 消息处理失败')
+    logger.warn({ channelId, error: result.error }, 'Webhook message processing failed')
     return c.text('Failed', 400)
   })
 

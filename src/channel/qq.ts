@@ -33,21 +33,21 @@ interface AccessToken {
 }
 
 /**
- * 提取 QQ 消息文本内容
+ * Extract text content from a QQ message
  */
 export function extractQQTextContent(content: string): string {
   return content.trim()
 }
 
 /**
- * 去除 <@!botid> 格式的 @bot 提及
+ * Strip <@!botid> format @bot mentions
  */
 export function stripQQBotMention(content: string): string {
   return content.replace(/<@!\w+>/g, '').trim()
 }
 
 /**
- * 文本分片
+ * Split text into chunks
  */
 export function chunkText(text: string, limit: number): string[] {
   if (text.length <= limit) return [text]
@@ -59,7 +59,7 @@ export function chunkText(text: string, limit: number): string[] {
 }
 
 /**
- * 检查 token 是否仍在有效期内
+ * Check if the token is still valid
  */
 export function isTokenValid(token: AccessToken | null, bufferMs: number = 300000): boolean {
   if (!token) return false
@@ -101,19 +101,19 @@ export class QQChannel implements Channel {
   async connect(): Promise<void> {
     const logger = getLogger()
 
-    // 1. 获取 access_token
+    // 1. Obtain access_token
     await this.refreshToken()
 
-    // 2. 调度 token 自动刷新
+    // 2. Schedule automatic token refresh
     this.scheduleTokenRefresh()
 
-    // 3. 获取 WebSocket 网关
+    // 3. Get WebSocket gateway URL
     const gatewayUrl = await this.getGatewayUrl()
 
-    // 4. 建立 WebSocket 连接
+    // 4. Establish WebSocket connection
     await this.connectWebSocket(gatewayUrl)
 
-    // 5. 订阅 EventBus complete/error 事件（用于清理 recentMsgIds）
+    // 5. Subscribe to EventBus complete/error events (to clean up recentMsgIds)
     if (this.eventBus) {
       this.unsubscribeEvents = this.eventBus.subscribe(
         { types: ['complete', 'error'] },
@@ -126,7 +126,7 @@ export class QQChannel implements Channel {
     }
 
     this._connected = true
-    logger.info('QQ WebSocket 连接已建立')
+    logger.info('QQ WebSocket connection established')
   }
 
   private async refreshToken(): Promise<void> {
@@ -142,7 +142,7 @@ export class QQChannel implements Channel {
         })
 
         if (!res.ok) {
-          throw new Error(`Token 请求失败: ${res.status} ${res.statusText}`)
+          throw new Error(`Token request failed: ${res.status} ${res.statusText}`)
         }
 
         const data = await res.json() as { access_token: string; expires_in: string }
@@ -152,17 +152,17 @@ export class QQChannel implements Channel {
           fetchedAt: Date.now(),
         }
 
-        logger.debug({ expiresIn: this.accessToken.expires_in }, 'QQ access_token 已刷新')
+        logger.debug({ expiresIn: this.accessToken.expires_in }, 'QQ access_token refreshed')
         return
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
         const delay = 5000 * Math.pow(2, i)
-        logger.warn({ attempt: i + 1, delay, error: lastError.message }, 'QQ token 刷新失败，重试中')
+        logger.warn({ attempt: i + 1, delay, error: lastError.message }, 'QQ token refresh failed, retrying')
         if (i < 2) await new Promise(r => setTimeout(r, delay))
       }
     }
 
-    throw new Error(`QQ token 刷新失败（3 次重试）: ${lastError?.message}`)
+    throw new Error(`QQ token refresh failed (3 retries): ${lastError?.message}`)
   }
 
   private scheduleTokenRefresh(): void {
@@ -170,14 +170,14 @@ export class QQChannel implements Channel {
 
     if (!this.accessToken) return
 
-    // 过期前 5 分钟刷新
+    // Refresh 5 minutes before expiry
     const refreshIn = Math.max((this.accessToken.expires_in - 300) * 1000, 60000)
     this.tokenRefreshTimer = setTimeout(async () => {
       try {
         await this.refreshToken()
         this.scheduleTokenRefresh()
       } catch (err) {
-        getLogger().error({ error: err instanceof Error ? err.message : String(err) }, 'QQ token 自动刷新失败')
+        getLogger().error({ error: err instanceof Error ? err.message : String(err) }, 'QQ token auto-refresh failed')
       }
     }, refreshIn)
   }
@@ -190,7 +190,7 @@ export class QQChannel implements Channel {
     })
 
     if (!res.ok) {
-      throw new Error(`获取 QQ WebSocket 网关失败: ${res.status}`)
+      throw new Error(`Failed to get QQ WebSocket gateway: ${res.status}`)
     }
 
     const data = await res.json() as { url: string }
@@ -209,20 +209,20 @@ export class QQChannel implements Channel {
         try {
           payload = JSON.parse(typeof event.data === 'string' ? event.data : '')
         } catch {
-          logger.warn('QQ WebSocket 收到无效 JSON')
+          logger.warn('QQ WebSocket received invalid JSON')
           return
         }
 
-        // 更新序列号
+        // Update sequence number
         if (payload.s !== null && payload.s !== undefined) {
           this.lastSeq = payload.s
         }
 
         switch (payload.op) {
           case OP_HELLO: {
-            // 收到 HELLO，获取心跳间隔
+            // Received HELLO, get heartbeat interval
             this.heartbeatInterval = payload.d?.heartbeat_interval ?? 41250
-            // 发送 IDENTIFY
+            // Send IDENTIFY
             this.sendWsPayload(OP_IDENTIFY, {
               token: `QQBot ${this.accessToken!.access_token}`,
               intents: INTENTS_GROUP_AND_C2C,
@@ -257,18 +257,18 @@ export class QQChannel implements Channel {
           }
 
           case OP_HEARTBEAT_ACK: {
-            // 心跳确认，无需额外处理
+            // Heartbeat acknowledged, no action needed
             break
           }
 
           case OP_RECONNECT: {
-            logger.info('QQ WebSocket 收到 RECONNECT，正在重连')
+            logger.info('QQ WebSocket received RECONNECT, reconnecting')
             this.handleReconnect()
             break
           }
 
           case OP_INVALID_SESSION: {
-            logger.warn('QQ WebSocket 收到 INVALID_SESSION，清除 session 后全量重连')
+            logger.warn('QQ WebSocket received INVALID_SESSION, clearing session for full reconnect')
             this.sessionId = null
             this.lastSeq = null
             this.handleReconnect()
@@ -278,15 +278,15 @@ export class QQChannel implements Channel {
       }
 
       this.ws.onerror = (event) => {
-        logger.error({ error: event }, 'QQ WebSocket 错误')
+        logger.error({ error: event }, 'QQ WebSocket error')
         if (!resolved) {
           resolved = true
-          reject(new Error('QQ WebSocket 连接错误'))
+          reject(new Error('QQ WebSocket connection error'))
         }
       }
 
       this.ws.onclose = () => {
-        logger.info('QQ WebSocket 连接已关闭')
+        logger.info('QQ WebSocket connection closed')
         this.clearHeartbeat()
         if (this._connected) {
           this.handleReconnect()
@@ -325,7 +325,7 @@ export class QQChannel implements Channel {
     }
 
     if (this.reconnectAttempt >= 10) {
-      logger.error('QQ WebSocket 重连次数已用尽')
+      logger.error('QQ WebSocket reconnect attempts exhausted')
       this._connected = false
       return
     }
@@ -333,22 +333,22 @@ export class QQChannel implements Channel {
     const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempt), 300000)
     this.reconnectAttempt++
 
-    logger.info({ attempt: this.reconnectAttempt, delayMs: delay }, 'QQ WebSocket 将在延迟后重连')
+    logger.info({ attempt: this.reconnectAttempt, delayMs: delay }, 'QQ WebSocket will reconnect after delay')
     await new Promise(r => setTimeout(r, delay))
 
     try {
-      // 优先 RESUME
+      // Prefer RESUME
       if (this.sessionId && this.lastSeq !== null && this.resumeGatewayUrl) {
         await this.connectWebSocketForResume(this.resumeGatewayUrl)
       } else {
-        // 全量重连
+        // Full reconnect
         await this.refreshToken()
         this.scheduleTokenRefresh()
         const gatewayUrl = await this.getGatewayUrl()
         await this.connectWebSocket(gatewayUrl)
       }
     } catch (err) {
-      logger.error({ error: err instanceof Error ? err.message : String(err) }, 'QQ WebSocket 重连失败')
+      logger.error({ error: err instanceof Error ? err.message : String(err) }, 'QQ WebSocket reconnect failed')
       this.handleReconnect()
     }
   }
@@ -374,7 +374,7 @@ export class QQChannel implements Channel {
 
         if (payload.op === OP_HELLO) {
           this.heartbeatInterval = payload.d?.heartbeat_interval ?? 41250
-          // 发送 RESUME
+          // Send RESUME
           this.sendWsPayload(OP_RESUME, {
             token: `QQBot ${this.accessToken!.access_token}`,
             session_id: this.sessionId,
@@ -391,22 +391,22 @@ export class QQChannel implements Channel {
             this.handleGroupMessage(payload.d)
           }
         } else if (payload.op === OP_INVALID_SESSION) {
-          logger.warn('QQ RESUME 失败，进行全量重连')
+          logger.warn('QQ RESUME failed, performing full reconnect')
           this.sessionId = null
           this.lastSeq = null
-          if (!resolved) { resolved = true; reject(new Error('RESUME 失败')) }
+          if (!resolved) { resolved = true; reject(new Error('RESUME failed')) }
         } else if (payload.op === OP_HEARTBEAT_ACK) {
           // ignore
         }
       }
 
       this.ws.onerror = () => {
-        if (!resolved) { resolved = true; reject(new Error('QQ WebSocket RESUME 连接错误')) }
+        if (!resolved) { resolved = true; reject(new Error('QQ WebSocket RESUME connection error')) }
       }
 
       this.ws.onclose = () => {
         this.clearHeartbeat()
-        if (!resolved) { resolved = true; reject(new Error('QQ WebSocket RESUME 连接关闭')) }
+        if (!resolved) { resolved = true; reject(new Error('QQ WebSocket RESUME connection closed')) }
         if (this._connected) {
           this.handleReconnect()
         }
@@ -435,9 +435,9 @@ export class QQChannel implements Channel {
       }
 
       this.opts.onMessage(inbound)
-      logger.debug({ chatId }, 'QQ 私聊消息已接收')
+      logger.debug({ chatId }, 'QQ direct message received')
     } catch (err) {
-      logger.error({ error: err }, '处理 QQ 私聊消息失败')
+      logger.error({ error: err }, 'Failed to handle QQ direct message')
     }
   }
 
@@ -463,9 +463,9 @@ export class QQChannel implements Channel {
       }
 
       this.opts.onMessage(inbound)
-      logger.debug({ chatId }, 'QQ 群聊消息已接收')
+      logger.debug({ chatId }, 'QQ group message received')
     } catch (err) {
-      logger.error({ error: err }, '处理 QQ 群聊消息失败')
+      logger.error({ error: err }, 'Failed to handle QQ group message')
     }
   }
 
@@ -473,7 +473,7 @@ export class QQChannel implements Channel {
     const logger = getLogger()
 
     try {
-      // 确保 token 有效
+      // Ensure token is valid
       if (!isTokenValid(this.accessToken)) {
         await this.refreshToken()
       }
@@ -501,7 +501,7 @@ export class QQChannel implements Channel {
           const groupOpenid = chatId.slice('qq:group:'.length)
           url = `${QQ_API_BASE}/v2/groups/${groupOpenid}/messages`
         } else {
-          logger.warn({ chatId }, 'QQ: 未知的 chatId 格式')
+          logger.warn({ chatId }, 'QQ: unknown chatId format')
           return
         }
 
@@ -516,13 +516,13 @@ export class QQChannel implements Channel {
 
         if (!res.ok) {
           const errText = await res.text().catch(() => '')
-          logger.error({ chatId, status: res.status, body: errText }, 'QQ 消息发送失败')
+          logger.error({ chatId, status: res.status, body: errText }, 'QQ message send failed')
         }
       }
 
-      logger.debug({ chatId, length: text.length }, 'QQ 消息已发送')
+      logger.debug({ chatId, length: text.length }, 'QQ message sent')
     } catch (err) {
-      logger.error({ chatId, error: err }, 'QQ 消息发送异常')
+      logger.error({ chatId, error: err }, 'QQ message send error')
     }
   }
 
@@ -559,6 +559,6 @@ export class QQChannel implements Channel {
     }
 
     this._connected = false
-    logger.info('QQ Channel 已断开')
+    logger.info('QQ Channel disconnected')
   }
 }

@@ -14,7 +14,7 @@ import type { AgentManager } from '../agent/manager.ts'
 import type { AgentQueue } from '../agent/queue.ts'
 import type { Scheduler } from '../scheduler/scheduler.ts'
 
-// ===== Zod 入参验证 =====
+// ===== Zod input validation =====
 
 const createTaskSchema = z.object({
   agentId: z.string().min(1),
@@ -28,7 +28,7 @@ const createTaskSchema = z.object({
   deliveryMode: z.enum(['push', 'none']).default('none').optional(),
   deliveryTarget: z.string().optional(),
 }).refine((data) => {
-  // push 模式必须有 deliveryTarget
+  // push mode requires deliveryTarget
   if (data.deliveryMode === 'push' && !data.deliveryTarget) return false
   return true
 }, {
@@ -72,13 +72,13 @@ const updateTaskSchema = z.object({
 export function createTasksRoutes(scheduler: Scheduler, agentManager: AgentManager, agentQueue: AgentQueue) {
   const app = new Hono()
 
-  // GET /api/tasks — 任务列表
+  // GET /api/tasks — list tasks
   app.get('/tasks', (c) => {
     const tasks = getTasks()
     return c.json(tasks)
   })
 
-  // POST /api/tasks — 创建任务
+  // POST /api/tasks — create a task
   app.post('/tasks', async (c) => {
     const body = await c.req.json()
     const parsed = createTaskSchema.safeParse(body)
@@ -88,7 +88,7 @@ export function createTasksRoutes(scheduler: Scheduler, agentManager: AgentManag
 
     const data = parsed.data
 
-    // 验证 agent 存在
+    // Verify agent exists
     const agent = agentManager.getAgent(data.agentId)
     if (!agent) {
       return c.json({ error: 'Agent not found' }, 404)
@@ -96,10 +96,10 @@ export function createTasksRoutes(scheduler: Scheduler, agentManager: AgentManag
 
     const id = crypto.randomUUID()
 
-    // 计算首次运行时间
+    // Calculate first run time
     let nextRun: string
     if (data.scheduleType === 'once') {
-      nextRun = data.scheduleValue // ISO 时间
+      nextRun = data.scheduleValue // ISO datetime
     } else {
       const computed = scheduler.calculateNextRun({
         schedule_type: data.scheduleType,
@@ -133,7 +133,7 @@ export function createTasksRoutes(scheduler: Scheduler, agentManager: AgentManag
     return c.json(task, 201)
   })
 
-  // PUT /api/tasks/:id — 更新任务
+  // PUT /api/tasks/:id — update a task
   app.put('/tasks/:id', async (c) => {
     const id = c.req.param('id')
     const existing = getTask(id)
@@ -158,17 +158,17 @@ export function createTasksRoutes(scheduler: Scheduler, agentManager: AgentManag
     if (data.deliveryMode !== undefined) updates.deliveryMode = data.deliveryMode
     if (data.deliveryTarget !== undefined) updates.deliveryTarget = data.deliveryTarget
 
-    // 更新调度类型和调度值
+    // Update schedule type and value
     if (data.scheduleType !== undefined) updates.scheduleType = data.scheduleType
     if (data.scheduleValue !== undefined) updates.scheduleValue = data.scheduleValue
 
-    // 如果调度相关字段变化，重新计算 nextRun
+    // Recalculate nextRun if schedule-related fields changed
     if (data.scheduleValue !== undefined || data.scheduleType !== undefined || data.timezone !== undefined) {
       const scheduleType = data.scheduleType ?? existing.schedule_type
       const scheduleValue = data.scheduleValue ?? existing.schedule_value
       const timezone = data.timezone !== undefined ? data.timezone : existing.timezone
 
-      // 验证新的调度配置
+      // Validate new schedule config
       if (scheduleType === 'cron') {
         try {
           const opts: { timezone?: string } = {}
@@ -193,7 +193,7 @@ export function createTasksRoutes(scheduler: Scheduler, agentManager: AgentManag
       updates.nextRun = nextRun
     }
 
-    // 恢复 active 时重置连续失败计数
+    // Reset consecutive failure count when resuming to active
     if (data.status === 'active' && existing.status === 'paused') {
       updates.consecutiveFailures = 0
     }
@@ -204,7 +204,7 @@ export function createTasksRoutes(scheduler: Scheduler, agentManager: AgentManag
     return c.json(updated)
   })
 
-  // POST /api/tasks/:id/clone — 克隆任务
+  // POST /api/tasks/:id/clone — clone a task
   app.post('/tasks/:id/clone', async (c) => {
     const id = c.req.param('id')
     const existing = getTask(id)
@@ -241,7 +241,7 @@ export function createTasksRoutes(scheduler: Scheduler, agentManager: AgentManag
     return c.json(task, 201)
   })
 
-  // DELETE /api/tasks/:id — 删除任务
+  // DELETE /api/tasks/:id — delete a task
   app.delete('/tasks/:id', (c) => {
     const id = c.req.param('id')
     const existing = getTask(id)
@@ -254,7 +254,7 @@ export function createTasksRoutes(scheduler: Scheduler, agentManager: AgentManag
     return c.json({ ok: true })
   })
 
-  // POST /api/tasks/:id/run — 手动立即执行
+  // POST /api/tasks/:id/run — manually trigger immediate execution
   app.post('/tasks/:id/run', async (c) => {
     const id = c.req.param('id')
     const task = getTask(id)
@@ -269,7 +269,7 @@ export function createTasksRoutes(scheduler: Scheduler, agentManager: AgentManag
     return c.json(result)
   })
 
-  // GET /api/tasks/:id/logs — 运行历史
+  // GET /api/tasks/:id/logs — run history
   app.get('/tasks/:id/logs', (c) => {
     const id = c.req.param('id')
     const existing = getTask(id)

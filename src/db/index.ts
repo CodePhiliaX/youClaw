@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS channels (
 );
 `
 
-// bun:sqlite 查询结果类型辅助
+// bun:sqlite query result type helpers
 type SQLValue = string | number | boolean | null
 function queryAll<T>(db: Database, sql: string, ...params: SQLValue[]): T[] {
   return db.query(sql).all(...params) as T[]
@@ -106,39 +106,39 @@ export function initDatabase(): Database {
   _db.exec('PRAGMA foreign_keys = ON')
   _db.exec(SCHEMA)
 
-  // 迁移：添加 name 和 description 列
+  // Migration: add name and description columns
   try { _db.exec('ALTER TABLE scheduled_tasks ADD COLUMN name TEXT') } catch {}
   try { _db.exec('ALTER TABLE scheduled_tasks ADD COLUMN description TEXT') } catch {}
 
-  // 迁移：添加并发防护、退避、时区、上次结果列
+  // Migration: add concurrency guard, backoff, timezone, and last result columns
   try { _db.exec('ALTER TABLE scheduled_tasks ADD COLUMN running_since TEXT') } catch {}
   try { _db.exec('ALTER TABLE scheduled_tasks ADD COLUMN consecutive_failures INTEGER DEFAULT 0') } catch {}
   try { _db.exec('ALTER TABLE scheduled_tasks ADD COLUMN timezone TEXT') } catch {}
   try { _db.exec('ALTER TABLE scheduled_tasks ADD COLUMN last_result TEXT') } catch {}
 
-  // 迁移：添加投递配置列
+  // Migration: add delivery config columns
   try { _db.exec("ALTER TABLE scheduled_tasks ADD COLUMN delivery_mode TEXT DEFAULT 'none'") } catch {}
   try { _db.exec('ALTER TABLE scheduled_tasks ADD COLUMN delivery_target TEXT') } catch {}
 
-  // 迁移：添加投递状态列到运行日志
+  // Migration: add delivery status column to run logs
   try { _db.exec('ALTER TABLE task_run_logs ADD COLUMN delivery_status TEXT') } catch {}
 
-  // 迁移：添加附件列
+  // Migration: add attachments column
   try { _db.exec('ALTER TABLE messages ADD COLUMN attachments TEXT') } catch {}
 
-  // 迁移：添加 chat 头像列
+  // Migration: add chat avatar column
   try { _db.exec('ALTER TABLE chats ADD COLUMN avatar TEXT') } catch {}
 
-  getLogger().info({ path: paths.db }, '数据库初始化完成')
+  getLogger().info({ path: paths.db }, 'Database initialized')
   return _db
 }
 
 export function getDatabase(): Database {
-  if (!_db) throw new Error('数据库未初始化')
+  if (!_db) throw new Error('Database not initialized')
   return _db
 }
 
-// ===== 消息操作 =====
+// ===== Message Operations =====
 
 export function saveMessage(msg: {
   id: string
@@ -174,7 +174,7 @@ export function getMessages(chatId: string, limit = 50, before?: string): Array<
     chatId, limit)
 }
 
-// ===== Chat 操作 =====
+// ===== Chat Operations =====
 
 export function upsertChat(chatId: string, agentId: string, name?: string, channel = 'web') {
   const db = getDatabase()
@@ -221,7 +221,7 @@ export function deleteChat(chatId: string) {
   db.run('DELETE FROM chats WHERE chat_id = ?', [chatId])
 }
 
-// ===== Session 操作 =====
+// ===== Session Operations =====
 
 export function getSession(agentId: string, chatId: string): string | null {
   const db = getDatabase()
@@ -237,7 +237,7 @@ export function saveSession(agentId: string, chatId: string, sessionId: string) 
   )
 }
 
-// ===== 定时任务操作 =====
+// ===== Scheduled Task Operations =====
 
 export interface ScheduledTask {
   id: string
@@ -357,7 +357,7 @@ export function getTasksDueBy(time: string): ScheduledTask[] {
     time)
 }
 
-/** 查询卡住的任务（running_since 早于阈值） */
+/** Query stuck tasks (running_since before the threshold) */
 export function getStuckTasks(cutoffIso: string): ScheduledTask[] {
   const db = getDatabase()
   return queryAll<ScheduledTask>(db,
@@ -365,7 +365,7 @@ export function getStuckTasks(cutoffIso: string): ScheduledTask[] {
     cutoffIso)
 }
 
-/** 清理超期运行日志 */
+/** Prune expired run logs */
 export function pruneOldTaskRunLogs(retainDays: number): number {
   const db = getDatabase()
   const cutoff = new Date(Date.now() - retainDays * 24 * 60 * 60 * 1000).toISOString()
@@ -373,7 +373,7 @@ export function pruneOldTaskRunLogs(retainDays: number): number {
   return result.changes
 }
 
-// ===== 运行日志 =====
+// ===== Run Logs =====
 
 export function saveTaskRunLog(log: {
   taskId: string
@@ -399,7 +399,7 @@ export function getTaskRunLogs(taskId: string, limit = 50): TaskRunLog[] {
     taskId, limit)
 }
 
-// ===== 浏览器 Profile 操作 =====
+// ===== Browser Profile Operations =====
 
 export interface BrowserProfile {
   id: string
@@ -430,13 +430,13 @@ export function deleteBrowserProfile(id: string): void {
   db.run('DELETE FROM browser_profiles WHERE id = ?', [id])
 }
 
-// ===== Channel 操作 =====
+// ===== Channel Operations =====
 
 export interface ChannelRecord {
   id: string
   type: string
   label: string
-  config: string        // JSON 字符串
+  config: string        // JSON string
   enabled: number       // 0 | 1
   created_at: string
   updated_at: string
@@ -497,7 +497,7 @@ export function deleteChannelRecord(id: string): void {
   db.run('DELETE FROM channels WHERE id = ?', [id])
 }
 
-// ===== Skill 设置 =====
+// ===== Skill Settings =====
 
 export type SkillSettings = Record<string, { enabled: boolean }>
 

@@ -1,13 +1,13 @@
 export interface ParsedMessage {
-  requestedSkills: string[]  // 提取出的 skill 名称
-  cleanContent: string       // 去掉 /<skill> 后的纯文本
+  requestedSkills: string[]  // Extracted skill names
+  cleanContent: string       // Plain text with /<skill> tokens removed
 }
 
 /**
- * 解析消息中的 /<skill-name> 调用语法
- * - 匹配消息开头连续的 /<word> token
- * - 只有 <word> 在 knownSkillNames 中时才认定为 skill 调用
- * - 不在已知列表中的 /<word> 保留在 cleanContent 中
+ * Parse /<skill-name> invocation syntax in a message.
+ * - Matches consecutive /<word> tokens at the start of the message
+ * - Only recognizes <word> as a skill invocation if it exists in knownSkillNames
+ * - Unknown /<word> tokens are preserved in cleanContent
  */
 export function parseSkillInvocations(
   content: string,
@@ -16,7 +16,7 @@ export function parseSkillInvocations(
   const requestedSkills: string[] = []
   const remaining: string[] = []
 
-  // 按空白分割 token
+  // Split tokens by whitespace
   const tokens = content.split(/\s+/)
   let parsingSkills = true
 
@@ -29,7 +29,7 @@ export function parseSkillInvocations(
         continue
       }
     }
-    // 遇到非 skill token 后停止解析前缀（但当前 token 也要保留）
+    // Stop parsing prefix after encountering a non-skill token (preserve current token)
     parsingSkills = false
     remaining.push(token)
   }

@@ -5,12 +5,12 @@ import type { EventBus } from '../events/index.ts'
 export function createStreamRoutes(eventBus: EventBus) {
   const stream = new Hono()
 
-  // GET /api/stream/:chatId — 订阅某个 chat 的流式事件
+  // GET /api/stream/:chatId — subscribe to streaming events for a chat
   stream.get('/stream/:chatId', (c) => {
     const chatId = c.req.param('chatId')
 
     return streamSSE(c, async (sse) => {
-      // 使用写入队列确保 SSE 事件按序发送，避免并发写入丢失
+      // Use a write queue to ensure SSE events are sent in order and prevent concurrent write loss
       let writeQueue = Promise.resolve()
       const enqueueWrite = (event: string, data: string) => {
         writeQueue = writeQueue.then(() => sse.writeSSE({ event, data })).catch(() => {})
@@ -20,15 +20,15 @@ export function createStreamRoutes(eventBus: EventBus) {
         enqueueWrite(event.type, JSON.stringify(event))
       })
 
-      // 发送连接确认
+      // Send connection confirmation
       await sse.writeSSE({
         event: 'connected',
         data: JSON.stringify({ chatId, timestamp: new Date().toISOString() }),
       })
 
-      // 保持连接直到客户端断开
+      // Keep connection open until client disconnects
       try {
-        // 等待中止信号
+        // Wait for abort signal
         await new Promise<void>((resolve) => {
           c.req.raw.signal.addEventListener('abort', () => resolve())
         })
@@ -38,7 +38,7 @@ export function createStreamRoutes(eventBus: EventBus) {
     })
   })
 
-  // GET /api/stream/system — 订阅系统级事件
+  // GET /api/stream/system — subscribe to system-level events
   stream.get('/stream/system', (c) => {
     return streamSSE(c, async (sse) => {
       let writeQueue = Promise.resolve()

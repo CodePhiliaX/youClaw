@@ -5,7 +5,7 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
-// 本地类型定义，替代 ai 包依赖
+// Local type definitions, replacing ai package dependency
 type FileUIPart = { type: "file"; filename: string; url: string; mediaType: string };
 type SourceDocumentUIPart = { type: "source-document"; sourceId: string; title: string; url?: string; filename?: string };
 import {

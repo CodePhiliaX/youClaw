@@ -6,7 +6,7 @@ import { getEnv } from '../config/index.ts'
 export function createCreditRoutes() {
   const app = new Hono()
 
-  // GET /credit/balance — 查询积分余额
+  // GET /credit/balance — query credit balance
   app.get('/credit/balance', async (c) => {
     const apiUrl = getEnv().YOUCLAW_API_URL
     if (!apiUrl) {
@@ -36,7 +36,7 @@ export function createCreditRoutes() {
     }
   })
 
-  // GET /credit/transactions — 查询积分流水
+  // GET /credit/transactions — query credit transactions
   app.get('/credit/transactions', async (c) => {
     const apiUrl = getEnv().YOUCLAW_API_URL
     if (!apiUrl) {
@@ -48,7 +48,7 @@ export function createCreditRoutes() {
     }
 
     try {
-      // 透传分页参数
+      // Forward pagination params
       const url = new URL(`${apiUrl}/api/credit/transactions`)
       const page = c.req.query('page')
       const limit = c.req.query('limit')

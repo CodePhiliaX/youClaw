@@ -6,7 +6,7 @@ import { getLogDates, readLogEntries, cleanOldLogs } from './reader.ts'
 
 const logsDir = getPaths().logs
 
-// 示例日志行
+// Sample log line
 function makeLogLine(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
     level: 30,
@@ -39,16 +39,16 @@ function cleanLogsDir() {
 describe('getLogDates', () => {
   beforeEach(cleanLogsDir)
 
-  test('返回空数组当目录无日志文件', () => {
+  test('returns empty array when directory has no log files', () => {
     const dates = getLogDates()
     expect(dates).toEqual([])
   })
 
-  test('返回按降序排列的日期', () => {
+  test('returns dates in descending order', () => {
     writeFileSync(`${logsDir}/2026-03-09.log`, '')
     writeFileSync(`${logsDir}/2026-03-11.log`, '')
     writeFileSync(`${logsDir}/2026-03-10.log`, '')
-    // 非日志文件应被忽略
+    // Non-log files should be ignored
     writeFileSync(`${logsDir}/random.txt`, '')
 
     const dates = getLogDates()
@@ -59,12 +59,12 @@ describe('getLogDates', () => {
 describe('readLogEntries', () => {
   beforeEach(cleanLogsDir)
 
-  test('文件不存在时返回空结果', async () => {
+  test('returns empty result when file does not exist', async () => {
     const result = await readLogEntries('2099-01-01', {})
     expect(result).toEqual({ entries: [], total: 0, hasMore: false })
   })
 
-  test('读取并解析所有日志行', async () => {
+  test('reads and parses all log lines', async () => {
     const lines = [
       makeLogLine({ msg: 'first', time: 1000 }),
       makeLogLine({ msg: 'second', time: 2000 }),
@@ -79,7 +79,7 @@ describe('readLogEntries', () => {
     expect(result.hasMore).toBe(false)
   })
 
-  test('按级别过滤', async () => {
+  test('filters by level', async () => {
     const lines = [
       makeLogLine({ level: 20, msg: 'debug msg' }),
       makeLogLine({ level: 30, msg: 'info msg' }),
@@ -94,7 +94,7 @@ describe('readLogEntries', () => {
     expect(result.entries[1]!.msg).toBe('error msg')
   })
 
-  test('按类别过滤 - agent', async () => {
+  test('filters by category - agent', async () => {
     const lines = [
       makeLogLine({ msg: 'system log' }),
       makeLogLine({ msg: 'agent log', category: 'agent' }),
@@ -107,7 +107,7 @@ describe('readLogEntries', () => {
     expect(result.entries[0]!.msg).toBe('agent log')
   })
 
-  test('按类别过滤 - system（无 category 的日志）', async () => {
+  test('filters by category - system (logs without category)', async () => {
     const lines = [
       makeLogLine({ msg: 'system log' }),
       makeLogLine({ msg: 'agent log', category: 'agent' }),
@@ -119,7 +119,7 @@ describe('readLogEntries', () => {
     expect(result.entries[0]!.msg).toBe('system log')
   })
 
-  test('按关键词搜索', async () => {
+  test('searches by keyword', async () => {
     const lines = [
       makeLogLine({ msg: 'hello world' }),
       makeLogLine({ msg: 'foo bar' }),
@@ -131,7 +131,7 @@ describe('readLogEntries', () => {
     expect(result.total).toBe(2)
   })
 
-  test('分页 offset/limit', async () => {
+  test('pagination offset/limit', async () => {
     const lines = Array.from({ length: 5 }, (_, i) =>
       makeLogLine({ msg: `msg-${i}` })
     )
@@ -145,7 +145,7 @@ describe('readLogEntries', () => {
     expect(result.hasMore).toBe(true)
   })
 
-  test('最后一页 hasMore 为 false', async () => {
+  test('last page hasMore is false', async () => {
     const lines = Array.from({ length: 3 }, (_, i) =>
       makeLogLine({ msg: `msg-${i}` })
     )
@@ -156,7 +156,7 @@ describe('readLogEntries', () => {
     expect(result.hasMore).toBe(false)
   })
 
-  test('跳过非 JSON 行', async () => {
+  test('skips non-JSON lines', async () => {
     const content = [
       'not json at all',
       makeLogLine({ msg: 'valid' }),
@@ -169,35 +169,35 @@ describe('readLogEntries', () => {
     expect(result.entries[0]!.msg).toBe('valid')
   })
 
-  test('组合过滤：级别 + 类别 + 搜索', async () => {
+  test('combined filter: level + category + search', async () => {
     const lines = [
-      makeLogLine({ level: 30, category: 'agent', msg: '开始处理消息' }),
-      makeLogLine({ level: 50, category: 'agent', msg: '消息处理失败' }),
-      makeLogLine({ level: 50, msg: '数据库错误' }),
-      makeLogLine({ level: 30, category: 'tool_use', msg: '工具调用: Bash' }),
+      makeLogLine({ level: 30, category: 'agent', msg: 'start processing message' }),
+      makeLogLine({ level: 50, category: 'agent', msg: 'message processing failed' }),
+      makeLogLine({ level: 50, msg: 'database error' }),
+      makeLogLine({ level: 30, category: 'tool_use', msg: 'tool call: Bash' }),
     ]
     writeFileSync(`${logsDir}/2026-03-11.log`, lines.join('\n') + '\n')
 
     const result = await readLogEntries('2026-03-11', {
       level: 'error',
       category: 'agent',
-      search: '失败',
+      search: 'failed',
     })
     expect(result.total).toBe(1)
-    expect(result.entries[0]!.msg).toBe('消息处理失败')
+    expect(result.entries[0]!.msg).toBe('message processing failed')
   })
 })
 
 describe('cleanOldLogs', () => {
   beforeEach(cleanLogsDir)
 
-  test('删除超过保留天数的日志文件', () => {
-    // 创建一个 60 天前的日志
+  test('deletes log files older than retention days', () => {
+    // Create a 60-day-old log
     const old = new Date()
     old.setDate(old.getDate() - 60)
     const oldDate = old.toISOString().split('T')[0]!
 
-    // 今天的日志
+    // Today's log
     const today = new Date().toISOString().split('T')[0]!
 
     writeFileSync(`${logsDir}/${oldDate}.log`, 'old')
@@ -206,13 +206,13 @@ describe('cleanOldLogs', () => {
     const deleted = cleanOldLogs(30)
     expect(deleted).toBe(1)
 
-    // 今天的文件还在
+    // Today's file remains
     const remaining = readdirSync(logsDir)
     expect(remaining.length).toBe(1)
     expect(remaining[0]).toBe(`${today}.log`)
   })
 
-  test('retainDays 内的文件不删除', () => {
+  test('files within retainDays are not deleted', () => {
     const today = new Date().toISOString().split('T')[0]!
     writeFileSync(`${logsDir}/${today}.log`, 'keep')
 

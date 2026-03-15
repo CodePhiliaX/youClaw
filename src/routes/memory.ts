@@ -6,24 +6,24 @@ import type { AgentManager } from '../agent/index.ts'
 export function createMemoryRoutes(memoryManager: MemoryManager, agentManager: AgentManager, memoryIndexer: MemoryIndexer | null) {
   const memory = new Hono()
 
-  // ===== 全局 Memory =====
+  // ===== Global Memory =====
 
-  // GET /api/memory/global — 全局 MEMORY.md 内容
+  // GET /api/memory/global — global MEMORY.md content
   memory.get('/memory/global', (c) => {
     const content = memoryManager.getGlobalMemory()
     return c.json({ content })
   })
 
-  // PUT /api/memory/global — 更新全局 MEMORY.md
+  // PUT /api/memory/global — update global MEMORY.md
   memory.put('/memory/global', async (c) => {
     const body = await c.req.json<{ content: string }>()
     memoryManager.updateGlobalMemory(body.content)
     return c.json({ ok: true })
   })
 
-  // ===== 记忆搜索 =====
+  // ===== Memory Search =====
 
-  // GET /api/memory/search?q=xxx&agentId=xxx&fileType=xxx — 全文搜索
+  // GET /api/memory/search?q=xxx&agentId=xxx&fileType=xxx — full-text search
   memory.get('/memory/search', (c) => {
     if (!memoryIndexer) {
       return c.json({ error: 'Memory indexer not available' }, 503)
@@ -45,7 +45,7 @@ export function createMemoryRoutes(memoryManager: MemoryManager, agentManager: A
 
   // ===== Agent Memory =====
 
-  // GET /api/agents/:id/memory — MEMORY.md 内容
+  // GET /api/agents/:id/memory — MEMORY.md content
   memory.get('/agents/:id/memory', (c) => {
     const id = c.req.param('id')
     const managed = agentManager.getAgent(id)
@@ -58,7 +58,7 @@ export function createMemoryRoutes(memoryManager: MemoryManager, agentManager: A
     return c.json({ content })
   })
 
-  // PUT /api/agents/:id/memory — 编辑 MEMORY.md
+  // PUT /api/agents/:id/memory — edit MEMORY.md
   memory.put('/agents/:id/memory', async (c) => {
     const id = c.req.param('id')
     const managed = agentManager.getAgent(id)
@@ -72,7 +72,7 @@ export function createMemoryRoutes(memoryManager: MemoryManager, agentManager: A
     return c.json({ ok: true })
   })
 
-  // GET /api/agents/:id/memory/logs — 每日日志列表
+  // GET /api/agents/:id/memory/logs — daily log list
   memory.get('/agents/:id/memory/logs', (c) => {
     const id = c.req.param('id')
     const managed = agentManager.getAgent(id)
@@ -85,7 +85,7 @@ export function createMemoryRoutes(memoryManager: MemoryManager, agentManager: A
     return c.json(dates)
   })
 
-  // GET /api/agents/:id/memory/logs/:date — 某天的日志
+  // GET /api/agents/:id/memory/logs/:date — log for a specific date
   memory.get('/agents/:id/memory/logs/:date', (c) => {
     const id = c.req.param('id')
     const date = c.req.param('date')
@@ -99,9 +99,9 @@ export function createMemoryRoutes(memoryManager: MemoryManager, agentManager: A
     return c.json({ content })
   })
 
-  // ===== 对话存档 =====
+  // ===== Conversation Archives =====
 
-  // GET /api/agents/:id/memory/conversations — 归档会话列表
+  // GET /api/agents/:id/memory/conversations — list archived conversations
   memory.get('/agents/:id/memory/conversations', (c) => {
     const id = c.req.param('id')
     const managed = agentManager.getAgent(id)
@@ -115,7 +115,7 @@ export function createMemoryRoutes(memoryManager: MemoryManager, agentManager: A
     return c.json(conversations)
   })
 
-  // GET /api/agents/:id/memory/conversations/:chatId/:sessionId — 获取归档会话内容
+  // GET /api/agents/:id/memory/conversations/:chatId/:sessionId — get archived conversation content
   memory.get('/agents/:id/memory/conversations/:chatId/:sessionId', (c) => {
     const id = c.req.param('id')
     const chatId = c.req.param('chatId')
@@ -128,15 +128,15 @@ export function createMemoryRoutes(memoryManager: MemoryManager, agentManager: A
 
     const content = memoryManager.getArchivedConversation(id, chatId, sessionId)
     if (!content) {
-      return c.json({ error: '归档会话不存在' }, 404)
+      return c.json({ error: 'Archived conversation not found' }, 404)
     }
 
     return c.json({ content })
   })
 
-  // ===== 快照 =====
+  // ===== Snapshots =====
 
-  // POST /api/agents/:id/memory/snapshot — 生成快照
+  // POST /api/agents/:id/memory/snapshot — create a snapshot
   memory.post('/agents/:id/memory/snapshot', (c) => {
     const id = c.req.param('id')
     const managed = agentManager.getAgent(id)
@@ -149,7 +149,7 @@ export function createMemoryRoutes(memoryManager: MemoryManager, agentManager: A
     return c.json({ ok: true })
   })
 
-  // GET /api/agents/:id/memory/snapshot — 获取快照
+  // GET /api/agents/:id/memory/snapshot — get snapshot
   memory.get('/agents/:id/memory/snapshot', (c) => {
     const id = c.req.param('id')
     const managed = agentManager.getAgent(id)

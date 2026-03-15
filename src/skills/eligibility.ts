@@ -16,41 +16,41 @@ export interface EligibilityResult {
 }
 
 /**
- * 检查 skill 是否满足运行条件
- * - OS 是否匹配
- * - 依赖的可执行文件是否存在
- * - 需要的环境变量是否已设置
+ * Check whether a skill meets its runtime requirements:
+ * - OS platform match
+ * - Required executables exist
+ * - Required environment variables are set
  */
 export function checkEligibility(frontmatter: SkillFrontmatter): EligibilityResult {
   const errors: string[] = []
 
-  // 检查 OS
+  // Check OS
   const osPassed = !frontmatter.os || frontmatter.os.length === 0 || frontmatter.os.includes(process.platform)
   if (!osPassed) {
-    errors.push(`OS 不匹配: 需要 [${frontmatter.os!.join(', ')}]，当前为 ${process.platform}`)
+    errors.push(`OS mismatch: requires [${frontmatter.os!.join(', ')}], current is ${process.platform}`)
   }
 
-  // 检查 dependencies（可执行文件）
+  // Check dependencies (executables)
   const depResults: DependencyCheckResult[] = []
   if (frontmatter.dependencies) {
     for (const dep of frontmatter.dependencies) {
       const path = which(dep)
       depResults.push({ name: dep, found: !!path, path: path ?? undefined })
       if (!path) {
-        errors.push(`依赖缺失: 可执行文件 "${dep}" 未找到`)
+        errors.push(`Missing dependency: executable "${dep}" not found`)
       }
     }
   }
   const depsPassed = depResults.every((r) => r.found)
 
-  // 检查 env（环境变量）
+  // Check env (environment variables)
   const envResults: EnvCheckResult[] = []
   if (frontmatter.env) {
     for (const envVar of frontmatter.env) {
       const found = !!process.env[envVar]
       envResults.push({ name: envVar, found })
       if (!found) {
-        errors.push(`环境变量缺失: "${envVar}" 未设置`)
+        errors.push(`Missing environment variable: "${envVar}" is not set`)
       }
     }
   }

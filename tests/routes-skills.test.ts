@@ -23,7 +23,7 @@ const baseSkill = {
 }
 
 describe('skills routes', () => {
-  test('GET /skills 返回所有 skills', async () => {
+  test('GET /skills returns all skills', async () => {
     const app = createSkillsRoutes(
       {
         loadAllSkills: () => [baseSkill],
@@ -43,7 +43,7 @@ describe('skills routes', () => {
     expect(body.map((skill) => skill.name)).toEqual(['pdf'])
   })
 
-  test('GET /skills/stats 返回缓存统计和配置', async () => {
+  test('GET /skills/stats returns cache statistics and config', async () => {
     const app = createSkillsRoutes(
       {
         loadAllSkills: () => [baseSkill],
@@ -64,7 +64,7 @@ describe('skills routes', () => {
     expect(body.config.maxSkillCount).toBe(50)
   })
 
-  test('GET /skills/:name 不存在时返回 404', async () => {
+  test('GET /skills/:name returns 404 when not found', async () => {
     const app = createSkillsRoutes(
       {
         loadAllSkills: () => [baseSkill],
@@ -82,7 +82,7 @@ describe('skills routes', () => {
     expect(res.status).toBe(404)
   })
 
-  test('GET /agents/:id/skills 在 agent 存在时返回其 skills 视图', async () => {
+  test('GET /agents/:id/skills returns skills view when agent exists', async () => {
     const app = createSkillsRoutes(
       {
         loadAllSkills: () => [baseSkill],
@@ -110,7 +110,7 @@ describe('skills routes', () => {
     expect(missing.status).toBe(404)
   })
 
-  test('POST /skills/:name/toggle 正常切换', async () => {
+  test('POST /skills/:name/toggle toggles correctly', async () => {
     const disabledSkill = { ...baseSkill, enabled: false, usable: false }
     const app = createSkillsRoutes(
       {
@@ -137,7 +137,7 @@ describe('skills routes', () => {
     expect(body.usable).toBe(false)
   })
 
-  test('POST /skills/:name/toggle 不存在的 skill 返回 404', async () => {
+  test('POST /skills/:name/toggle returns 404 for nonexistent skill', async () => {
     const app = createSkillsRoutes(
       {
         loadAllSkills: () => [baseSkill],
@@ -159,7 +159,7 @@ describe('skills routes', () => {
     expect(res.status).toBe(404)
   })
 
-  test('GET /skills 返回含 enabled 和 usable 字段', async () => {
+  test('GET /skills returns items with enabled and usable fields', async () => {
     const app = createSkillsRoutes(
       {
         loadAllSkills: () => [baseSkill],

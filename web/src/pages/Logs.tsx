@@ -47,7 +47,7 @@ export function Logs() {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
   const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  // 加载日期列表
+  // Load date list
   useEffect(() => {
     getLogDates().then((d) => {
       setDates(d)
@@ -57,14 +57,14 @@ export function Logs() {
     }).catch(() => {})
   }, [])
 
-  // debounce 搜索
+  // Debounce search
   useEffect(() => {
     clearTimeout(searchTimer.current)
     searchTimer.current = setTimeout(() => setDebouncedSearch(search), 300)
     return () => clearTimeout(searchTimer.current)
   }, [search])
 
-  // 加载日志
+  // Load logs
   const fetchEntries = useCallback(async (offset = 0, append = false) => {
     if (!selectedDate) return
     setLoading(true)
@@ -90,7 +90,7 @@ export function Logs() {
     }
   }, [selectedDate, level, category, debouncedSearch])
 
-  // 筛选变化时重新加载
+  // Reload on filter change
   useEffect(() => {
     setExpandedIdx(null)
     fetchEntries(0, false)
@@ -118,11 +118,11 @@ export function Logs() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* 顶栏：标题 + 过滤器 */}
+      {/* Top bar: Title + filters */}
       <div className="p-4 pb-3 border-b border-border shrink-0 space-y-3">
         <h1 className="text-lg font-semibold">{t.logs.title}</h1>
         <div className="flex flex-wrap items-center gap-2">
-          {/* 日期选择 */}
+          {/* Date selector */}
           <select
             data-testid="logs-select-date"
             className="h-8 px-2 text-sm rounded-md border border-border bg-background"
@@ -135,7 +135,7 @@ export function Logs() {
             ))}
           </select>
 
-          {/* 类别按钮组 */}
+          {/* Category button group */}
           <div className="flex rounded-md border border-border overflow-hidden">
             {categories.map((c) => (
               <button
@@ -154,7 +154,7 @@ export function Logs() {
             ))}
           </div>
 
-          {/* 级别下拉 */}
+          {/* Level dropdown */}
           <select
             data-testid="logs-select-level"
             className="h-8 px-2 text-sm rounded-md border border-border bg-background"
@@ -166,7 +166,7 @@ export function Logs() {
             ))}
           </select>
 
-          {/* 搜索框 */}
+          {/* Search box */}
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <input
@@ -180,7 +180,7 @@ export function Logs() {
         </div>
       </div>
 
-      {/* 日志内容 */}
+      {/* Log content */}
       <div className="flex-1 overflow-y-auto p-4 min-h-0">
         <div className="rounded-lg border border-border bg-zinc-950 font-mono text-xs" data-testid="logs-list">
           {entries.length === 0 && !loading ? (
@@ -236,7 +236,7 @@ export function Logs() {
           )}
         </div>
 
-        {/* 底栏：总数 + 加载更多 */}
+        {/* Bottom bar: Total + load more */}
         {entries.length > 0 && (
           <div className="flex items-center justify-between mt-3 text-sm text-muted-foreground">
             <span>{total} {t.logs.totalEntries}</span>

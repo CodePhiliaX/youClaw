@@ -11,16 +11,16 @@ export interface SubagentInfo {
 }
 
 /**
- * 跟踪子 Agent 的生命周期
- * 记录活跃和最近完成的子 Agent 任务
+ * Track sub-agent lifecycle
+ * Record active and recently completed sub-agent tasks
  */
 export class SubagentTracker {
   private active: Map<string, SubagentInfo> = new Map()    // taskId -> info
-  private recent: SubagentInfo[] = []                       // 最近完成的任务
+  private recent: SubagentInfo[] = []                       // Recently completed tasks
   private maxRecent: number = 50
 
   /**
-   * 记录子 Agent 启动
+   * Record sub-agent start
    */
   track(agentId: string, taskId: string, description: string): void {
     const info: SubagentInfo = {
@@ -31,22 +31,22 @@ export class SubagentTracker {
       startedAt: new Date().toISOString(),
     }
     this.active.set(taskId, info)
-    getLogger().debug({ agentId, taskId, description }, '子 Agent 已启动')
+    getLogger().debug({ agentId, taskId, description }, 'Sub-agent started')
   }
 
   /**
-   * 更新子 Agent 进度
+   * Update sub-agent progress
    */
   updateProgress(taskId: string, summary?: string): void {
     const info = this.active.get(taskId)
     if (info) {
       info.summary = summary
-      getLogger().debug({ taskId, summary }, '子 Agent 进度更新')
+      getLogger().debug({ taskId, summary }, 'Sub-agent progress updated')
     }
   }
 
   /**
-   * 标记子 Agent 完成
+   * Mark sub-agent completed
    */
   complete(taskId: string, status: 'completed' | 'failed', summary: string): void {
     const info = this.active.get(taskId)
@@ -58,17 +58,17 @@ export class SubagentTracker {
       this.active.delete(taskId)
       this.recent.unshift(info)
 
-      // 限制最近记录数量
+      // Limit recent record count
       if (this.recent.length > this.maxRecent) {
         this.recent = this.recent.slice(0, this.maxRecent)
       }
 
-      getLogger().debug({ taskId, status, summary }, '子 Agent 已完成')
+      getLogger().debug({ taskId, status, summary }, 'Sub-agent completed')
     }
   }
 
   /**
-   * 获取活跃的子 Agent 列表
+   * Get active sub-agent list
    */
   getActive(agentId?: string): SubagentInfo[] {
     const all = Array.from(this.active.values())
@@ -79,7 +79,7 @@ export class SubagentTracker {
   }
 
   /**
-   * 获取最近完成的子 Agent 列表
+   * Get recently completed sub-agent list
    */
   getRecent(agentId?: string, limit: number = 10): SubagentInfo[] {
     let results = this.recent

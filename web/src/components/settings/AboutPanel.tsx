@@ -26,7 +26,7 @@ export function AboutPanel() {
   useEffect(() => {
     if (!isTauri) return
 
-    // 通过 Tauri command 获取版本
+    // Get version via Tauri command
     import("@tauri-apps/api/core").then(({ invoke }) => {
       invoke<string>("get_version").then((v) => setVersion("v" + v))
     })
@@ -120,7 +120,7 @@ export function AboutPanel() {
         </p>
       </div>
 
-      {/* 更新功能 */}
+      {/* Update feature */}
       {isTauri && (
         <div className="w-full max-w-xs">
           {!showInstall && (
@@ -150,7 +150,7 @@ export function AboutPanel() {
         <p className="text-sm text-muted-foreground">{t.settings.webModeHint}</p>
       )}
 
-      {/* 社交链接 */}
+      {/* Social links */}
       <div className="flex gap-3">
         <Button variant="outline" size="sm" className="gap-2 rounded-xl" asChild>
           <a href="https://github.com/CodePhiliaX/youClaw" target="_blank" rel="noopener noreferrer">

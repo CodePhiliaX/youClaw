@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url'
 import { BUILD_CONSTANTS } from './build-constants.ts'
 
 /**
- * 手动加载 .env 文件到 process.env（不覆盖已有值）
- * 替代 Bun 的自动 .env 加载，兼容 Node.js/tsx 运行时
+ * Manually load .env file into process.env (does not override existing values).
+ * Replaces Bun's automatic .env loading for Node.js/tsx runtime compatibility.
  */
 function loadDotEnv(): void {
   const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -16,12 +16,12 @@ function loadDotEnv(): void {
   try {
     content = readFileSync(envPath, 'utf-8')
   } catch {
-    return // .env 不存在，跳过
+    return // .env not found, skip
   }
 
   for (const line of content.split('\n')) {
     const trimmed = line.trim()
-    // 跳过空行和注释
+    // Skip empty lines and comments
     if (!trimmed || trimmed.startsWith('#')) continue
 
     const eqIndex = trimmed.indexOf('=')
@@ -30,12 +30,12 @@ function loadDotEnv(): void {
     const key = trimmed.slice(0, eqIndex).trim()
     let value = trimmed.slice(eqIndex + 1).trim()
 
-    // 去除引号包裹
+    // Strip surrounding quotes
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1)
     }
 
-    // 不覆盖已有环境变量（系统/命令行设置的优先）
+    // Do not override existing env vars (system/CLI settings take priority)
     if (!(key in process.env)) {
       process.env[key] = value
     }
@@ -60,10 +60,10 @@ const envSchema = z.object({
   WECOM_ENCODING_AES_KEY: z.string().optional(),
   DINGTALK_CLIENT_ID: z.string().optional(),
   DINGTALK_SECRET: z.string().optional(),
-  // 云服务地址（不配置则为离线模式）
+  // Cloud service URLs (offline mode if not configured)
   YOUCLAW_WEBSITE_URL: z.string().optional(),
   YOUCLAW_API_URL: z.string().optional(),
-  // 内置模型配置（编译时注入）
+  // Built-in model config (injected at build time)
   YOUCLAW_BUILTIN_API_URL: z.string().optional(),
   YOUCLAW_BUILTIN_AUTH_TOKEN: z.string().optional(),
 })
@@ -75,11 +75,11 @@ let _config: EnvConfig | null = null
 export function loadEnv(): EnvConfig {
   if (_config) return _config
 
-  // Node.js/tsx 不会自动加载 .env，需要手动加载
+  // Node.js/tsx does not auto-load .env; load manually
   loadDotEnv()
 
-  // 构建时常量注入：build-sidecar.mjs 会生成 build-constants.ts，
-  // 把编译时环境变量写成普通 JS 对象，这里合并到 process.env
+  // Build-time constant injection: build-sidecar.mjs generates build-constants.ts
+  // with compile-time env vars as a plain JS object, merged into process.env here
   for (const [key, val] of Object.entries(BUILD_CONSTANTS)) {
     if (val && !process.env[key]) {
       process.env[key] = val
@@ -88,7 +88,7 @@ export function loadEnv(): EnvConfig {
 
   const result = envSchema.safeParse(process.env)
   if (!result.success) {
-    console.error('环境变量校验失败:')
+    console.error('Environment variable validation failed:')
     for (const issue of result.error.issues) {
       console.error(`  ${issue.path.join('.')}: ${issue.message}`)
     }
@@ -98,13 +98,13 @@ export function loadEnv(): EnvConfig {
   _config = result.data
 
   if (!_config.ANTHROPIC_API_KEY) {
-    console.warn('ANTHROPIC_API_KEY 未设置，Agent 功能将不可用。请在设置中配置 API Key。')
+    console.warn('ANTHROPIC_API_KEY not set. Agent features will be unavailable. Please configure the API Key in settings.')
   }
 
   return _config
 }
 
 export function getEnv(): EnvConfig {
-  if (!_config) throw new Error('环境变量未初始化，请先调用 loadEnv()')
+  if (!_config) throw new Error('Environment not initialized. Call loadEnv() first.')
   return _config
 }

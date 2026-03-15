@@ -27,7 +27,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
-/** 行内左右 padding，保证收起时图标在 52px 内居中 (8+36+8=52) */
+/** Inline horizontal padding, keeps icon centered within 52px when collapsed (8+36+8=52) */
 const ROW_PX = "px-2";
 
 interface AppSidebarProps {
@@ -56,7 +56,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
     { to: "/memory", icon: Brain, label: t.nav.memory },
   ];
 
-  // 头像组件
+  // Avatar component
   const AvatarView = ({ size = "md" }: { size?: "sm" | "md" }) => {
     const sizeClass = size === "sm" ? "w-6 h-6 text-[10px]" : "w-8 h-8 text-xs";
 
@@ -70,7 +70,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
         </div>
       );
     }
-    // 离线 / 未登录：默认头像
+    // Offline / not logged in: default avatar
     return (
       <div className={cn("rounded-full bg-muted flex items-center justify-center text-muted-foreground", sizeClass)}>
         <User className={size === "sm" ? "h-3 w-3" : "h-4 w-4"} />
@@ -78,7 +78,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
     );
   };
 
-  // 用户名显示
+  // Display name
   const displayName = isLoggedIn && user ? user.name : (cloudEnabled ? t.account.notLoggedIn : t.account.offlineMode);
   const displaySub = isLoggedIn && user ? "Pro Plan" : (cloudEnabled ? t.account.loginHint : t.account.offlineModeHint);
 
@@ -93,7 +93,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
         )}
         aria-expanded={!isCollapsed}
       >
-        {/* macOS 交通灯空间 */}
+        {/* macOS traffic light spacing */}
         {isMac && (
           <div
             className="h-7 shrink-0"
@@ -101,7 +101,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
           />
         )}
 
-        {/* 顶部操作栏 */}
+        {/* Top action bar */}
         <div
           className={cn("flex items-center h-[52px] shrink-0", ROW_PX)}
           style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
@@ -138,7 +138,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
           </button>
         </div>
 
-        {/* 页面导航 */}
+        {/* Page navigation */}
         <nav className="space-y-0.5 px-1.5">
           {navItems.map((item) => (
             <NavLink
@@ -173,10 +173,10 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
           ))}
         </nav>
 
-        {/* 填充空间 */}
+        {/* Spacer */}
         <div className="flex-1" />
 
-        {/* 底部：用户头像弹出菜单 */}
+        {/* Bottom: user avatar popup menu */}
         <div
           className="border-t border-[var(--subtle-border)] py-2 px-1.5"
           style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
@@ -208,7 +208,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
               sideOffset={8}
               className="w-[240px] rounded-xl p-2"
             >
-              {/* 顶部用户信息区 */}
+              {/* Top user info area */}
               <div className="flex flex-col items-center py-3 px-2">
                 <div className="mb-2">
                   <AvatarView size="md" />
@@ -219,7 +219,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
 
               <DropdownMenuSeparator />
 
-              {/* 云模式 & 未登录：登录按钮 */}
+              {/* Cloud mode & not logged in: login button */}
               {cloudEnabled && !isLoggedIn && (
                 <>
                   <DropdownMenuItem onClick={() => login()} disabled={authLoading} className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
@@ -230,7 +230,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
                 </>
               )}
 
-              {/* 设置 */}
+              {/* Settings */}
               <DropdownMenuItem onClick={onOpenSettings} className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
                 <Settings2 className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">{t.settings.title}</span>
@@ -244,7 +244,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
                 </a>
               </DropdownMenuItem>
 
-              {/* 文档 */}
+              {/* Docs */}
               <DropdownMenuItem asChild className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
                 <a href="https://youclaw.dev" target="_blank" rel="noopener noreferrer">
                   <BookOpen className="h-4 w-4 text-muted-foreground" />
@@ -252,7 +252,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
                 </a>
               </DropdownMenuItem>
 
-              {/* 登出 — 仅登录状态显示 */}
+              {/* Logout -- only shown when logged in */}
               {isLoggedIn && (
                 <>
                   <DropdownMenuSeparator />

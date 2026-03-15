@@ -37,26 +37,26 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
   const skills = new Hono()
   const installer = new SkillsInstaller()
 
-  // GET /api/skills — 所有可用 skills
+  // GET /api/skills — all available skills
   skills.get('/skills', (c) => {
     const allSkills = skillsLoader.loadAllSkills()
     return c.json(allSkills)
   })
 
-  // GET /api/skills/stats — 缓存统计
+  // GET /api/skills/stats — cache statistics
   skills.get('/skills/stats', (c) => {
     const stats = skillsLoader.getCacheStats()
     const config = skillsLoader.getConfig()
     return c.json({ ...stats, config })
   })
 
-  // POST /api/skills/reload — 强制重载
+  // POST /api/skills/reload — force reload
   skills.post('/skills/reload', (c) => {
     const reloaded = skillsLoader.refresh()
     return c.json({ count: reloaded.length, reloadedAt: Date.now() })
   })
 
-  // POST /api/skills/configure — 保存环境变量到 .env
+  // POST /api/skills/configure — save environment variable to .env
   skills.post('/skills/configure', async (c) => {
     const body = await c.req.json()
     const parsed = configureEnvSchema.safeParse(body)
@@ -69,13 +69,13 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
     const logger = getLogger()
 
     try {
-      // 读取现有 .env 内容
+      // Read existing .env content
       let content = ''
       if (existsSync(envPath)) {
         content = readFileSync(envPath, 'utf-8')
       }
 
-      // 替换或追加
+      // Replace or append
       const lineRegex = new RegExp(`^(#\\s*)?${key}\\s*=.*$`, 'm')
       if (lineRegex.test(content)) {
         content = content.replace(lineRegex, `${key}=${value}`)
@@ -85,22 +85,22 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
 
       writeFileSync(envPath, content, 'utf-8')
 
-      // 立即更新 process.env，无需重启
+      // Update process.env immediately, no restart needed
       process.env[key] = value
 
-      // 重新加载 skills，使 eligibility 检查使用新的环境变量
+      // Reload skills so eligibility checks use the new env vars
       skillsLoader.refresh()
 
-      logger.info({ key }, '环境变量已保存到 .env')
+      logger.info({ key }, 'Env var saved to .env')
       return c.json({ ok: true })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      logger.error({ key, error: msg }, '保存环境变量失败')
+      logger.error({ key, error: msg }, 'Failed to save env var')
       return c.json({ error: msg }, 500)
     }
   })
 
-  // POST /api/skills/install — 执行安装命令（已有 skill 的依赖安装）
+  // POST /api/skills/install — run install command (dependency installation for existing skill)
   skills.post('/skills/install', async (c) => {
     const body = await c.req.json()
     const parsed = installSchema.safeParse(body)
@@ -111,20 +111,20 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
     const { skillName, method } = parsed.data
     const logger = getLogger()
 
-    // 查找 skill
+    // Find skill
     const allSkills = skillsLoader.loadAllSkills()
     const skill = allSkills.find((s) => s.name === skillName)
     if (!skill) {
       return c.json({ error: 'Skill not found' }, 404)
     }
 
-    // 查找安装命令
+    // Find install command
     const command = skill.frontmatter.install?.[method]
     if (!command) {
       return c.json({ error: `Install method "${method}" not found for skill "${skillName}"` }, 400)
     }
 
-    logger.info({ skillName, method, command }, '开始安装 skill 依赖')
+    logger.info({ skillName, method, command }, 'Installing skill dependency')
 
     try {
       let stdout = ''
@@ -138,19 +138,19 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
         exitCode = execErr.status ?? 1
       }
 
-      // 安装完成后重新加载 skills
+      // Reload skills after installation
       skillsLoader.refresh()
 
-      logger.info({ skillName, method, exitCode }, '安装完成')
+      logger.info({ skillName, method, exitCode }, 'Installation complete')
       return c.json({ ok: exitCode === 0, stdout, stderr, exitCode })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      logger.error({ skillName, method, error: msg }, '安装失败')
+      logger.error({ skillName, method, error: msg }, 'Installation failed')
       return c.json({ error: msg }, 500)
     }
   })
 
-  // POST /api/skills/:name/toggle — 启用/停用 skill
+  // POST /api/skills/:name/toggle — enable/disable a skill
   skills.post('/skills/:name/toggle', async (c) => {
     const name = c.req.param('name')
     const body = await c.req.json()
@@ -169,7 +169,7 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
     return c.json(updated)
   })
 
-  // POST /api/skills/install-from-path — 从本地路径安装 skill
+  // POST /api/skills/install-from-path — install skill from local path
   skills.post('/skills/install-from-path', async (c) => {
     const body = await c.req.json()
     const parsed = installFromPathSchema.safeParse(body)
@@ -190,7 +190,7 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
     }
   })
 
-  // POST /api/skills/install-from-url — 从远程 URL 安装 skill
+  // POST /api/skills/install-from-url — install skill from remote URL
   skills.post('/skills/install-from-url', async (c) => {
     const body = await c.req.json()
     const parsed = installFromUrlSchema.safeParse(body)
@@ -211,12 +211,12 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
     }
   })
 
-  // DELETE /api/skills/:name — 卸载 skill
+  // DELETE /api/skills/:name — uninstall a skill
   skills.delete('/skills/:name', async (c) => {
     const name = c.req.param('name')
     const logger = getLogger()
 
-    // 查找 skill 获取其路径
+    // Find skill to get its path
     const allSkills = skillsLoader.loadAllSkills()
     const skill = allSkills.find((s) => s.name === name)
 
@@ -224,9 +224,9 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
       return c.json({ error: 'Skill not found' }, 404)
     }
 
-    // 只允许卸载项目级和用户级 skills（不允许卸载 workspace 级的）
+    // Only allow uninstalling project-level and user-level skills (not workspace-level)
     if (skill.source === 'workspace') {
-      return c.json({ error: '不允许通过 API 卸载 workspace 级别的 skill' }, 403)
+      return c.json({ error: 'Cannot uninstall workspace-level skills via API' }, 403)
     }
 
     try {
@@ -237,12 +237,12 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
       return c.json({ ok: true })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      logger.error({ name, error: msg }, '卸载 skill 失败')
+      logger.error({ name, error: msg }, 'Failed to uninstall skill')
       return c.json({ error: msg }, 500)
     }
   })
 
-  // GET /api/skills/:name — 单个 skill 详情
+  // GET /api/skills/:name — single skill details
   skills.get('/skills/:name', (c) => {
     const name = c.req.param('name')
     const allSkills = skillsLoader.loadAllSkills()
@@ -255,7 +255,7 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
     return c.json(skill)
   })
 
-  // GET /api/agents/:id/skills — agent 的 skills 视图（增强版）
+  // GET /api/agents/:id/skills — agent skills view (enhanced)
   skills.get('/agents/:id/skills', (c) => {
     const id = c.req.param('id')
     const managed = agentManager.getAgent(id)

@@ -15,15 +15,15 @@ import type { AgentQueue } from '../agent/queue.ts'
 import type { AgentManager } from '../agent/manager.ts'
 import type { EventBus } from '../events/index.ts'
 
-// 退避延迟梯度（毫秒）：30s, 1m, 5m, 15m, 60m
+// Backoff delay tiers (ms): 30s, 1m, 5m, 15m, 60m
 const BACKOFF_DELAYS = [30_000, 60_000, 300_000, 900_000, 3_600_000]
-// 连续失败 N 次后自动暂停
+// Auto-pause after N consecutive failures
 const MAX_CONSECUTIVE_FAILURES = 5
-// 卡住检测阈值（5 分钟）
+// Stuck detection threshold (5 minutes)
 const STUCK_THRESHOLD_MS = 5 * 60 * 1000
-// 日志裁剪间隔（每 120 次 tick，约 1 小时）
+// Log pruning interval (every 120 ticks, ~1 hour)
 const PRUNE_INTERVAL_TICKS = 120
-// 日志保留天数
+// Log retention days
 const LOG_RETAIN_DAYS = 30
 
 export class Scheduler {
@@ -36,74 +36,74 @@ export class Scheduler {
     private eventBus: EventBus,
   ) {}
 
-  /** 启动调度循环（每 30 秒检查一次） */
+  /** Start scheduling loop (check every 30 seconds) */
   start(): void {
     const logger = getLogger()
     if (this.intervalId) return
 
-    logger.info('Scheduler 已启动，每 30 秒检查一次')
-    // 立即执行一次
+    logger.info('Scheduler started, checking every 30 seconds')
+    // Execute immediately
     this.tick().catch((err) => {
-      logger.error({ error: String(err) }, 'Scheduler tick 失败')
+      logger.error({ error: String(err) }, 'Scheduler tick failed')
     })
 
     this.intervalId = setInterval(() => {
       this.tick().catch((err) => {
-        logger.error({ error: String(err) }, 'Scheduler tick 失败')
+        logger.error({ error: String(err) }, 'Scheduler tick failed')
       })
     }, 30_000)
   }
 
-  /** 停止调度 */
+  /** Stop scheduling */
   stop(): void {
     if (this.intervalId) {
       clearInterval(this.intervalId)
       this.intervalId = null
-      getLogger().info('Scheduler 已停止')
+      getLogger().info('Scheduler stopped')
     }
   }
 
-  /** 检查并执行到期任务 */
+  /** Check and execute due tasks */
   private async tick(): Promise<void> {
     const logger = getLogger()
 
-    // 卡住检测：重置超时任务的 running_since
+    // Stuck detection: reset timed-out task running_since
     this.recoverStuckTasks()
 
     const now = new Date().toISOString()
     const dueTasks = getTasksDueBy(now)
 
     for (const task of dueTasks) {
-      // 先同步锁定任务，防止下次 tick 重复取出（竞态条件修复）
+      // Lock task synchronously to prevent duplicate pickup on next tick (race condition fix)
       updateTask(task.id, { runningSince: now })
 
-      // 不 await：并行执行多个到期任务
+      // No await: execute multiple due tasks in parallel
       this.executeTask(task).catch((err) => {
-        logger.error({ taskId: task.id, error: String(err), category: 'task' }, '执行定时任务失败')
+        logger.error({ taskId: task.id, error: String(err), category: 'task' }, 'Scheduled task execution failed')
       })
     }
 
-    // 定期裁剪旧日志
+    // Periodically prune old logs
     this.tickCount++
     if (this.tickCount >= PRUNE_INTERVAL_TICKS) {
       this.tickCount = 0
       try {
         const deleted = pruneOldTaskRunLogs(LOG_RETAIN_DAYS)
         if (deleted > 0) {
-          logger.info({ deleted }, '已裁剪过期运行日志')
+          logger.info({ deleted }, 'Pruned expired run logs')
         }
-        // 清理过期系统日志文件
+        // Clean expired system log files
         const deletedLogs = cleanOldLogs(LOG_RETAIN_DAYS)
         if (deletedLogs > 0) {
-          logger.info({ deleted: deletedLogs }, '已清理过期系统日志文件')
+          logger.info({ deleted: deletedLogs }, 'Cleaned expired system log files')
         }
       } catch (err) {
-        logger.error({ error: String(err) }, '裁剪运行日志失败')
+        logger.error({ error: String(err) }, 'Failed to prune run logs')
       }
     }
   }
 
-  /** 检测并恢复卡住的任务 */
+  /** Detect and recover stuck tasks */
   private recoverStuckTasks(): void {
     const logger = getLogger()
     const cutoff = new Date(Date.now() - STUCK_THRESHOLD_MS).toISOString()
@@ -113,7 +113,7 @@ export class Scheduler {
       const newFailures = (task.consecutive_failures ?? 0) + 1
       logger.warn(
         { taskId: task.id, runningSince: task.running_since, consecutiveFailures: newFailures, category: 'task' },
-        '检测到卡住任务，重置 running_since'
+        'Stuck task detected, resetting running_since'
       )
 
       saveTaskRunLog({
@@ -121,51 +121,51 @@ export class Scheduler {
         runAt: task.running_since!,
         durationMs: Date.now() - new Date(task.running_since!).getTime(),
         status: 'error',
-        error: `任务执行超时（超过 ${STUCK_THRESHOLD_MS / 1000} 秒）`,
+        error: `Task execution timed out (exceeded ${STUCK_THRESHOLD_MS / 1000}s)`,
       })
 
       if (newFailures >= MAX_CONSECUTIVE_FAILURES) {
-        // 连续失败过多，自动暂停（传入 consecutiveFailures 以正确计算退避后的 nextRun）
+        // Too many consecutive failures, auto-pause (pass consecutiveFailures for correct backoff nextRun)
         const nextRun = this.calculateNextRun(task, { consecutiveFailures: newFailures })
         updateTask(task.id, {
           runningSince: null,
           consecutiveFailures: newFailures,
           status: 'paused',
-          lastResult: `ERROR: 连续失败 ${newFailures} 次，自动暂停`,
+          lastResult: `ERROR: ${newFailures} consecutive failures, auto-paused`,
           nextRun,
         })
-        logger.warn({ taskId: task.id, consecutiveFailures: newFailures, category: 'task' }, '任务连续失败过多，已自动暂停')
+        logger.warn({ taskId: task.id, consecutiveFailures: newFailures, category: 'task' }, 'Too many consecutive failures, task auto-paused')
       } else {
-        // 计算退避后的下次运行时间
+        // Calculate next run time with backoff
         const nextRun = this.calculateNextRun(task, { consecutiveFailures: newFailures })
         updateTask(task.id, {
           runningSince: null,
           consecutiveFailures: newFailures,
-          lastResult: `ERROR: 任务执行超时`,
+          lastResult: `ERROR: Task execution timed out`,
           nextRun,
         })
       }
     }
   }
 
-  /** 执行单个任务 */
+  /** Execute a single task */
   async executeTask(task: ScheduledTask): Promise<void> {
     const logger = getLogger()
     const runAt = new Date().toISOString()
     const startMs = Date.now()
 
-    logger.info({ taskId: task.id, agentId: task.agent_id, taskName: task.name, category: 'task' }, '执行定时任务')
+    logger.info({ taskId: task.id, agentId: task.agent_id, taskName: task.name, category: 'task' }, 'Executing scheduled task')
 
-    // running_since 已在 tick() 中同步设置，此处不再重复
+    // running_since already set synchronously in tick(), no need to repeat
 
     try {
       const result = await this.agentQueue.enqueue(task.agent_id, task.chat_id, task.prompt)
       const durationMs = Date.now() - startMs
 
-      // 保存执行结果到 messages 表，使 Chat 页面可见
+      // Save execution result to messages table for Chat page visibility
       this.saveTaskMessages(task, runAt, result ?? '(no output)')
 
-      // 投递到外部 channel（best-effort）
+      // Deliver to external channel (best-effort)
       const deliveryStatus = this.deliver(task, result ?? '(no output)')
 
       saveTaskRunLog({
@@ -177,7 +177,7 @@ export class Scheduler {
         deliveryStatus,
       })
 
-      // 计算下次运行时间（成功时重置退避）
+      // Calculate next run time (reset backoff on success)
       const nextRun = this.calculateNextRun(task)
       if (nextRun) {
         updateTask(task.id, {
@@ -188,7 +188,7 @@ export class Scheduler {
           lastResult: result?.slice(0, 500) ?? null,
         })
       } else {
-        // once 类型任务执行后标记为 completed
+        // Mark once-type tasks as completed after execution
         updateTask(task.id, {
           lastRun: runAt,
           nextRun: null,
@@ -199,7 +199,7 @@ export class Scheduler {
         })
       }
 
-      logger.info({ taskId: task.id, agentId: task.agent_id, durationMs, category: 'task' }, '定时任务执行成功')
+      logger.info({ taskId: task.id, agentId: task.agent_id, durationMs, category: 'task' }, 'Scheduled task executed successfully')
     } catch (err) {
       const durationMs = Date.now() - startMs
       const errorMsg = err instanceof Error ? err.message : String(err)
@@ -216,7 +216,7 @@ export class Scheduler {
       const newFailures = (task.consecutive_failures ?? 0) + 1
 
       if (newFailures >= MAX_CONSECUTIVE_FAILURES) {
-        // 连续失败过多，自动暂停（传入 consecutiveFailures 以正确计算退避后的 nextRun）
+        // Too many consecutive failures, auto-pause (pass consecutiveFailures for correct backoff nextRun)
         const nextRun = this.calculateNextRun(task, { consecutiveFailures: newFailures })
         updateTask(task.id, {
           lastRun: runAt,
@@ -226,9 +226,9 @@ export class Scheduler {
           status: 'paused',
           lastResult: `ERROR: ${errorMsg}`.slice(0, 500),
         })
-        logger.warn({ taskId: task.id, consecutiveFailures: newFailures, category: 'task' }, '任务连续失败过多，已自动暂停')
+        logger.warn({ taskId: task.id, consecutiveFailures: newFailures, category: 'task' }, 'Too many consecutive failures, task auto-paused')
       } else {
-        // 计算退避后的下次运行时间
+        // Calculate next run time with backoff
         const nextRun = this.calculateNextRun(task, { consecutiveFailures: newFailures })
         if (nextRun) {
           updateTask(task.id, {
@@ -250,12 +250,12 @@ export class Scheduler {
         }
       }
 
-      logger.error({ taskId: task.id, agentId: task.agent_id, error: errorMsg, consecutiveFailures: newFailures, category: 'task' }, '定时任务执行失败')
+      logger.error({ taskId: task.id, agentId: task.agent_id, error: errorMsg, consecutiveFailures: newFailures, category: 'task' }, 'Scheduled task execution failed')
     }
   }
 
-  /** 保存任务执行消息到 messages 表 */
-  /** 投递结果到外部 channel（best-effort，失败不影响任务状态） */
+  /** Save task execution messages to messages table */
+  /** Deliver result to external channel (best-effort, failure does not affect task status) */
   private deliver(
     task: Pick<ScheduledTask, 'id' | 'agent_id' | 'name' | 'prompt' | 'delivery_mode' | 'delivery_target'>,
     text: string,
@@ -274,10 +274,10 @@ export class Scheduler {
         fullText: `[Task: ${taskName}]\n\n${text}`,
         sessionId: `task:${task.id}`,
       })
-      logger.info({ taskId: task.id, deliveryTarget: task.delivery_target }, '任务结果已投递')
+      logger.info({ taskId: task.id, deliveryTarget: task.delivery_target }, 'Task result delivered')
       return 'sent'
     } catch (err) {
-      logger.warn({ taskId: task.id, deliveryTarget: task.delivery_target, error: String(err) }, '投递失败（best-effort）')
+      logger.warn({ taskId: task.id, deliveryTarget: task.delivery_target, error: String(err) }, 'Delivery failed (best-effort)')
       return 'failed'
     }
   }
@@ -291,7 +291,7 @@ export class Scheduler {
   ): void {
     const timestamp = new Date().toISOString()
 
-    // 保存用户 prompt 消息（isFromMe=false 表示非 bot 发出，与 router 语义一致）
+    // Save user prompt message (isFromMe=false means not sent by bot, consistent with router semantics)
     saveMessage({
       id: `${task.id}-${runAt}-user`,
       chatId: task.chat_id,
@@ -303,7 +303,7 @@ export class Scheduler {
       isBotMessage: false,
     })
 
-    // 保存 bot 结果消息（isFromMe=true 表示 bot 发出）
+    // Save bot result message (isFromMe=true means sent by bot)
     saveMessage({
       id: `${task.id}-${runAt}-bot`,
       chatId: task.chat_id,
@@ -315,12 +315,12 @@ export class Scheduler {
       isBotMessage: true,
     })
 
-    // 更新 chat 记录
+    // Update chat record
     const taskName = task.name || task.prompt.slice(0, 30)
     upsertChat(task.chat_id, task.agent_id, `Task: ${taskName}`, 'task')
   }
 
-  /** 手动执行任务（不设 running_since，不影响 consecutiveFailures） */
+  /** Manually execute task (no running_since, does not affect consecutiveFailures) */
   async runManually(task: ScheduledTask): Promise<{ status: string; result?: string; error?: string }> {
     const runAt = new Date().toISOString()
     const startMs = Date.now()
@@ -330,13 +330,13 @@ export class Scheduler {
       const result = await this.agentQueue.enqueue(task.agent_id, task.chat_id, task.prompt)
       const durationMs = Date.now() - startMs
 
-      // 保存执行结果到 messages 表
+      // Save execution result to messages table
       this.saveTaskMessages(task, `${runId}-${runAt}`, result ?? '(no output)', 'manual', 'Manual Run')
 
-      // 投递到外部 channel
+      // Deliver to external channel
       const deliveryStatus = this.deliver(task, result ?? '(no output)')
 
-      // 记录运行日志
+      // Record run log
       saveTaskRunLog({
         taskId: task.id,
         runAt,
@@ -351,7 +351,7 @@ export class Scheduler {
       const durationMs = Date.now() - startMs
       const error = err instanceof Error ? err.message : String(err)
 
-      // 记录失败日志
+      // Record failure log
       saveTaskRunLog({
         taskId: task.id,
         runAt,
@@ -365,7 +365,7 @@ export class Scheduler {
     }
   }
 
-  /** 计算下次运行时间 */
+  /** Calculate next run time */
   calculateNextRun(
     task: Pick<ScheduledTask, 'schedule_type' | 'schedule_value' | 'last_run'> & { timezone?: string | null },
     options?: { consecutiveFailures?: number },
@@ -390,9 +390,9 @@ export class Scheduler {
         break
       }
       case 'once': {
-        // once 成功后返回 null（标记 completed）；失败时由退避逻辑计算重试时间
+        // Return null after once succeeds (marks completed); on failure, backoff logic calculates retry time
         if (!options?.consecutiveFailures) return null
-        // 有失败，需要退避重试：以当前时间为基准计算退避
+        // Has failures, need backoff retry: calculate backoff based on current time
         nextTime = now
         break
       }
@@ -402,13 +402,13 @@ export class Scheduler {
 
     if (!nextTime) return null
 
-    // 退避逻辑：有连续失败时延后下次运行
+    // Backoff logic: delay next run on consecutive failures
     const failures = options?.consecutiveFailures ?? 0
     if (failures > 0) {
       const backoffIdx = Math.min(failures - 1, BACKOFF_DELAYS.length - 1)
       const backoffMs = BACKOFF_DELAYS[backoffIdx]!
       const backoffTime = new Date(now.getTime() + backoffMs)
-      // 取 max(正常下次时间, now + backoffDelay)
+      // Take max(normal next time, now + backoffDelay)
       if (backoffTime.getTime() > nextTime.getTime()) {
         nextTime = backoffTime
       }

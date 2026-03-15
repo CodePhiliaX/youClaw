@@ -40,7 +40,7 @@ describe('scanWorkspaceFiles', () => {
     rmSync(workspaceDir, { recursive: true, force: true })
   })
 
-  test('返回工作区文件并排除 .git、node_modules、data', () => {
+  test('returns workspace files excluding .git, node_modules, and data', () => {
     mkdirSync(join(workspaceDir, 'src'), { recursive: true })
     mkdirSync(join(workspaceDir, '.git'), { recursive: true })
     mkdirSync(join(workspaceDir, 'node_modules/pkg'), { recursive: true })
@@ -57,18 +57,18 @@ describe('scanWorkspaceFiles', () => {
     expect(files).toEqual(['README.md', 'src/index.ts'])
   })
 
-  test('目录不存在时返回空数组', () => {
+  test('returns empty array when directory does not exist', () => {
     expect(scanWorkspaceFiles(join(workspaceDir, 'missing'))).toEqual([])
   })
 })
 
 describe('matchSkillGlobs', () => {
-  test('无 globs 时默认匹配', () => {
+  test('matches by default when no globs are specified', () => {
     expect(matchSkillGlobs(createSkill(), ['src/index.ts'])).toBe(true)
     expect(matchSkillGlobs(createSkill([]), ['src/index.ts'])).toBe(true)
   })
 
-  test('任一 glob 命中即可返回 true', () => {
+  test('returns true when any glob matches', () => {
     const matched = matchSkillGlobs(createSkill(['**/*.ts', '**/*.tsx']), ['README.md', 'src/index.ts'])
     const notMatched = matchSkillGlobs(createSkill(['**/*.py']), ['README.md', 'src/index.ts'])
 

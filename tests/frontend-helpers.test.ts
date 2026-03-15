@@ -1,13 +1,13 @@
 /**
- * 前端辅助函数测试
+ * Frontend helper function tests
  *
- * 测试 Tasks.tsx 中导出的纯函数逻辑
- * 由于组件函数是模块内部的，这里直接复制逻辑进行验证
+ * Tests the pure function logic exported from Tasks.tsx
+ * Since the component functions are module-internal, we copy the logic here for verification
  */
 
 import { describe, test, expect } from 'bun:test'
 
-// 复制自 Tasks.tsx 的纯函数（它们未 export，所以这里复制测试）
+// Copied from Tasks.tsx pure functions (they are not exported, so we copy them here for testing)
 
 function formatRelative(iso: string | null): string {
   if (!iso) return '-'
@@ -68,37 +68,37 @@ describe('formatRelative', () => {
     expect(formatRelative(null)).toBe('-')
   })
 
-  test('未来 30 秒 → "in <1m"', () => {
+  test('30 seconds in the future → "in <1m"', () => {
     const future = new Date(Date.now() + 30_000).toISOString()
     expect(formatRelative(future)).toBe('in <1m')
   })
 
-  test('过去 30 秒 → "<1m ago"', () => {
+  test('30 seconds in the past → "<1m ago"', () => {
     const past = new Date(Date.now() - 30_000).toISOString()
     expect(formatRelative(past)).toBe('<1m ago')
   })
 
-  test('未来 5 分钟 → "in 5m"', () => {
+  test('5 minutes in the future → "in 5m"', () => {
     const future = new Date(Date.now() + 5 * 60_000).toISOString()
     expect(formatRelative(future)).toBe('in 5m')
   })
 
-  test('过去 10 分钟 → "10m ago"', () => {
+  test('10 minutes in the past → "10m ago"', () => {
     const past = new Date(Date.now() - 10 * 60_000).toISOString()
     expect(formatRelative(past)).toBe('10m ago')
   })
 
-  test('未来 2 小时 → "in 2h"', () => {
+  test('2 hours in the future → "in 2h"', () => {
     const future = new Date(Date.now() + 2 * 3_600_000).toISOString()
     expect(formatRelative(future)).toBe('in 2h')
   })
 
-  test('过去 3 小时 → "3h ago"', () => {
+  test('3 hours in the past → "3h ago"', () => {
     const past = new Date(Date.now() - 3 * 3_600_000).toISOString()
     expect(formatRelative(past)).toBe('3h ago')
   })
 
-  test('超过 24 小时使用 toLocaleString', () => {
+  test('beyond 24 hours uses toLocaleString', () => {
     const farFuture = new Date(Date.now() + 2 * 86_400_000).toISOString()
     const result = formatRelative(farFuture)
     expect(result).not.toContain('in ')
@@ -109,18 +109,18 @@ describe('formatRelative', () => {
 // ===== formatDuration =====
 
 describe('formatDuration', () => {
-  test('毫秒级别', () => {
+  test('millisecond level', () => {
     expect(formatDuration(50)).toBe('50ms')
     expect(formatDuration(999)).toBe('999ms')
   })
 
-  test('秒级别', () => {
+  test('second level', () => {
     expect(formatDuration(1000)).toBe('1.0s')
     expect(formatDuration(1500)).toBe('1.5s')
     expect(formatDuration(10000)).toBe('10.0s')
   })
 
-  test('边界值', () => {
+  test('boundary values', () => {
     expect(formatDuration(0)).toBe('0ms')
     expect(formatDuration(1)).toBe('1ms')
   })
@@ -129,31 +129,31 @@ describe('formatDuration', () => {
 // ===== scheduleLabel =====
 
 describe('scheduleLabel', () => {
-  test('cron 类型', () => {
+  test('cron type', () => {
     expect(scheduleLabel('cron', '0 9 * * *')).toBe('cron: 0 9 * * *')
     expect(scheduleLabel('cron', '*/5 * * * *')).toBe('cron: */5 * * * *')
   })
 
-  test('interval — 秒级', () => {
+  test('interval — second level', () => {
     expect(scheduleLabel('interval', '30000')).toBe('every 30s')
   })
 
-  test('interval — 分钟级', () => {
+  test('interval — minute level', () => {
     expect(scheduleLabel('interval', '60000')).toBe('every 1m')
     expect(scheduleLabel('interval', '1800000')).toBe('every 30m')
   })
 
-  test('interval — 小时级', () => {
+  test('interval — hour level', () => {
     expect(scheduleLabel('interval', '3600000')).toBe('every 1h')
     expect(scheduleLabel('interval', '7200000')).toBe('every 2h')
   })
 
-  test('once 类型', () => {
+  test('once type', () => {
     const result = scheduleLabel('once', '2026-03-10T14:30:00.000Z')
     expect(result.startsWith('once: ')).toBe(true)
   })
 
-  test('未知类型返回原始值', () => {
+  test('unknown type returns raw value', () => {
     expect(scheduleLabel('unknown', 'raw-value')).toBe('raw-value')
   })
 })
@@ -161,17 +161,17 @@ describe('scheduleLabel', () => {
 // ===== msToMinutes =====
 
 describe('msToMinutes', () => {
-  test('正常转换', () => {
+  test('normal conversion', () => {
     expect(msToMinutes('60000')).toBe('1')
     expect(msToMinutes('1800000')).toBe('30')
     expect(msToMinutes('3600000')).toBe('60')
   })
 
-  test('非整数分钟', () => {
+  test('non-integer minutes', () => {
     expect(msToMinutes('90000')).toBe('1.5')
   })
 
-  test('NaN 返回原始字符串', () => {
+  test('NaN returns the original string', () => {
     expect(msToMinutes('abc')).toBe('abc')
     expect(msToMinutes('')).toBe('')
   })
@@ -180,25 +180,25 @@ describe('msToMinutes', () => {
 // ===== isoToDatetimeLocal =====
 
 describe('isoToDatetimeLocal', () => {
-  test('标准 ISO 转换', () => {
-    // 注意：转换为本地时间
+  test('standard ISO conversion', () => {
+    // Note: converts to local time
     const result = isoToDatetimeLocal('2026-03-10T14:30:00.000Z')
-    // 应该匹配 YYYY-MM-DDTHH:MM 格式
+    // Should match YYYY-MM-DDTHH:MM format
     expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
   })
 
-  test('月和日正确补零', () => {
+  test('month and day are correctly zero-padded', () => {
     const result = isoToDatetimeLocal('2026-01-05T03:07:00.000Z')
-    // 本地时间可能因时区不同，但格式正确
+    // Local time may differ by timezone, but format should be correct
     expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
   })
 })
 
-// ===== ScheduledTaskDTO 类型验证 =====
+// ===== ScheduledTaskDTO type validation =====
 
-describe('ScheduledTaskDTO 字段完整性', () => {
-  test('包含所有必要字段（类型定义验证）', () => {
-    // 模拟一个完整的 DTO 对象，验证类型正确
+describe('ScheduledTaskDTO field completeness', () => {
+  test('contains all required fields (type definition validation)', () => {
+    // Simulate a complete DTO object to verify type correctness
     const dto = {
       id: 'test-id',
       agent_id: 'agent-1',
@@ -216,73 +216,73 @@ describe('ScheduledTaskDTO 字段完整性', () => {
 
     expect(dto.name).toBe('test name')
     expect(dto.description).toBe('test desc')
-    expect(Object.keys(dto).length).toBe(12) // 12 个字段
+    expect(Object.keys(dto).length).toBe(12) // 12 fields
   })
 })
 
-// ===== 新增边界测试 =====
+// ===== Additional boundary tests =====
 
-describe('formatRelative — 精确边界', () => {
-  test('精确边界 60 秒未来 → "in 1m"', () => {
+describe('formatRelative — exact boundaries', () => {
+  test('exact boundary 60 seconds in the future → "in 1m"', () => {
     const future = new Date(Date.now() + 60_000).toISOString()
     expect(formatRelative(future)).toBe('in 1m')
   })
 
-  test('精确边界 60 秒过去 → "1m ago"', () => {
+  test('exact boundary 60 seconds in the past → "1m ago"', () => {
     const past = new Date(Date.now() - 60_000).toISOString()
     expect(formatRelative(past)).toBe('1m ago')
   })
 
-  test('精确边界 1 小时未来 → "in 1h"', () => {
+  test('exact boundary 1 hour in the future → "in 1h"', () => {
     const future = new Date(Date.now() + 3_600_000).toISOString()
     expect(formatRelative(future)).toBe('in 1h')
   })
 
-  test('精确边界 24 小时未来 → toLocaleString', () => {
+  test('exact boundary 24 hours in the future → toLocaleString', () => {
     const future = new Date(Date.now() + 86_400_000).toISOString()
     const result = formatRelative(future)
-    // 24 小时正好等于 86_400_000，absDiff < 86_400_000 为 false，走 toLocaleString
+    // Exactly 24 hours equals 86_400_000, absDiff < 86_400_000 is false, falls through to toLocaleString
     expect(result).not.toContain('in ')
     expect(result).not.toContain(' ago')
   })
 
-  test('空字符串 → "-"（falsy 值）', () => {
+  test('empty string → "-" (falsy value)', () => {
     expect(formatRelative('')).toBe('-')
   })
 
-  test('负零毫秒差（当前时间） → "<1m ago" 或 "in <1m"', () => {
+  test('near-zero ms difference (current time) → "<1m ago" or "in <1m"', () => {
     const now = new Date(Date.now()).toISOString()
     const result = formatRelative(now)
-    // diffMs 接近 0，absDiff < 60_000 为 true
+    // diffMs is close to 0, absDiff < 60_000 is true
     expect(result === '<1m ago' || result === 'in <1m').toBe(true)
   })
 })
 
-describe('formatDuration — 大数值', () => {
-  test('大数值转换', () => {
+describe('formatDuration — large values', () => {
+  test('large value conversion', () => {
     expect(formatDuration(3_600_000)).toBe('3600.0s')
     expect(formatDuration(100_000)).toBe('100.0s')
   })
 })
 
-describe('scheduleLabel — 边界情况', () => {
+describe('scheduleLabel — edge cases', () => {
   test('interval NaN → "every NaNh"', () => {
-    // parseInt('not-a-number', 10) 为 NaN，所有比较均为 false，走到 return `every ${NaN / 3_600_000}h`
+    // parseInt('not-a-number', 10) is NaN, all comparisons are false, falls through to return `every ${NaN / 3_600_000}h`
     expect(scheduleLabel('interval', 'not-a-number')).toBe('every NaNh')
   })
 
   test('interval 0 → "every 0s"', () => {
-    // 0 < 60_000 为 true，0 / 1000 = 0
+    // 0 < 60_000 is true, 0 / 1000 = 0
     expect(scheduleLabel('interval', '0')).toBe('every 0s')
   })
 
-  test('cron 空值 → "cron: "', () => {
+  test('cron empty value → "cron: "', () => {
     expect(scheduleLabel('cron', '')).toBe('cron: ')
   })
 })
 
-describe('msToMinutes — 边界情况', () => {
-  test('负数 → "-1"', () => {
+describe('msToMinutes — edge cases', () => {
+  test('negative number → "-1"', () => {
     expect(msToMinutes('-60000')).toBe('-1')
   })
 
@@ -291,16 +291,16 @@ describe('msToMinutes — 边界情况', () => {
   })
 })
 
-describe('isoToDatetimeLocal — 无效输入', () => {
-  test('无效日期字符串 → NaN 填充结果（不会触发 catch）', () => {
+describe('isoToDatetimeLocal — invalid input', () => {
+  test('invalid date string → NaN-filled result (does not trigger catch)', () => {
     const result = isoToDatetimeLocal('not-a-date')
-    // new Date('not-a-date') 不抛异常，但各字段均为 NaN
+    // new Date('not-a-date') does not throw, but all fields are NaN
     expect(result).toBe('NaN-NaN-NaNTNaN:NaN')
   })
 
-  test('空字符串 → NaN 填充结果（不会触发 catch）', () => {
+  test('empty string → NaN-filled result (does not trigger catch)', () => {
     const result = isoToDatetimeLocal('')
-    // new Date('') 不抛异常，但各字段均为 NaN
+    // new Date('') does not throw, but all fields are NaN
     expect(result).toBe('NaN-NaN-NaNTNaN:NaN')
   })
 })

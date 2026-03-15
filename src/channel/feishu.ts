@@ -12,7 +12,7 @@ export interface FeishuChannelOpts {
 }
 
 /**
- * 飞书消息事件数据结构（im.message.receive_v1）
+ * Feishu message event data structure (im.message.receive_v1)
  */
 interface FeishuMessageEvent {
   sender: {
@@ -42,7 +42,7 @@ interface FeishuMessageEvent {
 }
 
 /**
- * 从飞书消息 content JSON 中提取纯文本
+ * Extract plain text from Feishu message content JSON
  */
 export function extractTextContent(contentJson: string, messageType: string): string {
   try {
@@ -63,10 +63,10 @@ export function extractTextContent(contentJson: string, messageType: string): st
 }
 
 /**
- * 从富文本（post）消息中提取文本
+ * Extract text from rich text (post) messages
  */
 export function extractPostText(parsed: Record<string, unknown>): string {
-  // post 格式：{ title?, content: [[{ tag, text?, ... }]] } 或 { zh_cn: { title?, content: [...] } }
+  // post format: { title?, content: [[{ tag, text?, ... }]] } or { zh_cn: { title?, content: [...] } }
   const postBody = (parsed.zh_cn || parsed.en_us || parsed) as Record<string, unknown>
   const title = (postBody.title as string) || ''
   const contentBlocks = (postBody.content || []) as Array<Array<Record<string, unknown>>>
@@ -82,12 +82,12 @@ export function extractPostText(parsed: Record<string, unknown>): string {
       } else if (element.tag === 'a') {
         paraTexts.push((element.text as string) || (element.href as string) || '')
       } else if (element.tag === 'at') {
-        // @提及：保留 @name 格式
+        // @mention: preserve @name format
         if (element.user_name) {
           paraTexts.push(`@${element.user_name}`)
         }
       } else if (element.tag === 'img') {
-        paraTexts.push('[图片]')
+        paraTexts.push('[image]')
       }
     }
     if (paraTexts.length > 0) {
@@ -99,7 +99,7 @@ export function extractPostText(parsed: Record<string, unknown>): string {
 }
 
 /**
- * 去除消息文本中对 bot 自身的 @提及
+ * Strip @mentions of the bot itself from message text
  */
 export function stripBotMention(
   text: string,
@@ -109,7 +109,7 @@ export function stripBotMention(
   let result = text
   for (const mention of mentions) {
     if (mention.id.open_id === botOpenId) {
-      // 去除 @bot 的占位符（如 @_user_1）和名称
+      // Remove @bot placeholder (e.g. @_user_1) and name
       result = result.replace(new RegExp(mention.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')
     }
   }
@@ -117,7 +117,7 @@ export function stripBotMention(
 }
 
 /**
- * 文本分片
+ * Split text into chunks
  */
 export function chunkText(text: string, limit: number): string[] {
   if (text.length <= limit) return [text]
@@ -158,7 +158,7 @@ export class FeishuChannel implements Channel {
   async connect(): Promise<void> {
     const logger = getLogger()
 
-    // 获取 bot 的 open_id（用于过滤 @mention）
+    // Get bot's open_id (used for @mention filtering)
     try {
       const response = await this.client.request<{ code: number; bot?: { open_id?: string; bot_name?: string }; data?: { bot?: { open_id?: string; bot_name?: string } } }>({
         method: 'GET',
@@ -168,24 +168,24 @@ export class FeishuChannel implements Channel {
       const bot = response.bot || response.data?.bot
       if (bot?.open_id) {
         this.botOpenId = bot.open_id
-        logger.info({ botOpenId: this.botOpenId, botName: bot.bot_name }, '飞书 bot 信息获取成功')
+        logger.info({ botOpenId: this.botOpenId, botName: bot.bot_name }, 'Feishu bot info retrieved')
       }
     } catch (err) {
-      logger.warn({ error: err }, '获取飞书 bot 信息失败，@mention 过滤可能不准确')
+      logger.warn({ error: err }, 'Failed to get Feishu bot info, @mention filtering may be inaccurate')
     }
 
-    // 创建事件分发器
+    // Create event dispatcher
     const eventDispatcher = new Lark.EventDispatcher({}).register({
       'im.message.receive_v1': async (data: unknown) => {
         try {
           this.handleMessageEvent(data as FeishuMessageEvent)
         } catch (err) {
-          logger.error({ error: err }, '处理飞书消息事件失败')
+          logger.error({ error: err }, 'Failed to process Feishu message event')
         }
       },
     })
 
-    // 使用 WebSocket 长连接模式接收事件
+    // Use WebSocket long connection to receive events
     this.wsClient = new Lark.WSClient({
       appId: this.appId,
       appSecret: this.appSecret,
@@ -193,8 +193,8 @@ export class FeishuChannel implements Channel {
     })
 
     await this.wsClient.start({ eventDispatcher })
-    logger.info('飞书 WebSocket 长连接已启动')
-    // WSClient.start 是异步的但没有回调，给一点时间让连接建立
+    logger.info('Feishu WebSocket long connection started')
+    // WSClient.start is async without callback, give some time for connection
     await new Promise<void>(r => setTimeout(r, 1500))
     this._connected = true
 
@@ -211,23 +211,23 @@ export class FeishuChannel implements Channel {
   }
 
   /**
-   * 处理入站消息事件
+   * Handle inbound message event
    */
   private handleMessageEvent(event: FeishuMessageEvent): void {
     const logger = getLogger()
     const { sender, message: msg } = event
 
-    // 只处理文本和富文本消息
+    // Only process text and rich text messages
     if (msg.message_type !== 'text' && msg.message_type !== 'post') {
-      logger.debug({ messageType: msg.message_type }, '飞书：跳过非文本消息')
+      logger.debug({ messageType: msg.message_type }, 'Feishu: skipping non-text message')
       return
     }
 
-    // 提取文本内容
+    // Extract text content
     let content = extractTextContent(msg.content, msg.message_type)
     if (!content) return
 
-    // 处理 @mention：去除 bot 自身的 @提及
+    // Handle @mention: strip bot's own @mentions
     if (msg.mentions && this.botOpenId) {
       content = stripBotMention(content, msg.mentions, this.botOpenId)
     }
@@ -236,7 +236,7 @@ export class FeishuChannel implements Channel {
     const senderId = sender.sender_id.open_id || sender.sender_id.user_id || 'unknown'
     const isGroup = msg.chat_type === 'group'
 
-    // 从 mentions 中找发送者名称，否则用 open_id
+    // Find sender name from mentions, otherwise use open_id
     const senderName = senderId
 
     const inbound: InboundMessage = {
@@ -250,11 +250,11 @@ export class FeishuChannel implements Channel {
       channel: 'feishu',
     }
 
-    // 异步添加处理中 reaction（不阻塞消息处理）
+    // Asynchronously add processing reaction (non-blocking)
     this.addProcessingReaction(msg.message_id, chatId)
 
     this.opts.onMessage(inbound)
-    logger.debug({ chatId, sender: senderId, chatType: msg.chat_type }, '飞书消息已接收')
+    logger.debug({ chatId, sender: senderId, chatType: msg.chat_type }, 'Feishu message received')
   }
 
   async sendMessage(chatId: string, text: string): Promise<void> {
@@ -263,11 +263,11 @@ export class FeishuChannel implements Channel {
     try {
       const feishuChatId = chatId.replace(/^feishu:/, '')
 
-      // 长消息分片
+      // Long message chunking
       const chunks = chunkText(text, FEISHU_TEXT_CHUNK_LIMIT)
 
       for (const chunk of chunks) {
-        // 判断是否包含代码块或表格，选择消息格式
+        // Check for code blocks or tables to choose message format
         const shouldUseCard = /```[\s\S]*?```/.test(chunk) || /\|.+\|[\r\n]+\|[-:| ]+\|/.test(chunk)
 
         if (shouldUseCard) {
@@ -277,14 +277,14 @@ export class FeishuChannel implements Channel {
         }
       }
 
-      logger.debug({ chatId, length: text.length }, '飞书消息已发送')
+      logger.debug({ chatId, length: text.length }, 'Feishu message sent')
     } catch (err) {
-      logger.error({ chatId, error: err }, '飞书消息发送失败')
+      logger.error({ chatId, error: err }, 'Feishu message send failed')
     }
   }
 
   /**
-   * 以富文本（post）格式发送（支持基础 markdown）
+   * Send in rich text (post) format (supports basic markdown)
    */
   private async sendPost(chatId: string, text: string): Promise<void> {
     await this.client.im.message.create({
@@ -302,7 +302,7 @@ export class FeishuChannel implements Channel {
   }
 
   /**
-   * 以交互卡片格式发送（支持代码块、表格等复杂 markdown）
+   * Send as interactive card (supports code blocks, tables, etc.)
    */
   private async sendCard(chatId: string, text: string): Promise<void> {
     await this.client.im.message.create({
@@ -331,7 +331,7 @@ export class FeishuChannel implements Channel {
         this.pendingReactions.set(chatId, { messageId, reactionId: res.data.reaction_id })
       }
     } catch (err) {
-      getLogger().debug({ error: err, messageId }, '添加飞书 reaction 失败')
+      getLogger().debug({ error: err, messageId }, 'Failed to add Feishu reaction')
     }
   }
 
@@ -344,7 +344,7 @@ export class FeishuChannel implements Channel {
         path: { message_id: pending.messageId, reaction_id: pending.reactionId },
       })
     } catch (err) {
-      getLogger().debug({ error: err, chatId }, '移除飞书 reaction 失败')
+      getLogger().debug({ error: err, chatId }, 'Failed to remove Feishu reaction')
     }
   }
 
@@ -370,7 +370,7 @@ export class FeishuChannel implements Channel {
       }
       this.wsClient = null
       this._connected = false
-      logger.info('飞书 WebSocket 连接已关闭')
+      logger.info('Feishu WebSocket connection closed')
     }
   }
 }

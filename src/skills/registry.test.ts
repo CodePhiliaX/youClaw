@@ -6,13 +6,13 @@ import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { homedir } from 'node:os'
 
-// 初始化环境和日志（RegistryManager 内部依赖）
+// Initialize env and logger (required by RegistryManager internally)
 import { loadEnv } from '../config/index.ts'
 import { initLogger } from '../logger/index.ts'
 loadEnv()
 initLogger()
 
-/** 创建 mock SkillsLoader */
+/** Create mock SkillsLoader */
 function createMockLoader(skills: Partial<Skill>[] = []): SkillsLoader {
   return {
     loadAllSkills: () => skills as Skill[],
@@ -22,12 +22,12 @@ function createMockLoader(skills: Partial<Skill>[] = []): SkillsLoader {
 
 describe('RegistryManager', () => {
   describe('getRecommended', () => {
-    test('返回推荐列表，包含正确字段', () => {
+    test('returns recommended list with correct fields', () => {
       const manager = new RegistryManager(createMockLoader())
       const list = manager.getRecommended()
 
       expect(list.length).toBe(10)
-      // 每项都有必要字段
+      // Each item has required fields
       for (const item of list) {
         expect(typeof item.slug).toBe('string')
         expect(typeof item.displayName).toBe('string')
@@ -40,7 +40,7 @@ describe('RegistryManager', () => {
       expect(list[0].category).toBe('agent')
     })
 
-    test('已安装的技能标记 installed=true（通过 registryMeta）', () => {
+    test('marks installed skill as installed=true (via registryMeta)', () => {
       const manager = new RegistryManager(createMockLoader([
         {
           name: 'DuckDuckGo Web Search',
@@ -59,11 +59,11 @@ describe('RegistryManager', () => {
       expect(ddg.installed).toBe(true)
     })
 
-    test('已安装的技能标记 installed=true（通过目录检测）', () => {
+    test('marks installed skill as installed=true (via directory detection)', () => {
       const userSkillsDir = resolve(homedir(), '.youclaw', 'skills')
       const testDir = resolve(userSkillsDir, 'coding')
 
-      // 创建测试目录
+      // Create test directory
       mkdirSync(testDir, { recursive: true })
       writeFileSync(resolve(testDir, 'SKILL.md'), '---\nname: coding\ndescription: test\n---\n')
 
@@ -74,19 +74,19 @@ describe('RegistryManager', () => {
         const coding = list.find(s => s.slug === 'coding')!
         expect(coding.installed).toBe(true)
       } finally {
-        // 清理
+        // Clean up
         rmSync(testDir, { recursive: true, force: true })
       }
     })
   })
 
   describe('installSkill', () => {
-    test('未知 slug 抛出错误', async () => {
+    test('throws error for unknown slug', async () => {
       const manager = new RegistryManager(createMockLoader())
-      await expect(manager.installSkill('unknown-skill')).rejects.toThrow('未知的推荐技能')
+      await expect(manager.installSkill('unknown-skill')).rejects.toThrow('Unknown recommended skill')
     })
 
-    test('已安装的技能抛出错误', async () => {
+    test('throws error for already installed skill', async () => {
       const userSkillsDir = resolve(homedir(), '.youclaw', 'skills')
       const testDir = resolve(userSkillsDir, 'ddg-web-search')
 
@@ -95,7 +95,7 @@ describe('RegistryManager', () => {
 
       try {
         const manager = new RegistryManager(createMockLoader())
-        await expect(manager.installSkill('ddg-web-search')).rejects.toThrow('已安装')
+        await expect(manager.installSkill('ddg-web-search')).rejects.toThrow('already installed')
       } finally {
         rmSync(testDir, { recursive: true, force: true })
       }
@@ -103,13 +103,13 @@ describe('RegistryManager', () => {
   })
 
   describe('uninstallSkill', () => {
-    test('未安装的技能抛出错误', async () => {
+    test('throws error for uninstalled skill', async () => {
       const slug = `test-uninstall-${Date.now()}`
       const manager = new RegistryManager(createMockLoader())
-      await expect(manager.uninstallSkill(slug)).rejects.toThrow('未安装')
+      await expect(manager.uninstallSkill(slug)).rejects.toThrow('is not installed')
     })
 
-    test('已安装的技能可以卸载', async () => {
+    test('can uninstall an installed skill', async () => {
       const slug = `test-uninstall-${Date.now()}`
       const userSkillsDir = resolve(homedir(), '.youclaw', 'skills')
       const testDir = resolve(userSkillsDir, slug)

@@ -40,7 +40,7 @@ export function useSSE(chatId: string | null, onEvent: (event: SSEEvent) => void
     es.addEventListener('tool_use', handleEvent)
 
     es.onerror = () => {
-      // 自动重连由 EventSource 处理
+      // Auto-reconnect handled by EventSource
     }
 
     return () => {

@@ -13,27 +13,27 @@ export function createSystemRoutes(agentManager: AgentManager, eventBus: EventBu
 
   const system = new Hono()
 
-  // GET /api/status — 系统状态信息
+  // GET /api/status — system status info
   system.get('/status', async (c) => {
     const paths = getPaths()
 
-    // Agent 统计
+    // Agent statistics
     const agents = agentManager.getAgents()
     const allManaged = agents.map((cfg) => agentManager.getAgent(cfg.id))
     const activeCount = allManaged.filter(
       (m) => m?.state.isProcessing,
     ).length
 
-    // 数据库大小
+    // Database size
     let dbSizeBytes = 0
     if (existsSync(paths.db)) {
       dbSizeBytes = statSync(paths.db).size
     }
 
-    // Channel 连接状态
+    // Channel connection status
     const channels = router.getChannelStatuses()
 
-    // 向后兼容：保留 telegram 字段
+    // Backward compatibility: keep telegram field
     const telegramConnected = channels.some((ch) => ch.name === 'telegram' && ch.connected)
 
     return c.json({

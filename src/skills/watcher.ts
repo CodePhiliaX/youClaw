@@ -7,8 +7,8 @@ import { getLogger } from '../logger/index.ts'
 import type { SkillsLoader } from './loader.ts'
 
 /**
- * 监听 skills 目录变更，自动触发重载
- * 使用 node:fs 的 watch（recursive）+ 防抖
+ * Watch skills directories for changes and auto-trigger reload.
+ * Uses node:fs watch (recursive) with debouncing.
  */
 export class SkillsWatcher {
   private loader: SkillsLoader
@@ -24,18 +24,18 @@ export class SkillsWatcher {
   }
 
   /**
-   * 启动监听
+   * Start watching.
    */
   start(): void {
     const logger = getLogger()
     const paths = getPaths()
 
     const dirsToWatch = [
-      paths.skills,                               // 项目级 skills/
-      resolve(homedir(), '.youclaw', 'skills'),   // 用户级
+      paths.skills,                               // Project-level skills/
+      resolve(homedir(), '.youclaw', 'skills'),   // User-level
     ]
 
-    // 也监听 agents 下的 skills 子目录
+    // Also watch skills subdirectories under agents
     if (existsSync(paths.agents)) {
       dirsToWatch.push(paths.agents)
     }
@@ -48,19 +48,19 @@ export class SkillsWatcher {
           this.scheduleReload()
         })
         this.watchers.push(watcher)
-        logger.debug({ dir }, 'Skills watcher 已启动')
+        logger.debug({ dir }, 'Skills watcher started')
       } catch (err) {
-        logger.warn({ dir, error: err instanceof Error ? err.message : String(err) }, 'Skills watcher 启动失败')
+        logger.warn({ dir, error: err instanceof Error ? err.message : String(err) }, 'Failed to start skills watcher')
       }
     }
 
     if (this.watchers.length > 0) {
-      logger.info({ watcherCount: this.watchers.length }, 'Skills 热更新监听已启动')
+      logger.info({ watcherCount: this.watchers.length }, 'Skills hot-reload watcher started')
     }
   }
 
   /**
-   * 停止监听
+   * Stop watching.
    */
   stop(): void {
     const logger = getLogger()
@@ -75,11 +75,11 @@ export class SkillsWatcher {
     }
     this.watchers = []
 
-    logger.debug('Skills watcher 已停止')
+    logger.debug('Skills watcher stopped')
   }
 
   /**
-   * 防抖调度重载
+   * Debounced reload scheduling.
    */
   private scheduleReload(): void {
     if (this.debounceTimer) {
@@ -92,10 +92,10 @@ export class SkillsWatcher {
 
       try {
         const skills = this.loader.refresh()
-        logger.info({ count: skills.length }, 'Skills 热更新重载完成')
+        logger.info({ count: skills.length }, 'Skills hot-reload complete')
         this.onReload?.(skills)
       } catch (err) {
-        logger.error({ error: err instanceof Error ? err.message : String(err) }, 'Skills 热更新重载失败')
+        logger.error({ error: err instanceof Error ? err.message : String(err) }, 'Skills hot-reload failed')
       }
     }, this.debounceMs)
   }

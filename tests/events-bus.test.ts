@@ -2,7 +2,7 @@ import { describe, test, expect, mock } from 'bun:test'
 import { EventBus } from '../src/events/bus.ts'
 
 describe('EventBus', () => {
-  test('按 type、agentId、chatId 过滤事件', () => {
+  test('filters events by type, agentId, and chatId', () => {
     const bus = new EventBus()
     const handler = mock(() => {})
 
@@ -15,7 +15,7 @@ describe('EventBus', () => {
     expect(handler).toHaveBeenCalledTimes(1)
   })
 
-  test('unsubscribe 会移除订阅者', () => {
+  test('unsubscribe removes the subscriber', () => {
     const bus = new EventBus()
     const handler = mock(() => {})
 
@@ -29,7 +29,7 @@ describe('EventBus', () => {
     expect(handler).toHaveBeenCalledTimes(0)
   })
 
-  test('单个订阅者抛错不会影响其他订阅者', () => {
+  test('a single subscriber throwing does not affect other subscribers', () => {
     const bus = new EventBus()
     const badHandler = mock(() => {
       throw new Error('boom')

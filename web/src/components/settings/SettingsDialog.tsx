@@ -34,18 +34,18 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     { id: "about", label: t.settings.about, icon: Info },
   ]
 
-  // 离线模式隐藏需要云服务的 tab
+  // Hide cloud-dependent tabs in offline mode
   const tabs = allTabs.filter((tab) => !tab.cloud || cloudEnabled)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[90vw] max-w-5xl h-[85vh] p-0 flex overflow-hidden bg-background rounded-2xl">
-        {/* 关闭按钮 */}
+        {/* Close button */}
         <DialogClose className="absolute right-4 top-4 z-10 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
           <X size={16} />
         </DialogClose>
 
-        {/* 侧边栏 */}
+        {/* Sidebar */}
         <div className="w-[200px] bg-muted/50 border-r border-border p-4 flex flex-col shrink-0">
           <h3 className="text-base font-semibold px-3 mb-4">{t.settings.title}</h3>
           <div className="flex-1 space-y-0.5">
@@ -67,7 +67,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           </div>
         </div>
 
-        {/* 内容区 */}
+        {/* Content area */}
         <div className={cn(
           "flex-1 overflow-hidden",
           currentTab === "account" || currentTab === "general" || currentTab === "models" || currentTab === "about"

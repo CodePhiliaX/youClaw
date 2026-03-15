@@ -285,7 +285,7 @@ pub fn run() {
                 }
                 #[cfg(debug_assertions)]
                 {
-                    // Dev 模式：读 .env 中的 PORT，同步写入 store 供前端使用
+                    // Dev mode: read PORT from .env and write it to store for frontend use
                     port = std::fs::read_to_string(
                         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.env")
                     )

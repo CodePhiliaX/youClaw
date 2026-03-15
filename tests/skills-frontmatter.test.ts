@@ -2,7 +2,7 @@ import { describe, test, expect } from 'bun:test'
 import { parseFrontmatter } from '../src/skills/frontmatter.ts'
 
 describe('parseFrontmatter', () => {
-  test('解析完整 frontmatter 并保留正文', () => {
+  test('parses complete frontmatter and preserves body content', () => {
     const raw = `
 ---
 name: pdf
@@ -45,7 +45,7 @@ Run this skill on uploaded PDF files.
     expect(parsed.content).toBe('# Usage\n\nRun this skill on uploaded PDF files.')
   })
 
-  test('install 值会被转成字符串，非法 priority 会被忽略', () => {
+  test('install values are coerced to strings, invalid priority is ignored', () => {
     const raw = `
 ---
 name: mixed
@@ -64,16 +64,16 @@ Body
     expect(parsed.content).toBe('Body')
   })
 
-  test('缺少起始 frontmatter 时抛错', () => {
-    expect(() => parseFrontmatter('name: invalid')).toThrow('SKILL.md 缺少 frontmatter')
+  test('throws when opening frontmatter is missing', () => {
+    expect(() => parseFrontmatter('name: invalid')).toThrow('SKILL.md missing frontmatter')
   })
 
-  test('frontmatter 未闭合时抛错', () => {
-    expect(() => parseFrontmatter('---\nname: demo\ndescription: test')).toThrow('SKILL.md frontmatter 未闭合')
+  test('throws when frontmatter is not closed', () => {
+    expect(() => parseFrontmatter('---\nname: demo\ndescription: test')).toThrow('SKILL.md frontmatter not closed')
   })
 
-  test('缺少必填字段时抛错', () => {
-    expect(() => parseFrontmatter('---\ndescription: only description\n---\nBody')).toThrow('SKILL.md frontmatter 缺少必需字段: name')
-    expect(() => parseFrontmatter('---\nname: only-name\n---\nBody')).toThrow('SKILL.md frontmatter 缺少必需字段: description')
+  test('throws when required fields are missing', () => {
+    expect(() => parseFrontmatter('---\ndescription: only description\n---\nBody')).toThrow('SKILL.md frontmatter missing required field: name')
+    expect(() => parseFrontmatter('---\nname: only-name\n---\nBody')).toThrow('SKILL.md frontmatter missing required field: description')
   })
 })

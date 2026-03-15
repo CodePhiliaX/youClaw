@@ -1,19 +1,19 @@
 /**
- * 数据库迁移测试
+ * Database migration tests
  *
- * 验证 scheduled_tasks 表的 name/description 列迁移正确性
+ * Verify the name/description column migration for the scheduled_tasks table
  */
 
 import { describe, test, expect } from 'bun:test'
 import { getDatabase } from './setup.ts'
 
-describe('数据库迁移 — name/description 字段', () => {
-  test('scheduled_tasks 表包含所有预期列', () => {
+describe('database migration — name/description fields', () => {
+  test('scheduled_tasks table contains all expected columns', () => {
     const db = getDatabase()
     const columns = db.query("PRAGMA table_info('scheduled_tasks')").all() as Array<{ name: string; type: string }>
     const colNames = columns.map((c) => c.name)
 
-    // 原有字段
+    // Original fields
     expect(colNames).toContain('id')
     expect(colNames).toContain('agent_id')
     expect(colNames).toContain('chat_id')
@@ -25,12 +25,12 @@ describe('数据库迁移 — name/description 字段', () => {
     expect(colNames).toContain('status')
     expect(colNames).toContain('created_at')
 
-    // 新增字段
+    // Newly added fields
     expect(colNames).toContain('name')
     expect(colNames).toContain('description')
   })
 
-  test('name 和 description 列类型为 TEXT', () => {
+  test('name and description column types are TEXT', () => {
     const db = getDatabase()
     const columns = db.query("PRAGMA table_info('scheduled_tasks')").all() as Array<{ name: string; type: string }>
 
@@ -41,7 +41,7 @@ describe('数据库迁移 — name/description 字段', () => {
     expect(descCol!.type).toBe('TEXT')
   })
 
-  test('重复 ALTER TABLE 不报错（try-catch 吞掉异常）', () => {
+  test('repeated ALTER TABLE does not throw (try-catch swallows exception)', () => {
     const db = getDatabase()
     expect(() => {
       try { db.exec('ALTER TABLE scheduled_tasks ADD COLUMN name TEXT') } catch {}
@@ -49,7 +49,7 @@ describe('数据库迁移 — name/description 字段', () => {
     }).not.toThrow()
   })
 
-  test('messages 表结构正确', () => {
+  test('messages table structure is correct', () => {
     const db = getDatabase()
     const columns = db.query("PRAGMA table_info('messages')").all() as Array<{ name: string }>
     const colNames = columns.map((c) => c.name)
@@ -63,7 +63,7 @@ describe('数据库迁移 — name/description 字段', () => {
     expect(colNames).toContain('is_bot_message')
   })
 
-  test('chats 表结构正确', () => {
+  test('chats table structure is correct', () => {
     const db = getDatabase()
     const columns = db.query("PRAGMA table_info('chats')").all() as Array<{ name: string }>
     const colNames = columns.map((c) => c.name)
@@ -75,7 +75,7 @@ describe('数据库迁移 — name/description 字段', () => {
     expect(colNames).toContain('last_message_time')
   })
 
-  test('task_run_logs 表结构正确', () => {
+  test('task_run_logs table structure is correct', () => {
     const db = getDatabase()
     const columns = db.query("PRAGMA table_info('task_run_logs')").all() as Array<{ name: string }>
     const colNames = columns.map((c) => c.name)

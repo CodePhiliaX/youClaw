@@ -2,8 +2,8 @@ import { getLogger } from '../logger/index.ts'
 import type { McpServerConfig } from './schema.ts'
 
 /**
- * 解析 MCP 服务器配置中的环境变量引用（${VAR} → process.env.VAR）
- * 同时支持 ${SECRET:key} 格式的 secrets 引用（由 SecretsManager 预处理）
+ * Resolve environment variable references in MCP server config (${VAR} -> process.env.VAR)
+ * Also supports ${SECRET:key} format (pre-processed by SecretsManager)
  */
 export function resolveMcpServers(
   servers: Record<string, McpServerConfig>,
@@ -21,17 +21,17 @@ export function resolveMcpServers(
     const resolvedEnv: Record<string, string> = {}
     for (const [key, value] of Object.entries(server.env)) {
       const resolvedValue = value.replace(/\$\{(\w+)\}/g, (_, varName) => {
-        // 优先从 extraEnv 中查找（SecretsManager 注入的）
+        // Look up in extraEnv first (injected by SecretsManager)
         if (extraEnv && varName in extraEnv) {
           return extraEnv[varName]!
         }
         const envVal = process.env[varName]
         if (!envVal) {
-          logger.warn({ mcpServer: name, envVar: varName }, 'MCP 服务器所需环境变量未定义，跳过该变量')
+          logger.warn({ mcpServer: name, envVar: varName }, 'Required env var for MCP server is undefined, skipping')
         }
         return envVal ?? ''
       })
-      // 跳过解析后为空的环境变量，避免传空字符串导致 MCP 进程崩溃
+      // Skip empty resolved env vars to prevent MCP process crashes from empty strings
       if (resolvedValue) {
         resolvedEnv[key] = resolvedValue
       }

@@ -7,7 +7,7 @@ import { getPaths } from '../config/index.ts'
 
 let _logger: pino.Logger | null = null
 
-// 每次 write 时检查日期，自动轮转文件
+// Check date on each write, automatically rotate log files
 class DailyRotatingStream extends Writable {
   private currentDate = ''
   private fileStream: WriteStream | null = null
@@ -49,6 +49,6 @@ export function initLogger(): pino.Logger {
 }
 
 export function getLogger(): pino.Logger {
-  if (!_logger) throw new Error('Logger 未初始化')
+  if (!_logger) throw new Error('Logger not initialized')
   return _logger
 }

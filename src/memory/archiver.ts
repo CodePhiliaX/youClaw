@@ -8,13 +8,13 @@ interface TranscriptEntry {
 }
 
 /**
- * 对话存档器：解析 SDK transcript (JSONL) 并格式化为 Markdown
+ * Conversation archiver: parse SDK transcript (JSONL) and format as Markdown
  */
 export class ConversationArchiver {
   constructor(private memoryManager: MemoryManager) {}
 
   /**
-   * 从 SDK transcript 文件存档对话
+   * Archive conversation from SDK transcript file
    */
   async archive(agentId: string, transcriptPath: string, chatId: string): Promise<string | null> {
     const logger = getLogger()
@@ -24,7 +24,7 @@ export class ConversationArchiver {
       const entries = this.parseTranscript(raw)
 
       if (entries.length === 0) {
-        logger.debug({ agentId, transcriptPath }, '空 transcript，跳过存档')
+        logger.debug({ agentId, transcriptPath }, 'Empty transcript, skipping archive')
         return null
       }
 
@@ -37,16 +37,16 @@ export class ConversationArchiver {
       const content = this.formatMarkdown(title, chatId, now, entries)
       this.memoryManager.saveConversationArchive(agentId, filename, content)
 
-      logger.info({ agentId, filename, entries: entries.length }, '对话已存档')
+      logger.info({ agentId, filename, entries: entries.length }, 'Conversation archived')
       return filename
     } catch (err) {
-      logger.error({ agentId, transcriptPath, error: err instanceof Error ? err.message : String(err) }, '对话存档失败')
+      logger.error({ agentId, transcriptPath, error: err instanceof Error ? err.message : String(err) }, 'Conversation archive failed')
       return null
     }
   }
 
   /**
-   * 从 JSONL 内容解析 user/assistant 消息
+   * Parse user/assistant messages from JSONL content
    */
   parseTranscript(raw: string): TranscriptEntry[] {
     const entries: TranscriptEntry[] = []
@@ -69,7 +69,7 @@ export class ConversationArchiver {
           }
         }
       } catch {
-        // 跳过无效 JSON 行
+        // Skip invalid JSON line
       }
     }
 
@@ -77,17 +77,17 @@ export class ConversationArchiver {
   }
 
   /**
-   * 从消息对象中提取文本内容
+   * Extract text content from message object
    */
   private extractContent(obj: Record<string, unknown>): string {
-    // 直接字符串
+    // Direct string
     if (typeof obj.content === 'string') return obj.content
 
-    // 嵌套在 message.content 中
+    // Nested in message.content
     const message = obj.message as Record<string, unknown> | undefined
     if (message && typeof message.content === 'string') return message.content
 
-    // 数组格式（Claude SDK 格式）
+    // Array format (Claude SDK format)
     const contentArr = (message?.content ?? obj.content) as Array<Record<string, unknown>> | undefined
     if (Array.isArray(contentArr)) {
       return contentArr
@@ -100,19 +100,19 @@ export class ConversationArchiver {
   }
 
   /**
-   * 从首条用户消息生成标题
+   * Generate title from the first user message
    */
   private generateTitle(entries: TranscriptEntry[]): string {
     const firstUser = entries.find((e) => e.role === 'user')
     if (!firstUser) return 'conversation'
 
-    // 取首行，截断到 50 字符
+    // Take first line, truncate to 50 chars
     const firstLine = firstUser.content.split('\n')[0] ?? 'conversation'
     return firstLine.slice(0, 50)
   }
 
   /**
-   * 文件名清理：小写、非字母数字转 -、去除连续 -、最多 50 字符
+   * Sanitize filename: lowercase, non-alphanumeric to -, remove consecutive -, max 50 chars
    */
   private sanitizeFilename(title: string): string {
     return title
@@ -123,7 +123,7 @@ export class ConversationArchiver {
   }
 
   /**
-   * 格式化为 Markdown
+   * Format as Markdown
    */
   private formatMarkdown(title: string, chatId: string, archivedAt: Date, entries: TranscriptEntry[]): string {
     const parts: string[] = []
@@ -137,7 +137,7 @@ export class ConversationArchiver {
 
     for (const entry of entries) {
       const label = entry.role === 'user' ? 'User' : 'Assistant'
-      // 截断超长内容
+      // Truncate oversized content
       const content = entry.content.length > 2000
         ? entry.content.slice(0, 2000) + '\n\n*(truncated)*'
         : entry.content

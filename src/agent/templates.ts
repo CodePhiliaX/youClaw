@@ -1,6 +1,6 @@
 /**
- * 内置默认 agent 模板常量
- * 首次启动时自动写入 agents/default/ 目录
+ * Built-in default agent template constants
+ * Automatically written to agents/default/ on first startup
  */
 
 export const DEFAULT_AGENT_YAML = `\
@@ -21,7 +21,7 @@ You are YouClaw, a helpful AI assistant running as a desktop agent.
 ## Style
 - Respond in the same language as the user's message
 - Be concise and helpful
-- 代码注释使用中文
+- Write code comments in English
 `
 
 export const DEFAULT_AGENT_MD = `\
@@ -34,27 +34,27 @@ export const DEFAULT_AGENT_MD = `\
 
 ## Memory Management
 
-你拥有持久化的记忆文件。使用 Read/Write 工具管理它们。
+You have persistent memory files. Use Read/Write tools to manage them.
 
-### 你的记忆文件
-- \`{{agentMemoryPath}}\` — 长期记忆。存储用户偏好、重要事实、项目信息等。
-- \`{{agentMemoryDir}}/logs/\` — 每日交互日志（自动生成，只读）。
-- \`{{agentMemoryDir}}/conversations/\` — 对话存档（自动生成，只读）。
+### Your Memory Files
+- \`{{agentMemoryPath}}\` — Long-term memory. Stores user preferences, important facts, project info, etc.
+- \`{{agentMemoryDir}}/logs/\` — Daily interaction logs (auto-generated, read-only).
+- \`{{agentMemoryDir}}/conversations/\` — Conversation archives (auto-generated, read-only).
 
-### 全局记忆（跨 Agent 共享）
-- 路径: \`{{globalMemoryPath}}\`
-- 读写全局记忆时，请使用上面的**绝对路径**
+### Global Memory (Shared Across Agents)
+- Path: \`{{globalMemoryPath}}\`
+- Use the **absolute path** above when reading/writing global memory
 
-### 何时更新记忆
-- 用户分享个人偏好或重要背景时
-- 用户纠正你之前的错误信息时
-- 项目里程碑完成时
-- 用户明确要求你 "记住" 某个信息时
+### When to Update Memory
+- When the user shares personal preferences or important context
+- When the user corrects previously incorrect information
+- When a project milestone is completed
+- When the user explicitly asks you to "remember" something
 
-### 如何更新记忆
-1. 先用 Read 工具读取 \`{{agentMemoryPath}}\` 现有内容
-2. 用 Write 工具写入更新后的内容（APPEND 新内容到合适的段落，不要覆盖已有信息）
-3. 用清晰的 Markdown 结构组织（如 \`## 用户偏好\`、\`## 项目信息\` 等）
+### How to Update Memory
+1. First use the Read tool to read existing content from \`{{agentMemoryPath}}\`
+2. Use the Write tool to write updated content (APPEND new content to the appropriate section, do not overwrite existing info)
+3. Organize with clear Markdown structure (e.g., \`## User Preferences\`, \`## Project Info\`, etc.)
 
 ## Scheduled Tasks (Cron Jobs)
 
@@ -107,24 +107,24 @@ export const DEFAULT_USER_MD = `\
 export const DEFAULT_TOOLS_MD = `\
 # Tools
 
-<!-- 记录本地工具、设备、API 等信息 -->
+<!-- Document local tools, devices, APIs, etc. -->
 `
 
 export const DEFAULT_MEMORY_MD = `\
-# 长期记忆
+# Long-term Memory
 
-## 用户偏好
+## User Preferences
 
-<!-- 用户偏好记录 -->
+<!-- User preference records -->
 
-## 项目信息
+## Project Info
 
-<!-- 项目相关记录 -->
+<!-- Project-related records -->
 `
 
-export const GLOBAL_MEMORY_MD = `# 全局记忆\n`
+export const GLOBAL_MEMORY_MD = `# Global Memory\n`
 
-/** 工作空间文档模板映射，用于创建新 agent 时初始化 */
+/** Workspace document template mapping, used to initialize new agents */
 export const DEFAULT_WORKSPACE_DOCS: Record<string, string> = {
   'SOUL.md': DEFAULT_SOUL_MD,
   'AGENT.md': DEFAULT_AGENT_MD,

@@ -7,7 +7,7 @@ import type { SkillsLoader } from '../skills/index.ts'
 import type { MemoryManager } from '../memory/index.ts'
 import type { AgentConfig } from './types.ts'
 
-// 工作空间 MD 文件加载顺序
+// Workspace MD file loading order
 const WORKSPACE_FILES = ['SOUL.md', 'USER.md', 'AGENT.md', 'TOOLS.md'] as const
 
 export class PromptBuilder {
@@ -17,8 +17,8 @@ export class PromptBuilder {
   ) {}
 
   /**
-   * 构建完整的系统提示词
-   * 加载顺序：SOUL.md → USER.md → AGENT.md → TOOLS.md → Skills → Memory → Env
+   * Build the complete system prompt
+   * Loading order: SOUL.md -> USER.md -> AGENT.md -> TOOLS.md -> Skills -> Memory -> Env
    */
   build(
     workspaceDir: string,
@@ -27,16 +27,16 @@ export class PromptBuilder {
   ): string {
     const parts: string[] = []
 
-    // 记忆文件绝对路径
+    // Memory file absolute paths
     const agentMemoryDir = resolve(workspaceDir, 'memory')
     const agentMemoryPath = resolve(agentMemoryDir, 'MEMORY.md')
     const globalMemoryPath = resolve(getPaths().agents, '_global', 'memory', 'MEMORY.md')
 
-    // 按顺序加载工作空间 MD 文件
+    // Load workspace MD files in order
     for (const filename of WORKSPACE_FILES) {
       let content = this.loadMdFile(workspaceDir, filename)
       if (content) {
-        // 替换记忆路径占位符为绝对路径
+        // Replace memory path placeholders with absolute paths
         content = content
           .replaceAll('{{agentMemoryDir}}', agentMemoryDir)
           .replaceAll('{{agentMemoryPath}}', agentMemoryPath)
@@ -45,7 +45,7 @@ export class PromptBuilder {
       }
     }
 
-    // 如果工作空间没有任何 MD 文件，回退到全局 system.md
+    // If workspace has no MD files, fall back to global system.md
     if (parts.length === 0) {
       const fallback = this.loadGlobalSystemPrompt()
       if (fallback) {
@@ -53,19 +53,19 @@ export class PromptBuilder {
       }
     }
 
-    // 注入 skills
+    // Inject skills
     const skillsPrompt = this.buildSkillsPrompt(config, context?.requestedSkills)
     if (skillsPrompt) {
       parts.push(skillsPrompt)
     }
 
-    // 注入浏览器 Profile 上下文
+    // Inject browser profile context
     const browserCtx = this.buildBrowserProfileContext(config, context?.browserProfileId)
     if (browserCtx) {
       parts.push(browserCtx)
     }
 
-    // 注入记忆上下文
+    // Inject memory context
     if (this.memoryManager && context) {
       const memoryConfig = config.memory
       const memoryContext = this.memoryManager.getMemoryContext(context.agentId, {
@@ -77,13 +77,13 @@ export class PromptBuilder {
       }
     }
 
-    // 注入环境上下文
+    // Inject environment context
     const envContext = this.buildEnvContext()
     if (envContext) {
       parts.push(envContext)
     }
 
-    // 注入当前上下文（Agent 创建定时任务时需要）
+    // Inject current context (needed when agent creates scheduled tasks)
     if (context) {
       parts.push(
         `\n## Current Context\n- Agent ID: ${context.agentId}\n- Chat ID: ${context.chatId}\n- IPC Directory: ./data/ipc/${context.agentId}/tasks/`,
@@ -94,7 +94,7 @@ export class PromptBuilder {
   }
 
   /**
-   * 加载工作空间 MD 文件，缺失则跳过（不报错）
+   * Load workspace MD file, skip if missing (no error)
    */
   private loadMdFile(workspaceDir: string, filename: string): string | null {
     const filePath = resolve(workspaceDir, filename)
@@ -103,11 +103,11 @@ export class PromptBuilder {
       try {
         const content = readFileSync(filePath, 'utf-8').trim()
         if (content) {
-          getLogger().debug({ filename, source: 'workspace' }, '加载提示词文件')
+          getLogger().debug({ filename, source: 'workspace' }, 'Prompt file loaded')
           return content
         }
       } catch (err) {
-        getLogger().warn({ filename, error: err instanceof Error ? err.message : String(err) }, '读取提示词文件失败')
+        getLogger().warn({ filename, error: err instanceof Error ? err.message : String(err) }, 'Failed to read prompt file')
       }
     }
 
@@ -115,7 +115,7 @@ export class PromptBuilder {
   }
 
   /**
-   * 回退加载全局 prompts/system.md
+   * Fall back to global prompts/system.md
    */
   private loadGlobalSystemPrompt(): string | null {
     const systemPath = resolve(getPaths().prompts, 'system.md')
@@ -130,7 +130,7 @@ export class PromptBuilder {
   }
 
   /**
-   * 构建环境上下文（从 prompts/env.md 模板动态生成）
+   * Build environment context (dynamically generated from prompts/env.md template)
    */
   private buildEnvContext(): string | null {
     const envPath = resolve(getPaths().prompts, 'env.md')
@@ -150,7 +150,7 @@ export class PromptBuilder {
   }
 
   /**
-   * 构建浏览器 Profile 上下文
+   * Build browser profile context
    */
   private buildBrowserProfileContext(config: AgentConfig, overrideBrowserProfileId?: string): string | null {
     const profileId = overrideBrowserProfileId ?? config.browserProfile
@@ -162,7 +162,7 @@ export class PromptBuilder {
   }
 
   /**
-   * 构建 skills 提示词片段
+   * Build skills prompt fragment
    */
   private buildSkillsPrompt(config: AgentConfig, requestedSkills?: string[]): string | null {
     if (!this.skillsLoader) return null
@@ -172,7 +172,7 @@ export class PromptBuilder {
 
     if (eligibleSkills.length === 0) return null
 
-    // 如果用户显式请求了 skills，只注入匹配的；否则回退到全部 eligible
+    // If user explicitly requested skills, inject only matched ones; otherwise fall back to all eligible
     let skillsToInject = eligibleSkills
     if (requestedSkills && requestedSkills.length > 0) {
       const requested = new Set(requestedSkills)
