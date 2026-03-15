@@ -157,40 +157,47 @@ export function Chat() {
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[13px] font-medium truncate flex-1 text-foreground">{chat.name}</span>
-                      <span className="text-[10px] text-muted-foreground shrink-0">
-                        {new Date(chat.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      <span className="text-[13px] font-medium truncate flex-1 text-foreground">
+                        {chat.name}
                       </span>
+                      <div className="relative shrink-0">
+                        <span className="text-[10px] text-muted-foreground group-hover:opacity-0 transition-opacity duration-200">
+                          {new Date(chat.last_message_time).toLocaleTimeString(
+                            [],
+                            { hour: "2-digit", minute: "2-digit" },
+                          )}
+                        </span>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              data-testid="chat-item-menu"
+                              className="absolute inset-0 opacity-0 group-hover:opacity-100 rounded-md flex items-center justify-center hover:bg-accent transition-opacity duration-200 hover:cursor-pointer"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem
+                              data-testid="chat-item-delete"
+                              className="text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteTarget(chat.chat_id);
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-2" />
+                              {t.common.delete}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                     <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                      {chat.last_message || '\u00A0'}
+                      {chat.last_message || "\u00A0"}
                     </p>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        data-testid="chat-item-menu"
-                        className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded-md flex items-center justify-center hover:bg-accent transition-all duration-200 shrink-0 mt-0.5"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <MoreHorizontal className="h-3 w-3" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      <DropdownMenuItem
-                        data-testid="chat-item-delete"
-                        className="text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeleteTarget(chat.chat_id);
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 mr-2" />
-                        {t.common.delete}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
                 </div>
               ))}
             </div>
@@ -219,7 +226,11 @@ export function Chat() {
                   : "text-center space-y-4 mb-0 opacity-0 h-0 overflow-hidden transition-all duration-500 ease-[var(--ease-soft)]"
               }
             >
-              <img src="/icon.svg" alt="YouClaw" className="h-24 w-24 mb-3 mx-auto" />
+              <img
+                src="/icon.svg"
+                alt="YouClaw"
+                className="h-24 w-24 mb-3 mx-auto"
+              />
               <h1 className="text-2xl font-semibold tracking-tight">
                 {t.chat.welcome}
               </h1>
