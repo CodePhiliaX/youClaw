@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, MoreHorizontal, Trash2 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Plus, Search, X, MoreHorizontal, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
 import { useChatContext } from "@/hooks/chatCtx";
@@ -30,6 +30,16 @@ export function Chat() {
   const { chatId, messages } = chatCtx;
   const isNewChat = !chatId && messages.length === 0;
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (searchOpen) {
+      searchInputRef.current?.focus();
+    } else {
+      chatCtx.setSearchQuery("");
+    }
+  }, [searchOpen]);
 
   const filteredChats = chatCtx.searchQuery
     ? chatCtx.chatList.filter((c) =>
@@ -56,26 +66,62 @@ export function Chat() {
       <div className="w-[260px] border-r border-[var(--subtle-border)] flex flex-col shrink-0">
         <div className="p-3 border-b border-[var(--subtle-border)] flex items-center justify-between">
           <h2 className="font-semibold text-sm">{t.nav.chat}</h2>
-          <button
-            data-testid="chat-new"
-            onClick={() => chatCtx.newChat()}
-            className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg text-muted-foreground hover:bg-[var(--surface-hover)] hover:text-accent-foreground transition-all duration-200 ease-[var(--ease-soft)]"
-            title={t.sidebar.newChat}
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-0.5">
+            <button
+              data-testid="chat-search-toggle"
+              onClick={() => setSearchOpen((v) => !v)}
+              className={cn(
+                "flex items-center gap-1 px-2 py-1 text-xs rounded-lg transition-all duration-200 ease-[var(--ease-soft)]",
+                searchOpen
+                  ? "text-foreground bg-[var(--surface-hover)]"
+                  : "text-muted-foreground hover:bg-[var(--surface-hover)] hover:text-accent-foreground",
+              )}
+              title={t.sidebar.search}
+            >
+              <Search className="h-3.5 w-3.5" />
+            </button>
+            <button
+              data-testid="chat-new"
+              onClick={() => chatCtx.newChat()}
+              className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg text-muted-foreground hover:bg-[var(--surface-hover)] hover:text-accent-foreground transition-all duration-200 ease-[var(--ease-soft)]"
+              title={t.sidebar.newChat}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
 
-        {/* 搜索 */}
-        <div className="px-3 py-2">
-          <input
-            type="text"
-            data-testid="chat-search"
-            className="w-full bg-[var(--surface-raised)] border border-[var(--subtle-border)] rounded-xl px-3 py-1.5 text-sm transition-all duration-200 ease-[var(--ease-soft)] focus:outline-none focus:border-primary/40 focus:shadow-[0_0_0_3px_oklch(0.55_0.2_25/0.1)]"
-            placeholder={t.sidebar.search}
-            value={chatCtx.searchQuery}
-            onChange={(e) => chatCtx.setSearchQuery(e.target.value)}
-          />
+        {/* 搜索（展开/收起） */}
+        <div
+          className={cn(
+            "overflow-hidden transition-all duration-200 ease-[var(--ease-soft)]",
+            searchOpen ? "max-h-12 opacity-100" : "max-h-0 opacity-0",
+          )}
+        >
+          <div className="px-3 py-2">
+            <div className="relative">
+              <input
+                ref={searchInputRef}
+                type="text"
+                data-testid="chat-search"
+                className="w-full bg-[var(--surface-raised)] border border-[var(--subtle-border)] rounded-xl px-3 py-1.5 pr-7 text-sm transition-all duration-200 ease-[var(--ease-soft)] focus:outline-none focus:border-primary/40 focus:shadow-[0_0_0_3px_oklch(0.55_0.2_25/0.1)]"
+                placeholder={t.sidebar.search}
+                value={chatCtx.searchQuery}
+                onChange={(e) => chatCtx.setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setSearchOpen(false);
+                }}
+              />
+              {chatCtx.searchQuery && (
+                <button
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => chatCtx.setSearchQuery("")}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* 对话列表 */}
