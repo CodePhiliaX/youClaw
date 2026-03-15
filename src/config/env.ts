@@ -77,13 +77,25 @@ export function loadEnv(): EnvConfig {
   // Node.js/tsx 不会自动加载 .env，需要手动加载
   loadDotEnv()
 
-  // bun build --define 会把 process.env.XXX 替换为字符串字面量
-  // 但 Zod safeParse(process.env) 是读 process.env 对象，读不到被替换的值
-  // 所以需要显式引用每个编译时常量，写回 process.env 对象
-  if (process.env.YOUCLAW_WEBSITE_URL) process.env.YOUCLAW_WEBSITE_URL = process.env.YOUCLAW_WEBSITE_URL
-  if (process.env.YOUCLAW_API_URL) process.env.YOUCLAW_API_URL = process.env.YOUCLAW_API_URL
-  if (process.env.YOUCLAW_BUILTIN_API_URL) process.env.YOUCLAW_BUILTIN_API_URL = process.env.YOUCLAW_BUILTIN_API_URL
-  if (process.env.YOUCLAW_BUILTIN_AUTH_TOKEN) process.env.YOUCLAW_BUILTIN_AUTH_TOKEN = process.env.YOUCLAW_BUILTIN_AUTH_TOKEN
+  // bun build --define 会把 process.env.XXX（点语法）替换为字符串字面量
+  // 但 Zod safeParse(process.env) 读的是 process.env 对象，拿不到被替换的值
+  // 解决：用点语法读取编译时常量（会被 --define 替换），
+  //       用方括号语法写回 process.env 对象（不会被 --define 替换）
+  const __YOUCLAW_WEBSITE_URL = process.env.YOUCLAW_WEBSITE_URL
+  const __YOUCLAW_API_URL = process.env.YOUCLAW_API_URL
+  const __YOUCLAW_BUILTIN_API_URL = process.env.YOUCLAW_BUILTIN_API_URL
+  const __YOUCLAW_BUILTIN_AUTH_TOKEN = process.env.YOUCLAW_BUILTIN_AUTH_TOKEN
+  if (__YOUCLAW_WEBSITE_URL) process.env['YOUCLAW_WEBSITE_URL'] = __YOUCLAW_WEBSITE_URL
+  if (__YOUCLAW_API_URL) process.env['YOUCLAW_API_URL'] = __YOUCLAW_API_URL
+  if (__YOUCLAW_BUILTIN_API_URL) process.env['YOUCLAW_BUILTIN_API_URL'] = __YOUCLAW_BUILTIN_API_URL
+  if (__YOUCLAW_BUILTIN_AUTH_TOKEN) process.env['YOUCLAW_BUILTIN_AUTH_TOKEN'] = __YOUCLAW_BUILTIN_AUTH_TOKEN
+
+  console.log('[env] cloud config:', {
+    YOUCLAW_WEBSITE_URL: !!process.env['YOUCLAW_WEBSITE_URL'],
+    YOUCLAW_API_URL: !!process.env['YOUCLAW_API_URL'],
+    YOUCLAW_BUILTIN_API_URL: !!process.env['YOUCLAW_BUILTIN_API_URL'],
+    YOUCLAW_BUILTIN_AUTH_TOKEN: !!process.env['YOUCLAW_BUILTIN_AUTH_TOKEN'],
+  })
 
   const result = envSchema.safeParse(process.env)
   if (!result.success) {
