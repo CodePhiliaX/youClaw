@@ -18,6 +18,8 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-input: var(--input);
@@ -45,6 +47,8 @@
   --ring: oklch(0.5 0.2 25);
   --radius: 0.625rem;
   --subtle-border: oklch(0 0 0 / 0.06);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0 0);
   --surface-hover: oklch(0 0 0 / 0.03);
   --surface-raised: oklch(0.97 0 0);
 }
@@ -67,6 +71,8 @@
   --input: oklch(0.2 0 0);
   --ring: oklch(0.55 0.2 25);
   --subtle-border: oklch(1 0 0 / 0.06);
+  --popover: oklch(0.17 0 0);
+  --popover-foreground: oklch(0.93 0 0);
   --surface-hover: oklch(1 0 0 / 0.03);
   --surface-raised: oklch(0.16 0 0);
 }
