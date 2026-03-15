@@ -81,8 +81,9 @@ export class MessageRouter {
       contentForAgent = parsed.cleanContent || message.content
     }
 
-    // 存入数据库
-    upsertChat(message.chatId, config.id, message.senderName, channel)
+    // 存入数据库（用消息内容前 50 字符作为对话标题）
+    const chatTitle = message.content.replace(/\n/g, ' ').slice(0, 50)
+    upsertChat(message.chatId, config.id, chatTitle, channel)
     saveMessage({
       id: message.id,
       chatId: message.chatId,

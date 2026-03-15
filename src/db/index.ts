@@ -179,17 +179,21 @@ export function upsertChat(chatId: string, agentId: string, name?: string, chann
     `INSERT INTO chats (chat_id, name, agent_id, channel, last_message_time)
      VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(chat_id) DO UPDATE SET
-       last_message_time = excluded.last_message_time,
-       name = COALESCE(excluded.name, chats.name)`,
+       last_message_time = excluded.last_message_time`,
     [chatId, name ?? chatId, agentId, channel, new Date().toISOString()]
   )
 }
 
 export function getChats(): Array<{
-  chat_id: string; name: string; agent_id: string; channel: string; last_message_time: string
+  chat_id: string; name: string; agent_id: string; channel: string; last_message_time: string; last_message: string | null
 }> {
   const db = getDatabase()
-  return queryAll(db, 'SELECT * FROM chats ORDER BY last_message_time DESC')
+  return queryAll(db, `
+    SELECT c.chat_id, c.name, c.agent_id, c.channel, c.last_message_time,
+           (SELECT m.content FROM messages m WHERE m.chat_id = c.chat_id ORDER BY m.timestamp DESC LIMIT 1) AS last_message
+    FROM chats c
+    ORDER BY c.last_message_time DESC
+  `)
 }
 
 export function deleteChat(chatId: string) {

@@ -45,7 +45,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     getChats().then(setChatList).catch(() => {})
   }, [])
 
-  useEffect(() => { refreshChats() }, [chat.chatId, refreshChats])
+  useEffect(() => { refreshChats() }, [chat.chatId, chat.messages.length, refreshChats])
 
   // 持久化 agentId
   useEffect(() => {

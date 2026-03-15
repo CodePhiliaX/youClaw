@@ -3,7 +3,7 @@ import { Plus, Search, X, MoreHorizontal, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
 import { useChatContext } from "@/hooks/chatCtx";
-import { groupChatsByDate } from "@/lib/chat-utils";
+import { groupChatsByDate, chatAvatar } from "@/lib/chat-utils";
 import { ChatWelcome } from "@/components/chat/ChatWelcome";
 import { ChatMessages } from "@/components/chat/ChatMessages";
 import { ChatInput } from "@/components/chat/ChatInput";
@@ -143,7 +143,7 @@ export function Chat() {
                   data-testid="chat-item"
                   aria-selected={chatCtx.chatId === chat.chat_id}
                   className={cn(
-                    "group flex items-center rounded-[10px] px-2.5 py-2 cursor-pointer",
+                    "group flex items-start rounded-[10px] px-2.5 py-2.5 cursor-pointer gap-2.5",
                     "transition-all duration-200 ease-[var(--ease-soft)]",
                     chatCtx.chatId === chat.chat_id
                       ? "bg-primary/8 text-foreground"
@@ -151,13 +151,27 @@ export function Chat() {
                   )}
                   onClick={() => chatCtx.loadChat(chat.chat_id)}
                 >
-                  <span className="text-xs truncate flex-1">{chat.name}</span>
+                  <div
+                    className="w-9 h-9 rounded-[10px] shrink-0 mt-0.5"
+                    style={{ background: chatAvatar(chat.chat_id) }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[13px] font-medium truncate flex-1 text-foreground">{chat.name}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {new Date(chat.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                      {chat.last_message || '\u00A0'}
+                    </p>
+                  </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button
                         type="button"
                         data-testid="chat-item-menu"
-                        className="opacity-0 group-hover:opacity-100 w-6 h-6 rounded-md flex items-center justify-center hover:bg-accent transition-all duration-200 shrink-0"
+                        className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded-md flex items-center justify-center hover:bg-accent transition-all duration-200 shrink-0 mt-0.5"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <MoreHorizontal className="h-3 w-3" />

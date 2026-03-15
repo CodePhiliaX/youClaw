@@ -24,7 +24,7 @@ export async function sendMessage(agentId: string, prompt: string, chatId?: stri
 
 // 获取聊天列表
 export async function getChats() {
-  return apiFetch<Array<{ chat_id: string; name: string; agent_id: string; channel: string; last_message_time: string }>>('/api/chats')
+  return apiFetch<Array<{ chat_id: string; name: string; agent_id: string; channel: string; last_message_time: string; last_message: string | null }>>('/api/chats')
 }
 
 // 获取消息历史
