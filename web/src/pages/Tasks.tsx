@@ -183,7 +183,7 @@ export function Tasks() {
     <div className="flex h-full">
       {/* 左面板 — 任务列表 */}
       <SidePanel>
-        <div className="p-3 border-b border-[var(--subtle-border)] flex items-center justify-between">
+        <div className="h-12 shrink-0 px-3 border-b border-[var(--subtle-border)] flex items-center justify-between">
           <h2 className="font-semibold text-sm">{t.tasks.title}</h2>
           <button
             data-testid="task-create-btn"

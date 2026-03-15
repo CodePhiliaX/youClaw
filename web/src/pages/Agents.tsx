@@ -193,7 +193,7 @@ export function Agents() {
     <div className="flex h-full">
       {/* 左侧：Agent 列表 */}
       <SidePanel>
-        <div className="p-3 border-b border-border flex items-center justify-between">
+        <div className="h-12 shrink-0 px-3 border-b border-border flex items-center justify-between">
           <h2 className="font-semibold text-sm">{t.agents.title}</h2>
           <button
             data-testid="agent-create-btn"

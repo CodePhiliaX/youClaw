@@ -5,9 +5,10 @@ import {
   getConversationArchives, getConversationArchive,
   searchMemory,
 } from '../api/client'
-import { Brain, Save, Pencil, X, ChevronRight, Calendar, FileText, Globe, MessageSquare, Search } from 'lucide-react'
+import { Save, Pencil, X, ChevronRight, Calendar, FileText, Globe, MessageSquare, Search, PanelRight } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useI18n } from '../i18n'
+import { SidePanel } from '@/components/layout/SidePanel'
 
 type Agent = {
   id: string
@@ -27,13 +28,18 @@ type SearchResult = {
   rank: number
 }
 
-// 特殊标记：表示全局 Memory
 const GLOBAL_ID = '__global__'
+
+type MemoryItem = {
+  id: string
+  label: string
+  isGlobal: boolean
+}
 
 export function Memory() {
   const { t } = useI18n()
   const [agents, setAgents] = useState<Agent[]>([])
-  const [selectedAgentId, setSelectedAgentId] = useState<string>('')
+  const [selectedId, setSelectedId] = useState<string>(GLOBAL_ID)
   const [memoryContent, setMemoryContent] = useState('')
   const [editContent, setEditContent] = useState('')
   const [isEditing, setIsEditing] = useState(false)
@@ -42,40 +48,35 @@ export function Memory() {
   const [expandedDate, setExpandedDate] = useState<string | null>(null)
   const [logContent, setLogContent] = useState<Record<string, string>>({})
 
-  // 对话存档
   const [archives, setArchives] = useState<ConversationArchive[]>([])
   const [expandedArchive, setExpandedArchive] = useState<string | null>(null)
   const [archiveContent, setArchiveContent] = useState<Record<string, string>>({})
 
-  // 搜索
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
 
-  // 右栏 tab
-  const [rightTab, setRightTab] = useState<'logs' | 'archives' | 'search'>('logs')
+  // 右侧面板
+  const [panelOpen, setPanelOpen] = useState(false)
+  const [panelTab, setPanelTab] = useState<'logs' | 'archives' | 'search'>('logs')
 
-  // 加载 agents 列表
   useEffect(() => {
     getAgents()
-      .then((list) => {
-        setAgents(list)
-        if (list.length > 0 && !selectedAgentId) {
-          setSelectedAgentId(list[0]!.id)
-        }
-      })
+      .then((list) => setAgents(list))
       .catch(() => {})
   }, [])
 
-  // 是否选中全局 Memory
-  const isGlobal = selectedAgentId === GLOBAL_ID
+  const isGlobal = selectedId === GLOBAL_ID
 
-  // 当选择 agent 变化时，加载记忆和日志
-  const loadMemoryData = useCallback((agentId: string) => {
-    if (!agentId) return
+  const memoryItems: MemoryItem[] = [
+    { id: GLOBAL_ID, label: 'Global Memory', isGlobal: true },
+    ...agents.map((a) => ({ id: a.id, label: a.name, isGlobal: false })),
+  ]
 
-    if (agentId === GLOBAL_ID) {
-      // 全局 Memory
+  const loadMemoryData = useCallback((id: string) => {
+    if (!id) return
+
+    if (id === GLOBAL_ID) {
       getGlobalMemory()
         .then((res) => {
           setMemoryContent(res.content)
@@ -88,8 +89,7 @@ export function Memory() {
       setLogDates([])
       setArchives([])
     } else {
-      // Agent Memory
-      getMemory(agentId)
+      getMemory(id)
         .then((res) => {
           setMemoryContent(res.content)
           setEditContent(res.content)
@@ -99,11 +99,11 @@ export function Memory() {
           setEditContent('')
         })
 
-      getMemoryLogs(agentId)
+      getMemoryLogs(id)
         .then(setLogDates)
         .catch(() => setLogDates([]))
 
-      getConversationArchives(agentId)
+      getConversationArchives(id)
         .then(setArchives)
         .catch(() => setArchives([]))
     }
@@ -118,20 +118,17 @@ export function Memory() {
   }, [])
 
   useEffect(() => {
-    if (selectedAgentId) {
-      loadMemoryData(selectedAgentId)
-    }
-  }, [selectedAgentId, loadMemoryData])
+    loadMemoryData(selectedId)
+  }, [selectedId, loadMemoryData])
 
-  // 保存 MEMORY.md
   const handleSave = async () => {
-    if (!selectedAgentId) return
+    if (!selectedId) return
     setIsSaving(true)
     try {
       if (isGlobal) {
         await updateGlobalMemory(editContent)
       } else {
-        await updateMemory(selectedAgentId, editContent)
+        await updateMemory(selectedId, editContent)
       }
       setMemoryContent(editContent)
       setIsEditing(false)
@@ -142,18 +139,15 @@ export function Memory() {
     }
   }
 
-  // 展开/收起日志
   const toggleDate = async (date: string) => {
     if (expandedDate === date) {
       setExpandedDate(null)
       return
     }
-
     setExpandedDate(date)
-
-    if (!logContent[date] && selectedAgentId && !isGlobal) {
+    if (!logContent[date] && selectedId && !isGlobal) {
       try {
-        const res = await getMemoryLog(selectedAgentId, date)
+        const res = await getMemoryLog(selectedId, date)
         setLogContent((prev) => ({ ...prev, [date]: res.content }))
       } catch {
         setLogContent((prev) => ({ ...prev, [date]: t.memory.loadFailed }))
@@ -161,18 +155,15 @@ export function Memory() {
     }
   }
 
-  // 展开/收起存档
   const toggleArchive = async (filename: string) => {
     if (expandedArchive === filename) {
       setExpandedArchive(null)
       return
     }
-
     setExpandedArchive(filename)
-
-    if (!archiveContent[filename] && selectedAgentId && !isGlobal) {
+    if (!archiveContent[filename] && selectedId && !isGlobal) {
       try {
-        const res = await getConversationArchive(selectedAgentId, filename)
+        const res = await getConversationArchive(selectedId, filename)
         setArchiveContent((prev) => ({ ...prev, [filename]: res.content }))
       } catch {
         setArchiveContent((prev) => ({ ...prev, [filename]: t.memory.loadFailed }))
@@ -180,12 +171,11 @@ export function Memory() {
     }
   }
 
-  // 搜索
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
     setIsSearching(true)
     try {
-      const results = await searchMemory(searchQuery, isGlobal ? undefined : selectedAgentId)
+      const results = await searchMemory(searchQuery, isGlobal ? undefined : selectedId)
       setSearchResults(results)
     } catch {
       setSearchResults([])
@@ -194,173 +184,185 @@ export function Memory() {
     }
   }
 
-  return (
-    <div className="flex flex-col h-full">
-      {/* 顶部：Agent 选择器 */}
-      <div className="flex items-center gap-3 p-4 border-b border-border">
-        <Brain className="h-5 w-5 text-muted-foreground" />
-        <h1 className="text-sm font-semibold">{t.memory.title}</h1>
-        <select
-          data-testid="memory-select-agent"
-          value={selectedAgentId}
-          onChange={(e) => setSelectedAgentId(e.target.value)}
-          className="ml-4 px-3 py-1.5 text-sm rounded-md bg-muted border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          <option value={GLOBAL_ID}>
-            🌐 Global Memory
-          </option>
-          {agents.map((agent) => (
-            <option key={agent.id} value={agent.id}>
-              {agent.name} ({agent.id})
-            </option>
-          ))}
-        </select>
-      </div>
+  const selectedItem = memoryItems.find((m) => m.id === selectedId)
 
-      {/* 主内容：左右分栏 */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* 左栏：MEMORY.md */}
-        <div className="flex-1 flex flex-col border-r border-border min-w-0">
-          <div className="flex items-center justify-between p-3 border-b border-border">
-            <div className="flex items-center gap-2">
-              {isGlobal ? <Globe className="h-4 w-4 text-muted-foreground" /> : <FileText className="h-4 w-4 text-muted-foreground" />}
-              <span className="text-sm font-medium">
-                {isGlobal ? 'Global MEMORY.md' : t.memory.memoryFile}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              {isEditing ? (
-                <>
-                  <button
-                    onClick={() => {
-                      setEditContent(memoryContent)
-                      setIsEditing(false)
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-muted-foreground hover:bg-accent transition-colors"
-                  >
-                    <X className="h-3 w-3" />
-                    {t.common.cancel}
-                  </button>
-                  <button
-                    data-testid="memory-save-btn"
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="flex items-center gap-1 px-3 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-                  >
-                    <Save className="h-3 w-3" />
-                    {isSaving ? t.memory.saving : t.common.save}
-                  </button>
-                </>
+  return (
+    <div className="flex h-full">
+      {/* 左侧：Memory 列表 */}
+      <SidePanel>
+        <div className="h-12 shrink-0 px-3 border-b border-[var(--subtle-border)] flex items-center justify-between">
+          <h2 className="font-semibold text-sm">{t.memory.title}</h2>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+          {memoryItems.map((item) => (
+            <div
+              key={item.id}
+              role="option"
+              aria-selected={selectedId === item.id}
+              className={cn(
+                "flex items-center gap-2.5 rounded-[10px] px-2.5 py-2.5 cursor-pointer",
+                "transition-all duration-200 ease-[var(--ease-soft)]",
+                selectedId === item.id
+                  ? "bg-primary/8 text-foreground"
+                  : "text-muted-foreground hover:bg-[var(--surface-hover)]",
+              )}
+              onClick={() => setSelectedId(item.id)}
+            >
+              {item.isGlobal ? (
+                <Globe className="h-4 w-4 shrink-0" />
               ) : (
+                <FileText className="h-4 w-4 shrink-0" />
+              )}
+              <span className="text-sm truncate">{item.label}</span>
+            </div>
+          ))}
+        </div>
+      </SidePanel>
+
+      {/* 中间：Memory 内容 */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        {/* 顶部工具栏 */}
+        <div className="h-12 shrink-0 flex items-center justify-between px-3 border-b border-[var(--subtle-border)]">
+          <div className="flex items-center gap-2">
+            {selectedItem?.isGlobal ? (
+              <Globe className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            )}
+            <span className="text-sm font-medium">
+              {selectedItem?.isGlobal ? 'Global MEMORY.md' : t.memory.memoryFile}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            {/* 编辑/保存 */}
+            {isEditing ? (
+              <>
                 <button
-                  data-testid="memory-edit-btn"
                   onClick={() => {
                     setEditContent(memoryContent)
-                    setIsEditing(true)
+                    setIsEditing(false)
                   }}
-                  className="flex items-center gap-1 px-2 py-1 text-xs rounded-md text-muted-foreground hover:bg-accent transition-colors"
+                  className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg text-muted-foreground hover:bg-[var(--surface-hover)] hover:text-accent-foreground transition-all duration-200 ease-[var(--ease-soft)]"
                 >
-                  <Pencil className="h-3 w-3" />
-                  {t.common.edit}
+                  <X className="h-3.5 w-3.5" />
                 </button>
+                <button
+                  data-testid="memory-save-btn"
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg text-muted-foreground hover:bg-[var(--surface-hover)] hover:text-accent-foreground transition-all duration-200 ease-[var(--ease-soft)] disabled:opacity-50"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                </button>
+              </>
+            ) : (
+              <button
+                data-testid="memory-edit-btn"
+                onClick={() => {
+                  setEditContent(memoryContent)
+                  setIsEditing(true)
+                }}
+                className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg text-muted-foreground hover:bg-[var(--surface-hover)] hover:text-accent-foreground transition-all duration-200 ease-[var(--ease-soft)]"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            )}
+
+            <div className="w-px h-4 bg-border mx-1" />
+
+            {/* 切换右侧面板 */}
+            <button
+              onClick={() => setPanelOpen((v) => !v)}
+              className={cn(
+                "flex items-center gap-1 px-2 py-1 text-xs rounded-lg transition-all duration-200 ease-[var(--ease-soft)]",
+                panelOpen
+                  ? "text-foreground bg-[var(--surface-hover)]"
+                  : "text-muted-foreground hover:bg-[var(--surface-hover)] hover:text-accent-foreground",
+              )}
+              title={t.memory.dailyLogs}
+            >
+              <PanelRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Memory 内容 */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {isEditing ? (
+            <textarea
+              data-testid="memory-textarea"
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              className="w-full h-full bg-transparent text-sm font-mono resize-none focus:outline-none text-foreground placeholder:text-muted-foreground"
+              placeholder={t.memory.writePlaceholder}
+            />
+          ) : (
+            <div className="text-sm whitespace-pre-wrap font-mono text-foreground/80">
+              {memoryContent || (
+                <span className="text-muted-foreground italic">
+                  {t.memory.noContent}
+                </span>
               )}
             </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4">
-            {isEditing ? (
-              <textarea
-                data-testid="memory-textarea"
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                className="w-full h-full bg-transparent text-sm font-mono resize-none focus:outline-none text-foreground placeholder:text-muted-foreground"
-                placeholder={t.memory.writePlaceholder}
-              />
-            ) : (
-              <div className="text-sm whitespace-pre-wrap font-mono text-foreground/80">
-                {memoryContent || (
-                  <span className="text-muted-foreground italic">
-                    {t.memory.noContent}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 右栏：日志 / 对话存档 / 搜索 */}
-        <div className="w-[380px] flex flex-col min-w-0">
-          {/* Tab 切换 */}
-          {!isGlobal && (
-            <div className="flex border-b border-border">
-              <button
-                data-testid="memory-tab-logs"
-                onClick={() => setRightTab('logs')}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs transition-colors',
-                  rightTab === 'logs' ? 'text-foreground border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <Calendar className="h-3.5 w-3.5" />
-                {t.memory.dailyLogs}
-              </button>
-              <button
-                data-testid="memory-tab-archives"
-                onClick={() => setRightTab('archives')}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs transition-colors',
-                  rightTab === 'archives' ? 'text-foreground border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <MessageSquare className="h-3.5 w-3.5" />
-                Archives
-              </button>
-              <button
-                data-testid="memory-tab-search"
-                onClick={() => setRightTab('search')}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs transition-colors',
-                  rightTab === 'search' ? 'text-foreground border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <Search className="h-3.5 w-3.5" />
-                Search
-              </button>
-            </div>
           )}
-
-          <div className="flex-1 overflow-y-auto">
-            {/* 全局模式：只显示搜索 */}
-            {isGlobal ? (
-              <div className="p-3">
-                <div className="flex gap-2 mb-3">
-                  <input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                    placeholder="Search all memory..."
-                    className="flex-1 px-3 py-1.5 text-sm rounded-md bg-muted border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                  <button
-                    onClick={handleSearch}
-                    disabled={isSearching}
-                    className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                  >
-                    <Search className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                {renderSearchResults()}
-              </div>
-            ) : (
-              <>
-                {rightTab === 'logs' && renderLogs()}
-                {rightTab === 'archives' && renderArchives()}
-                {rightTab === 'search' && renderSearchTab()}
-              </>
-            )}
-          </div>
         </div>
       </div>
+
+      {/* 右侧面板：日志 / 存档 / 搜索 */}
+      {panelOpen && (
+        <div className="w-[340px] shrink-0 border-l border-[var(--subtle-border)] flex flex-col">
+          {/* Tab 切换 */}
+          <div className="h-12 shrink-0 flex items-center gap-1 px-3 border-b border-[var(--subtle-border)]">
+            {!isGlobal && (
+              <>
+                <button
+                  onClick={() => setPanelTab('logs')}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg transition-all duration-200 ease-[var(--ease-soft)]",
+                    panelTab === 'logs'
+                      ? "bg-primary/10 text-primary font-medium"
+                      : "text-muted-foreground hover:bg-[var(--surface-hover)]",
+                  )}
+                >
+                  <Calendar className="h-3.5 w-3.5" />
+                  {t.memory.dailyLogs}
+                </button>
+                <button
+                  onClick={() => setPanelTab('archives')}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg transition-all duration-200 ease-[var(--ease-soft)]",
+                    panelTab === 'archives'
+                      ? "bg-primary/10 text-primary font-medium"
+                      : "text-muted-foreground hover:bg-[var(--surface-hover)]",
+                  )}
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Archives
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => setPanelTab('search')}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg transition-all duration-200 ease-[var(--ease-soft)]",
+                panelTab === 'search'
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-[var(--surface-hover)]",
+              )}
+            >
+              <Search className="h-3.5 w-3.5" />
+              Search
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {panelTab === 'logs' && !isGlobal && renderLogs()}
+            {panelTab === 'archives' && !isGlobal && renderArchives()}
+            {panelTab === 'search' && renderSearchTab()}
+          </div>
+        </div>
+      )}
     </div>
   )
 
@@ -383,10 +385,10 @@ export function Memory() {
             <button
               onClick={() => toggleDate(date)}
               className={cn(
-                'flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md text-left transition-colors',
+                'flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg text-left transition-all duration-200 ease-[var(--ease-soft)]',
                 expandedDate === date
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:bg-accent/50',
+                  ? 'bg-primary/8 text-foreground'
+                  : 'text-muted-foreground hover:bg-[var(--surface-hover)]',
               )}
             >
               <ChevronRight
@@ -400,7 +402,7 @@ export function Memory() {
             </button>
 
             {expandedDate === date && (
-              <div className="mt-1 mx-2 p-3 rounded-md bg-muted/50 border border-border/50">
+              <div className="mt-1 mx-2 p-3 rounded-lg bg-muted/50 border border-[var(--subtle-border)]">
                 <pre className="text-xs whitespace-pre-wrap font-mono text-foreground/70 overflow-x-auto">
                   {logContent[date] ?? t.common.loading}
                 </pre>
@@ -431,10 +433,10 @@ export function Memory() {
             <button
               onClick={() => toggleArchive(archive.filename)}
               className={cn(
-                'flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md text-left transition-colors',
+                'flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg text-left transition-all duration-200 ease-[var(--ease-soft)]',
                 expandedArchive === archive.filename
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:bg-accent/50',
+                  ? 'bg-primary/8 text-foreground'
+                  : 'text-muted-foreground hover:bg-[var(--surface-hover)]',
               )}
             >
               <ChevronRight
@@ -448,7 +450,7 @@ export function Memory() {
             </button>
 
             {expandedArchive === archive.filename && (
-              <div className="mt-1 mx-2 p-3 rounded-md bg-muted/50 border border-border/50">
+              <div className="mt-1 mx-2 p-3 rounded-lg bg-muted/50 border border-[var(--subtle-border)]">
                 <pre className="text-xs whitespace-pre-wrap font-mono text-foreground/70 overflow-x-auto">
                   {archiveContent[archive.filename] ?? t.common.loading}
                 </pre>
@@ -469,12 +471,12 @@ export function Memory() {
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             placeholder="Search memory..."
-            className="flex-1 px-3 py-1.5 text-sm rounded-md bg-muted border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="flex-1 bg-[var(--surface-raised)] border border-[var(--subtle-border)] rounded-xl px-3 py-1.5 text-sm transition-all duration-200 ease-[var(--ease-soft)] focus:outline-none focus:border-primary/40 focus:shadow-[0_0_0_3px_oklch(0.55_0.2_25/0.1)]"
           />
           <button
             onClick={handleSearch}
             disabled={isSearching}
-            className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-xl text-muted-foreground hover:bg-[var(--surface-hover)] hover:text-accent-foreground transition-all duration-200 ease-[var(--ease-soft)] disabled:opacity-50"
           >
             <Search className="h-3.5 w-3.5" />
           </button>
@@ -492,10 +494,10 @@ export function Memory() {
     return (
       <div className="space-y-2">
         {searchResults.map((result, i) => (
-          <div key={i} className="p-2 rounded-md bg-muted/50 border border-border/50">
+          <div key={i} className="p-2.5 rounded-lg bg-muted/50 border border-[var(--subtle-border)]">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xs font-medium text-foreground">{result.agentId}</span>
-              <span className="text-xs px-1.5 py-0.5 rounded bg-accent text-accent-foreground">{result.fileType}</span>
+              <span className="text-xs px-1.5 py-0.5 rounded-md bg-primary/10 text-primary">{result.fileType}</span>
             </div>
             <p className="text-xs font-mono text-foreground/70 whitespace-pre-wrap">{result.snippet}</p>
           </div>

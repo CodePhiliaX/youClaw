@@ -122,7 +122,7 @@ export function Skills() {
         <div className="flex flex-1 min-h-0">
           {/* 左侧：Skill 列表 */}
           <SidePanel>
-            <div className="p-3 border-b border-border">
+            <div className="h-12 shrink-0 px-3 border-b border-border flex items-center">
               <h2 className="font-semibold text-sm">{t.skills.title}</h2>
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-3">

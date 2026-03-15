@@ -55,7 +55,7 @@ export function BrowserProfiles() {
     <div className="flex h-full">
       {/* 左面板 — Profile 列表 */}
       <SidePanel>
-        <div className="p-3 border-b border-[var(--subtle-border)] flex items-center justify-between">
+        <div className="h-12 shrink-0 px-3 border-b border-[var(--subtle-border)] flex items-center justify-between">
           <h2 className="font-semibold text-sm">{t.browser.title}</h2>
           <button
             data-testid="browser-create-btn"
