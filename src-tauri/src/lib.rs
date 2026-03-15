@@ -248,6 +248,22 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // Windows: 第二个实例被启动时，args 包含 deep link URL
+            // 将 URL 转发给已运行的实例，并拉起窗口
+            log::info!("Single instance callback, args: {:?}", args);
+            for arg in &args {
+                if arg.starts_with("youclaw://") {
+                    let _ = app.emit("deep-link-received", arg.clone());
+                    break;
+                }
+            }
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+                let _ = win.set_focus();
+                let _ = win.unminimize();
+            }
+        }))
         .manage(SidecarState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             get_version,
