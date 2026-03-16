@@ -214,10 +214,17 @@ async fn set_preferred_port(app: AppHandle, port: u16) -> Result<(), String> {
 
 #[tauri::command]
 async fn restart_sidecar(app: AppHandle) -> Result<(), String> {
-    kill_sidecar(&app);
-    tokio::time::sleep(Duration::from_millis(500)).await;
-    let port = spawn_sidecar(&app)?;
-    wait_for_health(port, 30).await
+    #[cfg(debug_assertions)]
+    {
+        return Err("Dev mode: please restart 'bun dev:tauri' manually to apply port changes.".into());
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        kill_sidecar(&app);
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        let port = spawn_sidecar(&app)?;
+        wait_for_health(port, 30).await
+    }
 }
 
 
