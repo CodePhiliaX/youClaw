@@ -25,6 +25,7 @@ import type { RegistryManager } from '../skills/index.ts'
 import type { MemoryManager } from '../memory/index.ts'
 import type { MemoryIndexer } from '../memory/index.ts'
 import type { Scheduler } from '../scheduler/index.ts'
+import { getEnv } from '../config/env.ts'
 
 interface AppDeps {
   agentManager: AgentManager
@@ -47,7 +48,7 @@ export function createApp(deps: AppDeps) {
   app.use('/*', cors({
     origin: [
       'http://localhost:5173',
-      'http://localhost:62601',
+      `http://localhost:${getEnv().PORT}`,
       'tauri://localhost',        // macOS Tauri WebView
       'http://tauri.localhost',   // Windows Tauri WebView
       'https://tauri.localhost',  // Linux Tauri WebView
