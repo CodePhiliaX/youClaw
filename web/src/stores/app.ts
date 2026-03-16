@@ -126,41 +126,46 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       if (isTauri) {
-        // Tauri mode: use HTTP callback (works in both dev and release)
-        // plus deep link listener as fast path for release builds
-        const { loginUrl } = await getAuthLoginUrl()
-        const { openUrl } = await import('@tauri-apps/plugin-opener')
-        await openUrl(loginUrl)
+        // Check if running in dev mode (Vite dev server)
+        const isDev = import.meta.env.DEV
 
-        // Start polling as primary mechanism (HTTP callback saves token server-side)
-        const pollInterval = startPolling()
+        if (isDev) {
+          // Dev mode: deep link scheme not registered, use HTTP callback + polling (same as web mode)
+          const { loginUrl } = await getAuthLoginUrl()
+          const { openUrl } = await import('@tauri-apps/plugin-opener')
+          await openUrl(loginUrl)
+          startPolling()
+        } else {
+          // Release mode: use deep link callback
+          const { loginUrl } = await getAuthLoginUrl('tauri')
+          const { openUrl } = await import('@tauri-apps/plugin-opener')
+          await openUrl(loginUrl)
 
-        // Also listen for deep link as fast path (release builds with registered scheme)
-        try {
           const { listen } = await import('@tauri-apps/api/event')
+          let timeoutId: ReturnType<typeof setTimeout>
           const unlisten = await listen<string>('deep-link-received', async (event) => {
             try {
               const url = new URL(event.payload)
               if (url.host === 'auth' || url.pathname.startsWith('/auth/callback') || url.pathname.startsWith('auth/callback')) {
                 const token = url.searchParams.get('token')
                 if (token) {
-                  clearInterval(pollInterval)
                   await saveAuthToken(token)
                   await get().fetchUser()
                   await get().fetchCreditBalance()
-                  set({ authLoading: false })
                 }
               }
             } catch (err) {
               console.error('Deep link auth failed:', err)
             } finally {
               unlisten()
+              clearTimeout(timeoutId)
+              set({ authLoading: false })
             }
           })
-          // Clean up listener after timeout
-          setTimeout(() => unlisten(), 120000)
-        } catch {
-          // Deep link not available, polling handles it
+          timeoutId = setTimeout(() => {
+            unlisten()
+            set({ authLoading: false })
+          }, 120000)
         }
       } else {
         // Web mode: polling

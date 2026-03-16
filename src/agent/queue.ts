@@ -66,15 +66,24 @@ export class AgentQueue {
    * Try to schedule the next task for a given chat
    */
   private trySchedule(agentId: string, chatKey: string): void {
+    const logger = getLogger()
+
     // If this chat is already running, wait for completion then auto-schedule
-    if (this.chatRunning.has(chatKey)) return
+    if (this.chatRunning.has(chatKey)) {
+      const pending = this.chatQueues.get(chatKey)?.length ?? 0
+      logger.info({ agentId, chatKey, pending, category: 'queue' }, 'Chat already running, request queued')
+      return
+    }
 
     // Check agent concurrency limit
     const managed = this.agentManager.getAgent(agentId)
     const maxConcurrency = managed?.config.maxConcurrency ?? 1
     const currentRunning = this.agentRunning.get(agentId) ?? 0
 
-    if (currentRunning >= maxConcurrency) return
+    if (currentRunning >= maxConcurrency) {
+      logger.info({ agentId, chatKey, currentRunning, maxConcurrency, category: 'queue' }, 'Agent at max concurrency, request queued')
+      return
+    }
 
     // Dequeue the next task
     const queue = this.chatQueues.get(chatKey)
@@ -117,8 +126,8 @@ export class AgentQueue {
   private async processItem(item: QueueItem, chatKey: string): Promise<void> {
     const logger = getLogger()
 
-    logger.debug(
-      { agentId: item.agentId, chatId: item.chatId, chatKey },
+    logger.info(
+      { agentId: item.agentId, chatId: item.chatId, chatKey, category: 'queue' },
       'Processing queue task',
     )
 

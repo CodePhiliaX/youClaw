@@ -141,8 +141,9 @@ export class AgentRuntime {
         delete process.env.ANTHROPIC_CUSTOM_HEADERS
       }
 
-      logger.debug({
+      logger.info({
         agentId, chatId,
+        model,
         baseUrl: process.env.ANTHROPIC_BASE_URL || '(default)',
         hasCustomHeaders: !!process.env.ANTHROPIC_CUSTOM_HEADERS,
         category: 'agent',
