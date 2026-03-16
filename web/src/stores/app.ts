@@ -1,7 +1,7 @@
 import { create } from "zustand"
 import { getItem, setItem } from "@/lib/storage"
 import { applyThemeToDOM, type Theme } from "@/hooks/useTheme"
-import { getAuthUser, getAuthStatus, getAuthLoginUrl, getCreditBalance, getPayUrl, updateProfile as apiUpdateProfile, getCloudStatus, getSettings, updateSettings, saveAuthToken, type AuthUser } from "@/api/client"
+import { getAuthUser, getAuthStatus, getAuthLoginUrl, getCreditBalance, getPayUrl, updateProfile as apiUpdateProfile, getCloudStatus, getSettings, updateSettings, type AuthUser } from "@/api/client"
 import { isTauri } from "@/api/transport"
 import type { Locale } from "@/i18n/context"
 
@@ -126,47 +126,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       if (isTauri) {
-        // Check if running in dev mode (Vite dev server)
-        const isDev = import.meta.env.DEV
-
-        if (isDev) {
-          // Dev mode: deep link scheme not registered, use HTTP callback + polling (same as web mode)
-          const { loginUrl } = await getAuthLoginUrl()
-          const { openUrl } = await import('@tauri-apps/plugin-opener')
-          await openUrl(loginUrl)
-          startPolling()
-        } else {
-          // Release mode: use deep link callback
-          const { loginUrl } = await getAuthLoginUrl('tauri')
-          const { openUrl } = await import('@tauri-apps/plugin-opener')
-          await openUrl(loginUrl)
-
-          const { listen } = await import('@tauri-apps/api/event')
-          let timeoutId: ReturnType<typeof setTimeout>
-          const unlisten = await listen<string>('deep-link-received', async (event) => {
-            try {
-              const url = new URL(event.payload)
-              if (url.host === 'auth' || url.pathname.startsWith('/auth/callback') || url.pathname.startsWith('auth/callback')) {
-                const token = url.searchParams.get('token')
-                if (token) {
-                  await saveAuthToken(token)
-                  await get().fetchUser()
-                  await get().fetchCreditBalance()
-                }
-              }
-            } catch (err) {
-              console.error('Deep link auth failed:', err)
-            } finally {
-              unlisten()
-              clearTimeout(timeoutId)
-              set({ authLoading: false })
-            }
-          })
-          timeoutId = setTimeout(() => {
-            unlisten()
-            set({ authLoading: false })
-          }, 120000)
-        }
+        // Use HTTP callback + polling for reliable token delivery.
+        // Deep link is only used to bring the app window to foreground (triggered by the callback page).
+        const { loginUrl } = await getAuthLoginUrl()
+        const { openUrl } = await import('@tauri-apps/plugin-opener')
+        await openUrl(loginUrl)
+        startPolling()
       } else {
         // Web mode: polling
         const { loginUrl } = await getAuthLoginUrl()
@@ -204,51 +169,29 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   openPayPage: async () => {
     try {
+      const { payUrl } = await getPayUrl()
       if (isTauri) {
-        // Tauri mode: use deep link callback
-        const { payUrl } = await getPayUrl('tauri')
         const { openUrl } = await import('@tauri-apps/plugin-opener')
         await openUrl(payUrl)
-
-        // Listen for deep link payment callback
-        const { listen } = await import('@tauri-apps/api/event')
-        let timeoutId: ReturnType<typeof setTimeout>
-        const unlisten = await listen<string>('deep-link-received', async (event) => {
-          try {
-            const url = new URL(event.payload)
-            if (url.host === 'pay' || url.pathname.startsWith('/pay/callback') || url.pathname.startsWith('pay/callback')) {
-              await get().fetchCreditBalance()
-            }
-          } catch {
-            // Ignore parse errors
-          } finally {
-            unlisten()
-            clearTimeout(timeoutId)
-          }
-        })
-
-        // 120 second timeout
-        timeoutId = setTimeout(() => unlisten(), 120000)
       } else {
-        // Web mode: keep polling logic
-        const { payUrl } = await getPayUrl()
         window.open(payUrl, '_blank')
-
-        const oldBalance = get().creditBalance
-        const pollInterval = setInterval(async () => {
-          try {
-            const { balance } = await getCreditBalance()
-            if (balance !== oldBalance) {
-              clearInterval(pollInterval)
-              set({ creditBalance: balance })
-            }
-          } catch {
-            // Continue polling
-          }
-        }, 3000)
-
-        setTimeout(() => clearInterval(pollInterval), 120000)
       }
+
+      // Poll for balance change
+      const oldBalance = get().creditBalance
+      const pollInterval = setInterval(async () => {
+        try {
+          const { balance } = await getCreditBalance()
+          if (balance !== oldBalance) {
+            clearInterval(pollInterval)
+            set({ creditBalance: balance })
+          }
+        } catch {
+          // Continue polling
+        }
+      }, 3000)
+
+      setTimeout(() => clearInterval(pollInterval), 120000)
     } catch (err) {
       console.error('Open pay page failed:', err)
     }

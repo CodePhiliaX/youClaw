@@ -67,11 +67,22 @@ export function createAuthRoutes() {
     saveAuthToken(token)
     logger.info({ category: 'auth' }, 'Auth token saved from callback')
 
+    // Try to bring the Tauri app to foreground via deep link, then auto-close the tab
     return c.html(`
       <html><body style="font-family:system-ui;text-align:center;padding:60px">
         <h2 style="color:#22c55e">Login Successful</h2>
         <p>You can close this window and return to YouClaw.</p>
-        <script>setTimeout(() => window.close(), 2000)</script>
+        <script>
+          // Trigger deep link to bring app window to foreground
+          try {
+            var iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = 'youclaw://auth/focus';
+            document.body.appendChild(iframe);
+            setTimeout(function() { iframe.remove(); }, 3000);
+          } catch(e) {}
+          setTimeout(function() { window.close(); }, 2000);
+        </script>
       </body></html>
     `)
   })
