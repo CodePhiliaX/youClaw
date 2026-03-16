@@ -37,7 +37,7 @@ export async function getBackendBaseUrl(): Promise<string> {
   try {
     const { load } = await import('@tauri-apps/plugin-store')
     const store = await load('settings.json')
-    const port = (await store.get<string>('port')) || '62601'
+    const port = (await store.get<string>('preferred_port')) || '62601'
     _cachedBaseUrl = `http://localhost:${port}`
   } catch {
     _cachedBaseUrl = 'http://localhost:62601'

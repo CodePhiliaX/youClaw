@@ -30,6 +30,7 @@ export function GeneralPanel() {
   const [portValue, setPortValue] = useState("62601")
   const [portSaved, setPortSaved] = useState(false)
   const [portRestarting, setPortRestarting] = useState(false)
+  const [portMessage, setPortMessage] = useState("")
 
   // Load preferred_port from Tauri Store on mount
   useEffect(() => {
@@ -42,34 +43,45 @@ export function GeneralPanel() {
     }).catch(() => {})
   }, [])
 
+  const savePortToStore = useCallback(async (port: number) => {
+    const invoke = getTauriInvoke()
+    await invoke('set_preferred_port', { port })
+  }, [])
+
   const handleSavePort = useCallback(async () => {
     const port = parseInt(portValue, 10)
     if (isNaN(port) || port < 1024 || port > 65535) return
     try {
-      const invoke = getTauriInvoke()
-      await invoke('set_preferred_port', { port })
+      await savePortToStore(port)
       setPortSaved(true)
+      setPortMessage("")
       setTimeout(() => setPortSaved(false), 3000)
     } catch (err) {
       console.error('Failed to save port:', err)
     }
-  }, [portValue])
+  }, [portValue, savePortToStore])
 
   const handleRestartSidecar = useCallback(async () => {
+    const port = parseInt(portValue, 10)
+    if (isNaN(port) || port < 1024 || port > 65535) return
     setPortRestarting(true)
+    setPortMessage("")
     try {
+      // Save port first, then restart
+      await savePortToStore(port)
       const invoke = getTauriInvoke()
       await invoke('restart_sidecar')
-      const port = parseInt(portValue, 10)
-      if (!isNaN(port)) {
-        updateCachedBaseUrl(`http://localhost:${port}`)
-      }
+      updateCachedBaseUrl(`http://localhost:${port}`)
+      setPortSaved(false)
     } catch (err) {
-      console.error('Failed to restart sidecar:', err)
+      // Dev mode or restart failure: update cache anyway, show hint to restart manually
+      updateCachedBaseUrl(`http://localhost:${port}`)
+      setPortSaved(true)
+      setPortMessage(t.settings.portWebHint)
     } finally {
       setPortRestarting(false)
     }
-  }, [portValue])
+  }, [portValue, savePortToStore, t])
 
   return (
     <div className="space-y-8">
@@ -143,7 +155,7 @@ export function GeneralPanel() {
               min={1024}
               max={65535}
               value={portValue}
-              onChange={(e) => { setPortValue(e.target.value); setPortSaved(false) }}
+              onChange={(e) => { setPortValue(e.target.value); setPortSaved(false); setPortMessage("") }}
               className="w-32 rounded-xl"
             />
             <Button
@@ -165,6 +177,9 @@ export function GeneralPanel() {
               {portRestarting ? t.settings.portRestarting : t.settings.portRestartNow}
             </Button>
           </div>
+          {portMessage && (
+            <p className="text-xs text-amber-500 mt-2">{portMessage}</p>
+          )}
         </div>
       )}
 

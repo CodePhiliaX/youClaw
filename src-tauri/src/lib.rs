@@ -21,6 +21,7 @@ struct SidecarEvent {
 }
 
 /// Spawn the sidecar backend
+#[allow(dead_code)]
 fn spawn_sidecar(app: &AppHandle) -> Result<u16, String> {
     let state = app.state::<SidecarState>();
 
@@ -35,12 +36,6 @@ fn spawn_sidecar(app: &AppHandle) -> Result<u16, String> {
     // via Settings API (SQLite kv_state), no longer injected from Tauri Store.
     let mut env_vars: Vec<(String, String)> = vec![];
     env_vars.push(("PORT".into(), port.to_string()));
-
-    if let Ok(store) = app.store("settings.json") {
-        // Write port to store for frontend to read
-        let _ = store.set("port", serde_json::Value::String(port.to_string()));
-        let _ = store.save();
-    }
 
     // Set data directory
     if let Some(app_data) = app.path().app_data_dir().ok() {
@@ -213,11 +208,18 @@ async fn set_preferred_port(app: AppHandle, port: u16) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn restart_sidecar(app: AppHandle) -> Result<(), String> {
-    kill_sidecar(&app);
-    tokio::time::sleep(Duration::from_millis(500)).await;
-    let port = spawn_sidecar(&app)?;
-    wait_for_health(port, 30).await
+async fn restart_sidecar(#[allow(unused)] app: AppHandle) -> Result<(), String> {
+    #[cfg(debug_assertions)]
+    {
+        return Err("Dev mode: please restart 'bun dev:tauri' manually to apply port changes.".into());
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        kill_sidecar(&app);
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        let port = spawn_sidecar(&app)?;
+        wait_for_health(port, 30).await
+    }
 }
 
 
@@ -376,9 +378,6 @@ pub fn run() {
                         })
                         .unwrap_or(62601);
 
-                    if let Ok(store) = app_handle.store("settings.json") {
-                        let _ = store.set("port", serde_json::Value::String(port.to_string()));
-                    }
                     log::info!("Dev mode: skipping sidecar, using bun dev server on port {}", port);
                 }
 
