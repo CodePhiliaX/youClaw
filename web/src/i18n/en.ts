@@ -219,6 +219,9 @@ export const en = {
     categoryCoding: 'Coding',
     categoryOther: 'Other',
     recommended: 'Recommended',
+    deleteSkill: 'Delete Skill',
+    confirmDeleteSkill: 'Are you sure you want to delete this skill? This cannot be undone.',
+    deleting: 'Deleting...',
   },
   memory: {
     title: 'Memory',

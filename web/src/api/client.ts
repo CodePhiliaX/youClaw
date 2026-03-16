@@ -217,6 +217,13 @@ export async function installSkill(skillName: string, method: string) {
   })
 }
 
+// Delete skill (user/builtin only, not workspace)
+export async function deleteSkill(name: string) {
+  return apiFetch<{ ok: boolean }>(`/api/skills/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+  })
+}
+
 // Enable/disable skill
 export async function toggleSkill(name: string, enabled: boolean) {
   return apiFetch<Skill>(`/api/skills/${encodeURIComponent(name)}/toggle`, {

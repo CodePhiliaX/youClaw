@@ -221,6 +221,9 @@ export const zh: Translations = {
     categoryCoding: '编码',
     categoryOther: '其他',
     recommended: '推荐技能',
+    deleteSkill: '删除 Skill',
+    confirmDeleteSkill: '确定要删除这个 Skill 吗？此操作不可撤销。',
+    deleting: '删除中...',
   },
   memory: {
     title: '记忆',

@@ -230,9 +230,9 @@ export function createSkillsRoutes(skillsLoader: SkillsLoader, agentManager: Age
     }
 
     try {
-      const { dirname } = await import('node:path')
+      const { dirname, basename } = await import('node:path')
       const skillDir = dirname(skill.path)
-      await installer.uninstall(resolve(skillDir, '..').split('/').pop()!, dirname(skillDir))
+      await installer.uninstall(basename(skillDir), dirname(skillDir))
       skillsLoader.refresh()
       return c.json({ ok: true })
     } catch (err) {
