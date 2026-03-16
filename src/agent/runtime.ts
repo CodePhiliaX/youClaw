@@ -283,6 +283,7 @@ export class AgentRuntime {
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
       pathToClaudeCodeExecutable: resolveCliPath(),
+      settingSources: ['project'],
       ...(existingSessionId ? { resume: existingSessionId } : {}),
     }
 
@@ -300,9 +301,13 @@ export class AgentRuntime {
       queryOptions.mcpServers = resolveMcpServers(this.config.mcpServers)
     }
 
-    // Tool access control
+    // Tool access control (ensure Skill tool is always included)
     if (this.config.allowedTools) {
-      queryOptions.allowedTools = this.config.allowedTools
+      const tools = [...this.config.allowedTools]
+      if (!tools.includes('Skill')) {
+        tools.push('Skill')
+      }
+      queryOptions.allowedTools = tools
     }
     if (this.config.disallowedTools) {
       queryOptions.disallowedTools = this.config.disallowedTools
