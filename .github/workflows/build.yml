@@ -487,17 +487,19 @@ jobs:
             [ ! -f "$f" ] && continue
             SIG=$(cat "$f")
             NAME=$(basename "$f")
-            echo "Processing sig: $NAME"
+            # Derive the actual asset filename by stripping .sig suffix
+            ASSET_NAME="${NAME%.sig}"
+            echo "Processing sig: $NAME -> asset: $ASSET_NAME"
 
             case "$NAME" in
               *_aarch64.app.tar.gz.sig)
-                URL="${CDN_BASE}/You.Claw_aarch64.app.tar.gz"
+                URL="${CDN_BASE}/${ASSET_NAME}"
                 PLATFORMS=$(echo "$PLATFORMS" | jq \
                   --arg sig "$SIG" --arg url "$URL" \
                   '. + {"darwin-aarch64": {"signature": $sig, "url": $url}, "darwin-aarch64-app": {"signature": $sig, "url": $url}}')
                 ;;
               *_x64.app.tar.gz.sig)
-                URL="${CDN_BASE}/You.Claw_x64.app.tar.gz"
+                URL="${CDN_BASE}/${ASSET_NAME}"
                 PLATFORMS=$(echo "$PLATFORMS" | jq \
                   --arg sig "$SIG" --arg url "$URL" \
                   '. + {"darwin-x86_64": {"signature": $sig, "url": $url}, "darwin-x86_64-app": {"signature": $sig, "url": $url}}')
@@ -505,13 +507,13 @@ jobs:
               *_x64-setup.exe.sig)
                 PLATFORMS=$(echo "$PLATFORMS" | jq \
                   --arg sig "$SIG" \
-                  --arg url "${CDN_BASE}/You.Claw_${VERSION}_x64-setup.exe" \
+                  --arg url "${CDN_BASE}/${ASSET_NAME}" \
                   '. + {"windows-x86_64": {"signature": $sig, "url": $url}, "windows-x86_64-nsis": {"signature": $sig, "url": $url}}')
                 ;;
               *_x64_en-US.msi.sig)
                 PLATFORMS=$(echo "$PLATFORMS" | jq \
                   --arg sig "$SIG" \
-                  --arg url "${CDN_BASE}/You.Claw_${VERSION}_x64_en-US.msi" \
+                  --arg url "${CDN_BASE}/${ASSET_NAME}" \
                   '. + {"windows-x86_64-msi": {"signature": $sig, "url": $url}}')
                 ;;
             esac

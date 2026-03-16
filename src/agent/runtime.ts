@@ -427,17 +427,15 @@ export class AgentRuntime {
             throw err
           }
           if (err instanceof Error && (err.name === 'TimeoutError' || err.message.includes('timeout'))) {
-            logger.debug({
+            logger.warn({
               agentId, chatId,
               errorType: 'timeout',
               durationMs: preflightErrorDurationMs,
               url: preflightUrl,
               category: 'agent',
-            }, 'Pre-flight request timed out')
-            throw new Error(`Cannot reach model API at ${modelConfig.baseUrl} (timeout after 15s). Please check your network connection.`)
-          }
-          if (err instanceof Error && /ECONNREFUSED|ENOTFOUND|fetch failed/.test(err.message)) {
-            logger.debug({
+            }, 'Pre-flight request timed out, proceeding with SDK anyway')
+          } else if (err instanceof Error && /ECONNREFUSED|ENOTFOUND|fetch failed/.test(err.message)) {
+            logger.warn({
               agentId, chatId,
               errorType: 'network',
               errorName: err.name,
@@ -445,8 +443,7 @@ export class AgentRuntime {
               durationMs: preflightErrorDurationMs,
               url: preflightUrl,
               category: 'agent',
-            }, 'Pre-flight network error')
-            throw new Error(`Cannot reach model API at ${modelConfig.baseUrl}: ${err.message}`)
+            }, 'Pre-flight network error, proceeding with SDK anyway')
           }
           logger.warn({
             agentId, chatId,
@@ -970,6 +967,10 @@ export class AgentRuntime {
    * Order matters: specific errors first, generic fallback (process exited) last.
    */
   private humanizeError(raw: string): { message: string; errorCode: ErrorCode } {
+    // Pass through raw message directly for unrecognized/upstream errors — no humanization needed
+    if (/request interrupted by user/i.test(raw)) {
+      return { message: raw, errorCode: ErrorCode.UNKNOWN }
+    }
     // Insufficient credits (highest priority — triggers top-up dialog)
     if (/insufficient|credit|balance|quota|insufficient_credits/i.test(raw)) {
       return { message: 'Insufficient credits or API quota. Please check your account balance.', errorCode: ErrorCode.INSUFFICIENT_CREDITS }
@@ -990,9 +991,16 @@ export class AgentRuntime {
     if (/ECONNREFUSED|ENOTFOUND|fetch failed|network/i.test(raw)) {
       return { message: 'Cannot reach the model API. Please check your network connection and Base URL.', errorCode: ErrorCode.NETWORK_ERROR }
     }
+    // Server error (5xx from proxy/API)
+    if (/\b50[0-9]\b|server error|bad gateway|service unavailable/i.test(raw)) {
+      return { message: 'The model API returned a server error. This is usually temporary — please retry.', errorCode: ErrorCode.MODEL_CONNECTION_FAILED }
+    }
     // SDK process crash (fallback — last to avoid masking specific errors in upstream_response)
     if (/process exited with code/i.test(raw)) {
-      return { message: 'Model connection failed. Please check your model configuration (API Key, Base URL) in Settings → Models.', errorCode: ErrorCode.MODEL_CONNECTION_FAILED }
+      // Extract upstream_response detail if available
+      const upstreamMatch = raw.match(/upstream_response:\s*(.{1,200})/) as RegExpMatchArray | null
+      const detail = upstreamMatch?.[1] ? ` (${upstreamMatch[1].trim()})` : ''
+      return { message: `Model process exited unexpectedly${detail}. This may be a temporary issue — please retry.`, errorCode: ErrorCode.MODEL_CONNECTION_FAILED }
     }
     return { message: raw, errorCode: ErrorCode.UNKNOWN }
   }
