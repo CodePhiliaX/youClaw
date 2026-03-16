@@ -24,30 +24,22 @@ struct SidecarEvent {
 fn spawn_sidecar(app: &AppHandle) -> Result<u16, String> {
     let state = app.state::<SidecarState>();
 
-    // Read user-configured port, default to 62601 if not set
-    let port: u16 = app.store("settings.json")
-        .ok()
-        .and_then(|store| store.get("preferredPort"))
-        .and_then(|v| v.as_str().map(String::from))
-        .and_then(|p| p.parse::<u16>().ok())
-        .filter(|p| *p >= 1024)
-        .unwrap_or(62601);
-
-    // Check if port is available
-    match TcpListener::bind(format!("127.0.0.1:{}", port)) {
+    // Bind to port 0 to let the OS assign a random available port
+    let port: u16 = match TcpListener::bind("127.0.0.1:0") {
         Ok(listener) => {
+            let port = listener.local_addr().unwrap().port();
             drop(listener);
-            log::info!("Using port {}", port);
+            log::info!("Using random available port {}", port);
+            port
         }
-        Err(_) => {
-            log::warn!("Port {} is in use", port);
+        Err(e) => {
             let _ = app.emit("sidecar-event", SidecarEvent {
-                status: "port-conflict".into(),
-                message: format!("Port {} is already in use", port),
+                status: "error".into(),
+                message: format!("Failed to find available port: {}", e),
             });
-            return Err(format!("Port {} is already in use", port));
+            return Err(format!("Failed to find available port: {}", e));
         }
-    }
+    };
 
     // Model config (API Key, Base URL, Model ID) is now managed by the backend
     // via Settings API (SQLite kv_state), no longer injected from Tauri Store.
@@ -219,26 +211,6 @@ async fn restart_sidecar(app: AppHandle) -> Result<(), String> {
     wait_for_health(port, 30).await
 }
 
-#[tauri::command]
-async fn set_preferred_port(app: AppHandle, port: Option<String>) -> Result<(), String> {
-    let store = app.store("settings.json")
-        .map_err(|e| format!("Failed to open store: {}", e))?;
-
-    match port {
-        Some(p) => {
-            let port_num: u16 = p.parse().map_err(|_| "Invalid port number".to_string())?;
-            if port_num < 1024 {
-                return Err("Port must be between 1024 and 65535".to_string());
-            }
-            store.set("preferredPort", serde_json::Value::String(p));
-        }
-        None => {
-            let _ = store.delete("preferredPort");
-        }
-    }
-    let _ = store.save();
-    Ok(())
-}
 
 
 
@@ -273,7 +245,6 @@ pub fn run() {
             get_version,
             get_platform,
             restart_sidecar,
-            set_preferred_port,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
