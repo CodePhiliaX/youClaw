@@ -5,6 +5,7 @@ import { Chat } from './pages/Chat'
 import { Agents } from './pages/Agents'
 import { Memory } from './pages/Memory'
 import { Tasks } from './pages/Tasks'
+import { Logs } from './pages/Logs'
 import { Login } from './pages/Login'
 import { PortConflictDialog } from './components/PortConflictDialog'
 import { useTheme } from './hooks/useTheme'
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="/agents" element={<Agents />} />
           <Route path="/cron" element={<Tasks />} />
           <Route path="/memory" element={<Memory />} />
+          <Route path="/logs" element={<Logs />} />
         </Route>
         <Route path="*" element={<Navigate to={canPass ? "/" : "/login"} replace />} />
       </Routes>

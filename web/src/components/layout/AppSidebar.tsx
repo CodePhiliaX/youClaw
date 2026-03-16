@@ -3,6 +3,7 @@ import {
   Bot,
   CalendarClock,
   Brain,
+  ScrollText,
   PanelLeftClose,
   PanelLeft,
   SquarePen,
@@ -47,6 +48,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
     { to: "/agents", icon: Bot, label: t.nav.agents },
     { to: "/cron", icon: CalendarClock, label: t.nav.tasks },
     { to: "/memory", icon: Brain, label: t.nav.memory },
+    { to: "/logs", icon: ScrollText, label: t.nav.logs },
   ];
 
   // Avatar component
