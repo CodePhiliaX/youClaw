@@ -309,6 +309,7 @@ pub fn run() {
                 use tauri::TitleBarStyle;
                 if let Some(win) = app.get_webview_window("main") {
                     let _ = win.set_title_bar_style(TitleBarStyle::Overlay);
+                    let _ = win.set_title("");
                 }
             }
             // Create system tray (i18n based on system locale)
