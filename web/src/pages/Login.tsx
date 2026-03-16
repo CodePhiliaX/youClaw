@@ -182,15 +182,17 @@ function LoginWindowControls() {
     import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().close())
   }
 
+  const stopDrag = (e: React.MouseEvent) => e.stopPropagation()
+
   return (
     <div className="flex h-full shrink-0">
-      <button type="button" onClick={handleMinimize} className={`${btnBase} hover:bg-muted`} aria-label="Minimize">
+      <button type="button" onClick={handleMinimize} onMouseDown={stopDrag} className={`${btnBase} hover:bg-muted`} aria-label="Minimize">
         <Minus className="h-3.5 w-3.5" />
       </button>
-      <button type="button" onClick={handleToggleMaximize} className={`${btnBase} hover:bg-muted`} aria-label="Maximize">
+      <button type="button" onClick={handleToggleMaximize} onMouseDown={stopDrag} className={`${btnBase} hover:bg-muted`} aria-label="Maximize">
         <Square className="h-3 w-3" />
       </button>
-      <button type="button" onClick={handleClose} className={`${btnBase} hover:bg-destructive hover:text-destructive-foreground`} aria-label="Close">
+      <button type="button" onClick={handleClose} onMouseDown={stopDrag} className={`${btnBase} hover:bg-destructive hover:text-destructive-foreground`} aria-label="Close">
         <X className="h-4 w-4" />
       </button>
     </div>
