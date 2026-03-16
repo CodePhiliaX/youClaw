@@ -168,14 +168,14 @@ function CreateChannelForm({
   onCreated: () => void
   onCancel: () => void
 }) {
+  const visibleTypes = types.filter((t) => !t.hidden)
   const [selectedType, setSelectedType] = useState('')
-  const [id, setId] = useState('')
   const [label, setLabel] = useState('')
   const [configValues, setConfigValues] = useState<Record<string, string>>({})
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
 
-  const typeInfo = types.find((t) => t.type === selectedType)
+  const typeInfo = visibleTypes.find((t) => t.type === selectedType)
 
   useEffect(() => {
     if (typeInfo) {
@@ -190,7 +190,6 @@ function CreateChannelForm({
     setError('')
     try {
       await createChannel({
-        id: id || undefined,
         type: selectedType,
         label,
         config: configValues,
@@ -216,7 +215,7 @@ function CreateChannelForm({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__none__">{t.channels.selectType}</SelectItem>
-            {types.map((ct) => (
+            {visibleTypes.map((ct) => (
               <SelectItem key={ct.type} value={ct.type}>{ct.label} - {ct.description}</SelectItem>
             ))}
           </SelectContent>
@@ -225,19 +224,6 @@ function CreateChannelForm({
 
       {typeInfo && (
         <>
-          {/* ID */}
-          <div>
-            <label className="text-xs font-medium mb-1.5 block">ID</label>
-            <input
-              value={id}
-              onChange={(e) => setId(e.target.value)}
-              placeholder={`${selectedType}-main`}
-              className="w-full px-3 py-2 text-sm rounded-md bg-muted border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              data-testid="channel-input-id"
-            />
-            <p className="text-xs text-muted-foreground mt-1">{t.channels.idHint}</p>
-          </div>
-
           {/* Label */}
           <div>
             <label className="text-xs font-medium mb-1.5 block">{t.channels.labelField}</label>

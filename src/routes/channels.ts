@@ -61,6 +61,7 @@ export function createChannelsRoutes(channelManager: ChannelManager) {
       chatIdPrefix: info.chatIdPrefix,
       configFields: info.configFields,
       docsUrl: info.docsUrl,
+      hidden: info.hidden ?? false,
     }))
     return c.json(types)
   })

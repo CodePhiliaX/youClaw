@@ -48,6 +48,7 @@ export interface ChannelTypeInfo {
   configFields: ConfigFieldInfo[]
   docsUrl: string
   configSchema: z.ZodType
+  hidden?: boolean
 }
 
 export const CHANNEL_TYPE_REGISTRY: Record<string, ChannelTypeInfo> = {
@@ -100,6 +101,7 @@ export const CHANNEL_TYPE_REGISTRY: Record<string, ChannelTypeInfo> = {
     ],
     docsUrl: 'https://developer.work.weixin.qq.com',
     configSchema: WeComConfigSchema,
+    hidden: true,
   },
   dingtalk: {
     type: 'dingtalk',
