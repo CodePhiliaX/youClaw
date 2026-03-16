@@ -100,6 +100,24 @@ jobs:
           "
           bun build --compile --target=${{ matrix.bun_target }} src/index.ts --outfile src-tauri/bin/youclaw-server-${{ matrix.sidecar_suffix }}
 
+      - name: Embed Bun runtime for target platform
+        run: |
+          mkdir -p src-tauri/resources/bun-runtime
+          BUN_VERSION=$(bun --version)
+          # Map matrix arch to Bun download identifier
+          if [ "${{ matrix.arch }}" = "aarch64" ]; then
+            BUN_ARCH="aarch64"
+          else
+            BUN_ARCH="x64"
+          fi
+          BUN_URL="https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-darwin-${BUN_ARCH}.zip"
+          echo "Downloading Bun ${BUN_VERSION} for darwin-${BUN_ARCH}: ${BUN_URL}"
+          curl -fsSL -o /tmp/bun.zip "${BUN_URL}"
+          unzip -o /tmp/bun.zip -d /tmp/bun-extract
+          cp /tmp/bun-extract/bun-darwin-${BUN_ARCH}/bun src-tauri/resources/bun-runtime/bun
+          chmod 755 src-tauri/resources/bun-runtime/bun
+          echo "Embedded Bun runtime: $(file src-tauri/resources/bun-runtime/bun)"
+
       - name: Import macOS certificates
         uses: apple-actions/import-codesign-certs@v3
         with:
@@ -177,6 +195,18 @@ jobs:
             console.log('build-constants.ts:', Object.keys(c));
           "
           bun build --compile --target=bun-windows-x64 src/index.ts --outfile src-tauri/bin/youclaw-server-x86_64-pc-windows-msvc.exe
+
+      - name: Embed Bun runtime for Windows
+        shell: bash
+        run: |
+          mkdir -p src-tauri/resources/bun-runtime
+          BUN_VERSION=$(bun --version)
+          BUN_URL="https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-windows-x64.zip"
+          echo "Downloading Bun ${BUN_VERSION} for windows-x64: ${BUN_URL}"
+          curl -fsSL -o /tmp/bun.zip "${BUN_URL}"
+          unzip -o /tmp/bun.zip -d /tmp/bun-extract
+          cp /tmp/bun-extract/bun-windows-x64/bun.exe src-tauri/resources/bun-runtime/bun.exe
+          echo "Embedded Bun runtime: $(ls -la src-tauri/resources/bun-runtime/bun.exe)"
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -340,6 +370,18 @@ jobs:
             console.log('build-constants.ts:', Object.keys(c));
           "
           bun build --compile --target=bun-linux-x64 src/index.ts --outfile src-tauri/bin/youclaw-server-x86_64-unknown-linux-gnu
+
+      - name: Embed Bun runtime for Linux
+        run: |
+          mkdir -p src-tauri/resources/bun-runtime
+          BUN_VERSION=$(bun --version)
+          BUN_URL="https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-x64.zip"
+          echo "Downloading Bun ${BUN_VERSION} for linux-x64: ${BUN_URL}"
+          curl -fsSL -o /tmp/bun.zip "${BUN_URL}"
+          unzip -o /tmp/bun.zip -d /tmp/bun-extract
+          cp /tmp/bun-extract/bun-linux-x64/bun src-tauri/resources/bun-runtime/bun
+          chmod 755 src-tauri/resources/bun-runtime/bun
+          echo "Embedded Bun runtime: $(file src-tauri/resources/bun-runtime/bun)"
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
