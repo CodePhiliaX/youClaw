@@ -34,7 +34,7 @@ function getCurrentTarget() {
 
 // 从环境变量生成 build-constants.ts，将值编译进 sidecar
 function generateBuildConstants() {
-  const envKeys = ['YOUCLAW_WEBSITE_URL', 'YOUCLAW_API_URL', 'YOUCLAW_BUILTIN_API_URL', 'YOUCLAW_BUILTIN_AUTH_TOKEN']
+  const envKeys = ['YOUCLAW_WEBSITE_URL', 'YOUCLAW_API_URL', 'YOUCLAW_BUILTIN_API_URL', 'YOUCLAW_BUILTIN_AUTH_TOKEN', 'MINIMAX_API_KEY', 'MINIMAX_API_HOST']
   const entries = {}
   for (const key of envKeys) {
     const val = process.env[key]

@@ -61,12 +61,14 @@ jobs:
           YOUCLAW_API_URL: ${{ secrets.YOUCLAW_API_URL }}
           YOUCLAW_BUILTIN_API_URL: ${{ secrets.YOUCLAW_BUILTIN_API_URL }}
           YOUCLAW_BUILTIN_AUTH_TOKEN: ${{ secrets.YOUCLAW_BUILTIN_AUTH_TOKEN }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          MINIMAX_API_HOST: ${{ secrets.MINIMAX_API_HOST }}
         run: |
           mkdir -p src-tauri/bin
           node -e "
             const e = process.env;
             const c = {};
-            for (const k of ['YOUCLAW_WEBSITE_URL','YOUCLAW_API_URL','YOUCLAW_BUILTIN_API_URL','YOUCLAW_BUILTIN_AUTH_TOKEN']) {
+            for (const k of ['YOUCLAW_WEBSITE_URL','YOUCLAW_API_URL','YOUCLAW_BUILTIN_API_URL','YOUCLAW_BUILTIN_AUTH_TOKEN','MINIMAX_API_KEY','MINIMAX_API_HOST']) {
               if (e[k]) c[k] = e[k];
             }
             require('fs').writeFileSync('src/config/build-constants.ts',
@@ -136,12 +138,14 @@ jobs:
           YOUCLAW_API_URL: ${{ secrets.YOUCLAW_API_URL }}
           YOUCLAW_BUILTIN_API_URL: ${{ secrets.YOUCLAW_BUILTIN_API_URL }}
           YOUCLAW_BUILTIN_AUTH_TOKEN: ${{ secrets.YOUCLAW_BUILTIN_AUTH_TOKEN }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          MINIMAX_API_HOST: ${{ secrets.MINIMAX_API_HOST }}
         run: |
           mkdir -p src-tauri/bin
           node -e "
             const e = process.env;
             const c = {};
-            for (const k of ['YOUCLAW_WEBSITE_URL','YOUCLAW_API_URL','YOUCLAW_BUILTIN_API_URL','YOUCLAW_BUILTIN_AUTH_TOKEN']) {
+            for (const k of ['YOUCLAW_WEBSITE_URL','YOUCLAW_API_URL','YOUCLAW_BUILTIN_API_URL','YOUCLAW_BUILTIN_AUTH_TOKEN','MINIMAX_API_KEY','MINIMAX_API_HOST']) {
               if (e[k]) c[k] = e[k];
             }
             require('fs').writeFileSync('src/config/build-constants.ts',
@@ -308,12 +312,14 @@ jobs:
           YOUCLAW_API_URL: ${{ secrets.YOUCLAW_API_URL }}
           YOUCLAW_BUILTIN_API_URL: ${{ secrets.YOUCLAW_BUILTIN_API_URL }}
           YOUCLAW_BUILTIN_AUTH_TOKEN: ${{ secrets.YOUCLAW_BUILTIN_AUTH_TOKEN }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          MINIMAX_API_HOST: ${{ secrets.MINIMAX_API_HOST }}
         run: |
           mkdir -p src-tauri/bin
           node -e "
             const e = process.env;
             const c = {};
-            for (const k of ['YOUCLAW_WEBSITE_URL','YOUCLAW_API_URL','YOUCLAW_BUILTIN_API_URL','YOUCLAW_BUILTIN_AUTH_TOKEN']) {
+            for (const k of ['YOUCLAW_WEBSITE_URL','YOUCLAW_API_URL','YOUCLAW_BUILTIN_API_URL','YOUCLAW_BUILTIN_AUTH_TOKEN','MINIMAX_API_KEY','MINIMAX_API_HOST']) {
               if (e[k]) c[k] = e[k];
             }
             require('fs').writeFileSync('src/config/build-constants.ts',

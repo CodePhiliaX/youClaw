@@ -1,8 +1,6 @@
 ---
 name: web-search
 description: "Search the web using MiniMax web_search tool for real-time information, news, and facts."
-env:
-  - MINIMAX_API_KEY
 tags:
   - search
   - web
