@@ -30,6 +30,7 @@ export interface ChatContextType {
   agentId: string
   setAgentId: (id: string) => void
   agents: Agent[]
+  refreshAgents: () => void
 
   browserProfiles: BrowserProfileDTO[]
   selectedProfileId: string | null

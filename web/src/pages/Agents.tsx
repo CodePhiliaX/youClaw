@@ -11,6 +11,7 @@ import { cn } from '../lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
 import { useI18n } from '../i18n'
+import { useChatContext } from '../hooks/chatCtx'
 import { SidePanel } from '@/components/layout/SidePanel'
 
 type AgentState = {
@@ -58,6 +59,7 @@ type ViewMode = 'detail' | 'create'
 export function Agents() {
   const { t } = useI18n()
   const navigate = useNavigate()
+  const { refreshAgents: refreshChatAgents } = useChatContext()
   const [agents, setAgents] = useState<Agent[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('detail')
@@ -164,6 +166,7 @@ export function Agents() {
     try {
       const result = await createAgent({ name: newName.trim(), model: newModel })
       loadAgents()
+      refreshChatAgents()
       setSelected(result.id)
       setViewMode('detail')
       setNewName('')
@@ -181,6 +184,7 @@ export function Agents() {
     try {
       await deleteAgent(agentId)
       loadAgents()
+      refreshChatAgents()
       if (selected === agentId) {
         setSelected(null)
       }

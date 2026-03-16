@@ -46,11 +46,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Load agents
-  useEffect(() => {
+  const refreshAgents = useCallback(() => {
     getAgents()
-      .then((list) => setAgents(list.map((a) => ({ id: a.id, name: a.name }))))
+      .then((list) => {
+        const sorted = list
+          .map((a) => ({ id: a.id, name: a.name }))
+          .sort((a, b) => {
+            if (a.id === "default") return -1;
+            if (b.id === "default") return 1;
+            return a.name.localeCompare(b.name);
+          });
+        setAgents(sorted);
+      })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    refreshAgents();
+  }, [refreshAgents]);
 
   // Load browser profiles
   useEffect(() => {
@@ -113,6 +126,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         agentId,
         setAgentId,
         agents,
+        refreshAgents,
         browserProfiles,
         selectedProfileId,
         setSelectedProfileId,
