@@ -316,6 +316,18 @@ export const en = {
     portConflictAction: 'Change Port',
     portWebHint: 'Saved. Please restart the backend service manually to apply.',
   },
+  gitSetup: {
+    title: 'Git is Required',
+    description: 'YouClaw requires Git to run AI agent commands. Please download and install Git to continue.',
+    downloadButton: 'Download Git Installer',
+    steps: 'Installation Steps',
+    step1: 'Click the button above to download the Git installer (.zip)',
+    step2: 'Extract the zip file and run the installer (.exe)',
+    step3: 'Follow the wizard — just click "Next" through each step',
+    step4: 'Installation will be detected automatically, no restart needed',
+    detecting: 'Detecting Git installation...',
+    detected: 'Git detected! Loading...',
+  },
   login: {
     heroTitle: 'Experience Productivity.',
     heroDesc: 'The all-in-one assistant designed for the modern workflow.',

@@ -14,6 +14,11 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
   return res.json() as Promise<T>
 }
 
+// Check git availability
+export async function checkGit() {
+  return apiFetch<{ available: boolean; path: string | null }>('/api/git-check')
+}
+
 // Send message to agent
 export async function sendMessage(agentId: string, prompt: string, chatId?: string, browserProfileId?: string, attachments?: Attachment[]) {
   return apiFetch<{ chatId: string; status: string }>(`/api/agents/${agentId}/message`, {

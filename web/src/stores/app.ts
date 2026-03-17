@@ -1,7 +1,7 @@
 import { create } from "zustand"
 import { getItem, setItem } from "@/lib/storage"
 import { applyThemeToDOM, type Theme } from "@/hooks/useTheme"
-import { getAuthUser, getAuthStatus, getAuthLoginUrl, getCreditBalance, getPayUrl, updateProfile as apiUpdateProfile, getCloudStatus, getSettings, updateSettings, type AuthUser } from "@/api/client"
+import { getAuthUser, getAuthStatus, getAuthLoginUrl, getCreditBalance, getPayUrl, updateProfile as apiUpdateProfile, getCloudStatus, getSettings, updateSettings, checkGit, type AuthUser } from "@/api/client"
 import { isTauri } from "@/api/transport"
 import type { Locale } from "@/i18n/context"
 
@@ -19,6 +19,11 @@ interface AppState {
 
   // Cloud
   cloudEnabled: boolean
+
+  // Git
+  gitAvailable: boolean
+  gitChecked: boolean
+  recheckGit: () => Promise<boolean>
 
   // Model
   modelReady: boolean
@@ -71,6 +76,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Cloud
   cloudEnabled: false,
+
+  // Git
+  gitAvailable: true, // default true, only set false on Windows when check fails
+  gitChecked: false,
+
+  recheckGit: async () => {
+    try {
+      const { available } = await checkGit()
+      set({ gitAvailable: available, gitChecked: true })
+      return available
+    } catch {
+      // Backend not ready, assume available
+      set({ gitAvailable: true, gitChecked: true })
+      return true
+    }
+  },
 
   // Model
   modelReady: false,
@@ -210,6 +231,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       sidebarCollapsed: sidebar === "true",
     })
     applyThemeToDOM(resolvedTheme)
+
+    // Check git availability on Windows
+    const isWindows = navigator.userAgent.includes('Windows')
+    if (isWindows) {
+      await get().recheckGit()
+    }
 
     // Check cloud service status & model configuration
     try {

@@ -7,6 +7,7 @@ import { Memory } from './pages/Memory'
 import { Tasks } from './pages/Tasks'
 import { Logs } from './pages/Logs'
 import { Login } from './pages/Login'
+import { GitSetup } from './pages/GitSetup'
 import { PortConflictDialog } from './components/PortConflictDialog'
 import { useTheme } from './hooks/useTheme'
 import { useAppStore } from './stores/app'
@@ -25,6 +26,7 @@ export default function App() {
   useTheme()
   const isLoggedIn = useAppStore((s) => s.isLoggedIn)
   const cloudEnabled = useAppStore((s) => s.cloudEnabled)
+  const gitAvailable = useAppStore((s) => s.gitAvailable)
   const canPass = !cloudEnabled || isLoggedIn
   const [portConflict, setPortConflict] = useState(false)
 
@@ -48,6 +50,11 @@ export default function App() {
 
     return () => { cleanup?.() }
   }, [])
+
+  // Block all pages until Git is available (Windows only)
+  if (!gitAvailable) {
+    return <GitSetup />
+  }
 
   return (
     <BrowserRouter>
