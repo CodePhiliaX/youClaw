@@ -9,7 +9,7 @@
  */
 
 import { execSync } from 'node:child_process'
-import { mkdirSync, readdirSync, unlinkSync, writeFileSync, copyFileSync, chmodSync } from 'node:fs'
+import { mkdirSync, readdirSync, unlinkSync, writeFileSync, copyFileSync, chmodSync, existsSync, statSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -113,6 +113,45 @@ function copyBunRuntime() {
 }
 
 copyBunRuntime()
+
+// Prepare bundled Git installer for Windows (used by startup "Install Git" button)
+function prepareWindowsGitInstaller() {
+  const installerDir = resolve(root, 'src-tauri', 'resources', 'git-installer')
+  mkdirSync(installerDir, { recursive: true })
+
+  const installerName = process.env.YOUCLAW_GIT_INSTALLER_NAME || 'Git-2.53.0.2-64-bit.exe'
+  const installerPath = resolve(installerDir, installerName)
+
+  if (process.platform !== 'win32') {
+    console.log('Skipping bundled Git installer download (not Windows)')
+    return
+  }
+
+  // Reuse existing installer if present and looks valid (>10MB)
+  if (existsSync(installerPath) && statSync(installerPath).size > 10 * 1024 * 1024) {
+    console.log(`Git installer already present: ${installerPath}`)
+    return
+  }
+
+  const installerUrl = process.env.YOUCLAW_GIT_INSTALLER_URL || `https://cdn.chat2db-ai.com/youclaw/website/${installerName}`
+  console.log(`Downloading Git installer from ${installerUrl}`)
+
+  try {
+    // Prefer PowerShell on Windows to avoid curl dependency variations
+    const escapedUrl = installerUrl.replaceAll("'", "''")
+    const escapedPath = installerPath.replaceAll("'", "''")
+    execSync(
+      `powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri '${escapedUrl}' -OutFile '${escapedPath}'"`,
+      { stdio: 'inherit' }
+    )
+    console.log(`Bundled Git installer ready: ${installerPath}`)
+  } catch (err) {
+    console.error('Failed to download bundled Git installer:', err.message)
+    process.exit(1)
+  }
+}
+
+prepareWindowsGitInstaller()
 
 // 清理 bun build --compile 产生的临时文件
 for (const f of readdirSync(root)) {

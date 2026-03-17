@@ -100,22 +100,76 @@ fn add_windows_git_paths(extra_paths: &mut Vec<String>, bash_path: &str) {
 }
 
 #[cfg(target_os = "windows")]
+fn find_bundled_git_installer(app: &AppHandle) -> Option<String> {
+    let installer_name = "Git-2.53.0.2-64-bit.exe";
+
+    let mut candidates: Vec<String> = vec![];
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let mut res = resource_dir.to_string_lossy().to_string();
+        // Strip Windows extended-length path prefix (\\?\)
+        if res.starts_with("\\\\?\\") {
+            res = res[4..].to_string();
+        }
+
+        candidates.push(format!("{}\\git-installer\\{}", res, installer_name));
+        candidates.push(format!("{}\\resources\\git-installer\\{}", res, installer_name));
+        candidates.push(format!("{}\\_up_\\src-tauri\\resources\\git-installer\\{}", res, installer_name));
+    }
+
+    for candidate in candidates {
+        if std::path::Path::new(&candidate).exists() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn launch_git_installer(installer_path: &str) -> Result<(), String> {
+    let escaped = installer_path.replace('\'', "''");
+    let script = format!("Start-Process -FilePath '{}' -Verb RunAs", escaped);
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
+        .output()
+        .map_err(|e| format!("failed to launch installer: {}", e))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "installer launch failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ))
+    }
+}
+
+#[cfg(target_os = "windows")]
 fn prompt_windows_git_install(app: &AppHandle) {
     let is_zh = sys_locale::get_locale()
         .map(|l| l.starts_with("zh"))
         .unwrap_or(false);
+    let bundled_installer = find_bundled_git_installer(app);
 
     let (title, message, install_label, later_label) = if is_zh {
         (
             "缺少 Git 环境",
-            "检测到当前系统未安装 Git Bash，Claude Agent SDK 在 Windows 上需要 Git 才能正常执行命令。\n\n点击“下载安装”后将打开官方安装包下载地址，安装完成后重启 YouClaw。",
+            if bundled_installer.is_some() {
+                "检测到当前系统未安装 Git Bash，Claude Agent SDK 在 Windows 上需要 Git 才能正常执行命令。\n\n点击“下载安装”将直接启动内置 Git 安装包（需要管理员权限）。安装完成后重启 YouClaw。"
+            } else {
+                "检测到当前系统未安装 Git Bash，Claude Agent SDK 在 Windows 上需要 Git 才能正常执行命令。\n\n点击“下载安装”后将打开 Git 官方下载页面，安装完成后重启 YouClaw。"
+            },
             "下载安装",
             "稍后处理",
         )
     } else {
         (
             "Git is required",
-            "Git Bash was not found on this system. Claude Agent SDK on Windows requires Git to run shell commands.\n\nClick \"Install\" to open the installer download page, then restart YouClaw after installation.",
+            if bundled_installer.is_some() {
+                "Git Bash was not found on this system. Claude Agent SDK on Windows requires Git to run shell commands.\n\nClick \"Install\" to launch the bundled Git installer (admin permission required). Restart YouClaw after installation."
+            } else {
+                "Git Bash was not found on this system. Claude Agent SDK on Windows requires Git to run shell commands.\n\nClick \"Install\" to open the official Git download page, then restart YouClaw after installation."
+            },
             "Install",
             "Later",
         )
@@ -132,9 +186,19 @@ fn prompt_windows_git_install(app: &AppHandle) {
         ))
         .show(move |install_now| {
             if install_now {
-                let url = "https://cdn.chat2db-ai.com/youclaw/website/Git-2.53.0.2-64-bit.exe";
-                if let Err(err) = app_handle.opener().open_url(url, None::<&str>) {
-                    log::error!("Failed to open Git installer URL: {}", err);
+                if let Some(path) = bundled_installer.clone() {
+                    if let Err(err) = launch_git_installer(&path) {
+                        log::error!("Failed to launch bundled Git installer: {}", err);
+                        let url = "https://git-scm.com/download/win";
+                        if let Err(open_err) = app_handle.opener().open_url(url, None::<&str>) {
+                            log::error!("Failed to open Git installer URL: {}", open_err);
+                        }
+                    }
+                } else {
+                    let url = "https://git-scm.com/download/win";
+                    if let Err(err) = app_handle.opener().open_url(url, None::<&str>) {
+                        log::error!("Failed to open Git installer URL: {}", err);
+                    }
                 }
             }
         });

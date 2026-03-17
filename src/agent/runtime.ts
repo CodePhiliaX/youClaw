@@ -1143,7 +1143,7 @@ export class AgentRuntime {
     }
     if (/requires git-bash|git.?bash|CLAUDE_CODE_GIT_BASH_PATH|bash\.exe/i.test(raw)) {
       return {
-        message: 'Windows is missing Git Bash required by Claude SDK. Please install Git from https://cdn.chat2db-ai.com/youclaw/website/Git-2.53.0.2-64-bit.exe (supports Chinese setup UI), or set CLAUDE_CODE_GIT_BASH_PATH to bash.exe.',
+        message: 'Windows is missing Git Bash required by Claude SDK. Please install Git from the startup dialog (Install button) or https://git-scm.com/download/win, then restart YouClaw.',
         errorCode: ErrorCode.MODEL_CONNECTION_FAILED,
       }
     }
