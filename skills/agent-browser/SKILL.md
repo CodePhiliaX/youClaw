@@ -185,10 +185,19 @@ agent-browser --session agent1 close   # Close specific session
 
 ## Browser Profile (Persistent Login)
 
-If the system prompt provides a `--profile <dir>` parameter, you MUST always include it in every `agent-browser` command. This allows reusing persistent login state (cookies, localStorage, etc.) that the user has previously set up.
+If the system prompt provides `--session`, `--profile`, `--headed`, and/or `--executable-path` parameters, you MUST include them in every `agent-browser` command. This allows reusing persistent login state (cookies, localStorage, etc.).
 
 ```bash
-# With profile — login state is preserved across sessions
-agent-browser --profile /path/to/profile open https://app.example.com
-agent-browser --profile /path/to/profile snapshot -i
+agent-browser --session my-profile --profile /path/to/profile --headed open https://app.example.com
+agent-browser --session my-profile --profile /path/to/profile --headed snapshot -i
 ```
+
+### Troubleshooting
+If `agent-browser` fails to launch:
+1. Try `agent-browser install chrome` then retry once
+2. If headed mode fails, try without `--headed` (headless) while keeping `--profile` and `--session`
+3. Do NOT retry the same failing command more than 2 times
+
+## Default Mode (No Profile)
+
+When no browser profile is specified in the system prompt, use agent-browser without `--headed`, `--profile`, or `--session` flags. The browser runs in headless mode by default.
