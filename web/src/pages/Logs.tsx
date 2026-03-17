@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Search, ChevronDown, ChevronRight } from 'lucide-react'
 import { getLogDates, getLogEntries } from '../api/client'
 import type { LogEntry } from '../api/client'
 import { cn } from '../lib/utils'
 import { useI18n } from '../i18n'
+import { useLogSSE } from '../hooks/useLogSSE'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 const LEVEL_LABELS: Record<number, string> = {
@@ -26,12 +27,21 @@ const CATEGORY_COLORS: Record<string, string> = {
   system: 'bg-zinc-500/20 text-zinc-400',
 }
 
+const LEVEL_MAP: Record<string, number> = {
+  trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60,
+}
+
 function formatTime(epoch: number): string {
   const d = new Date(epoch)
   return d.toTimeString().split(' ')[0] ?? ''
 }
 
+function getToday(): string {
+  return new Date().toISOString().split('T')[0]!
+}
+
 const PAGE_SIZE = 100
+const MAX_ENTRIES = 2000
 
 export function Logs() {
   const { t } = useI18n()
@@ -45,8 +55,20 @@ export function Logs() {
   const [total, setTotal] = useState(0)
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
   const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  // Scroll refs
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const topSentinelRef = useRef<HTMLDivElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const isAtBottomRef = useRef(true)
+  const initialLoadDone = useRef(false)
+  // Track total entries fetched via pagination (desc order offset)
+  const fetchedCountRef = useRef(0)
+
+  const isToday = selectedDate === getToday()
 
   // Load date list
   useEffect(() => {
@@ -65,27 +87,55 @@ export function Logs() {
     return () => clearTimeout(searchTimer.current)
   }, [search])
 
-  // Load logs
-  const fetchEntries = useCallback(async (offset = 0, append = false) => {
+  // Track if user is at bottom of scroll
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container
+      isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 40
+    }
+    container.addEventListener('scroll', handleScroll, { passive: true })
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  // Initial load: fetch newest entries (desc order), then reverse for display (oldest on top, newest at bottom)
+  const fetchEntries = useCallback(async () => {
     if (!selectedDate) return
     setLoading(true)
+    initialLoadDone.current = false
     try {
       const result = await getLogEntries(selectedDate, {
         level: level || undefined,
         category: category || undefined,
         search: debouncedSearch || undefined,
-        offset,
+        offset: 0,
         limit: PAGE_SIZE,
+        order: 'desc',
       })
-      setEntries(prev => append ? [...prev, ...result.entries] : result.entries)
+      // Reverse so display order is chronological (oldest first, newest at bottom)
+      const reversed = [...result.entries].reverse()
+      setEntries(reversed)
       setTotal(result.total)
       setHasMore(result.hasMore)
+      fetchedCountRef.current = result.entries.length
+      setExpandedIdx(null)
+
+      // Scroll to bottom after render
+      requestAnimationFrame(() => {
+        const container = scrollContainerRef.current
+        if (container) {
+          container.scrollTop = container.scrollHeight
+          isAtBottomRef.current = true
+        }
+        initialLoadDone.current = true
+      })
     } catch {
-      if (!append) {
-        setEntries([])
-        setTotal(0)
-        setHasMore(false)
-      }
+      setEntries([])
+      setTotal(0)
+      setHasMore(false)
+      fetchedCountRef.current = 0
+      initialLoadDone.current = true
     } finally {
       setLoading(false)
     }
@@ -93,13 +143,108 @@ export function Logs() {
 
   // Reload on filter change
   useEffect(() => {
-    setExpandedIdx(null)
-    fetchEntries(0, false)
+    fetchEntries()
   }, [fetchEntries])
 
-  const handleLoadMore = () => {
-    fetchEntries(entries.length, true)
-  }
+  // Load older entries (prepend to top)
+  const loadOlder = useCallback(async () => {
+    if (!selectedDate || !hasMore || loadingOlder) return
+    setLoadingOlder(true)
+    const container = scrollContainerRef.current
+    const prevScrollHeight = container?.scrollHeight ?? 0
+
+    try {
+      const result = await getLogEntries(selectedDate, {
+        level: level || undefined,
+        category: category || undefined,
+        search: debouncedSearch || undefined,
+        offset: fetchedCountRef.current,
+        limit: PAGE_SIZE,
+        order: 'desc',
+      })
+      // Reverse to chronological and prepend
+      const older = [...result.entries].reverse()
+      fetchedCountRef.current += result.entries.length
+      setEntries(prev => [...older, ...prev])
+      setHasMore(result.hasMore)
+
+      // Restore scroll position after prepend
+      requestAnimationFrame(() => {
+        if (container) {
+          const newScrollHeight = container.scrollHeight
+          container.scrollTop = newScrollHeight - prevScrollHeight
+        }
+      })
+    } catch {
+      // Ignore errors
+    } finally {
+      setLoadingOlder(false)
+    }
+  }, [selectedDate, hasMore, loadingOlder, level, category, debouncedSearch])
+
+  // IntersectionObserver to trigger loading older entries when scrolling to top
+  useEffect(() => {
+    const sentinel = topSentinelRef.current
+    const container = scrollContainerRef.current
+    if (!sentinel || !container) return
+
+    const observer = new IntersectionObserver(
+      (observerEntries) => {
+        if (observerEntries[0]?.isIntersecting && hasMore && !loadingOlder && initialLoadDone.current) {
+          loadOlder()
+        }
+      },
+      { root: container, threshold: 0.1 },
+    )
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasMore, loadingOlder, loadOlder])
+
+  // SSE: filter matching logic
+  const matchesFilters = useCallback((entry: LogEntry): boolean => {
+    if (level) {
+      const minLevel = LEVEL_MAP[level] ?? 0
+      if (entry.level < minLevel) return false
+    }
+    if (category) {
+      const cat = entry.category ?? 'system'
+      if (category === 'system' && entry.category) return false
+      if (category !== 'system' && cat !== category) return false
+    }
+    if (debouncedSearch) {
+      const s = debouncedSearch.toLowerCase()
+      if (!JSON.stringify(entry).toLowerCase().includes(s)) return false
+    }
+    return true
+  }, [level, category, debouncedSearch])
+
+  // SSE: append new log entries
+  const handleSSEEntry = useCallback((entry: LogEntry) => {
+    if (!matchesFilters(entry)) return
+
+    setEntries(prev => {
+      const updated = [...prev, entry]
+      // Enforce memory cap
+      if (updated.length > MAX_ENTRIES) {
+        return updated.slice(updated.length - MAX_ENTRIES)
+      }
+      return updated
+    })
+    setTotal(prev => prev + 1)
+
+    // Auto-scroll if user is at bottom
+    if (isAtBottomRef.current) {
+      requestAnimationFrame(() => {
+        const container = scrollContainerRef.current
+        if (container) {
+          container.scrollTop = container.scrollHeight
+        }
+      })
+    }
+  }, [matchesFilters])
+
+  useLogSSE(isToday, handleSSEEntry)
 
   const categories = [
     { value: '', label: t.logs.allCategories },
@@ -121,7 +266,18 @@ export function Logs() {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Top bar: Title + filters */}
       <div className="p-4 pb-3 border-b border-border shrink-0 space-y-3">
-        <h1 className="text-lg font-semibold">{t.logs.title}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold">{t.logs.title}</h1>
+          {isToday && (
+            <span className="flex items-center gap-1.5 text-xs text-emerald-400">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+              {t.logs.live}
+            </span>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* Date selector */}
           <Select value={selectedDate} onValueChange={setSelectedDate}>
@@ -182,7 +338,7 @@ export function Logs() {
       </div>
 
       {/* Log content */}
-      <div className="flex-1 overflow-y-auto p-4 min-h-0">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 min-h-0">
         <div className="rounded-lg border border-border bg-zinc-950 font-mono text-xs" data-testid="logs-list">
           {entries.length === 0 && !loading ? (
             <div className="text-muted-foreground text-center py-12">
@@ -190,6 +346,13 @@ export function Logs() {
             </div>
           ) : (
             <div className="p-3 space-y-0">
+              {/* Top sentinel for loading older entries */}
+              <div ref={topSentinelRef} className="h-1" />
+              {loadingOlder && (
+                <div className="text-center text-muted-foreground py-2 text-[11px]">
+                  {t.logs.loadOlder}
+                </div>
+              )}
               {entries.map((entry, idx) => {
                 const levelLabel = LEVEL_LABELS[entry.level] ?? String(entry.level)
                 const levelColor = LEVEL_COLORS[entry.level] ?? 'text-zinc-400'
@@ -233,24 +396,16 @@ export function Logs() {
                   </div>
                 )
               })}
+              {/* Bottom anchor for auto-scroll */}
+              <div ref={bottomRef} />
             </div>
           )}
         </div>
 
-        {/* Bottom bar: Total + load more */}
+        {/* Bottom bar: Total */}
         {entries.length > 0 && (
           <div className="flex items-center justify-between mt-3 text-sm text-muted-foreground">
             <span>{total} {t.logs.totalEntries}</span>
-            {hasMore && (
-              <button
-                data-testid="logs-load-more"
-                className="px-3 py-1 rounded-md border border-border hover:bg-accent/50 text-sm"
-                onClick={handleLoadMore}
-                disabled={loading}
-              >
-                {loading ? '...' : t.logs.loadMore}
-              </button>
-            )}
           </div>
         )}
       </div>
