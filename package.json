@@ -13,7 +13,6 @@
     "name": "CodePhiliaX",
     "email": "huanyueyaoqin@qq.com"
   },
-  "license": "ISC",
   "scripts": {
     "dev": "bun run src/index.ts",
     "start": "bun run src/index.ts",
