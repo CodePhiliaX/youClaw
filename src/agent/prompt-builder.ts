@@ -159,7 +159,7 @@ export class PromptBuilder {
     const profile = getBrowserProfile(profileId)
     if (!profile) return null
     const profileDir = resolve(getPaths().browserProfiles, profile.id)
-    return `## Browser Profile\n\nWhen using agent-browser, ALWAYS include \`--profile ${profileDir}\` to use the persistent browser profile "${profile.name}". Example:\n\n\`\`\`bash\nagent-browser --profile ${profileDir} open https://example.com\n\`\`\``
+    return `## Browser Profile\n\nWhen using agent-browser, ALWAYS include \`--headed --profile ${profileDir}\` to use the persistent browser profile "${profile.name}" in headed mode (visible browser window). Example:\n\n\`\`\`bash\nagent-browser --headed --profile ${profileDir} open https://example.com\n\`\`\``
   }
 
 }
