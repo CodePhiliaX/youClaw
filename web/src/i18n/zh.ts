@@ -342,7 +342,7 @@ export const zh: Translations = {
     step1: '点击上方按钮下载 Git 安装包（.zip 压缩文件）',
     step2: '解压缩后运行安装程序（.exe 文件）',
     step3: '按照安装向导提示，一路点击"下一步"即可',
-    step4: '安装完成后会自动检测，无需重启应用',
+    step4: '安装完成后，重启 YouClaw 即可继续使用',
     detecting: '正在检测 Git 安装状态...',
     detected: '已检测到 Git！正在加载...',
   },

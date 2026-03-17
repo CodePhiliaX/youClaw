@@ -340,7 +340,7 @@ export const en = {
     step1: 'Click the button above to download the Git installer (.zip)',
     step2: 'Extract the zip file and run the installer (.exe)',
     step3: 'Follow the wizard — just click "Next" through each step',
-    step4: 'Installation will be detected automatically, no restart needed',
+    step4: 'After installation, restart YouClaw to continue',
     detecting: 'Detecting Git installation...',
     detected: 'Git detected! Loading...',
   },

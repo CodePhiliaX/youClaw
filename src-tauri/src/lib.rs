@@ -43,7 +43,19 @@ fn find_windows_git_bash() -> Option<String> {
         format!("{}\\scoop\\apps\\git\\current\\bin\\bash.exe", user_profile),
     ]);
 
-    if let Ok(output) = std::process::Command::new("where").arg("bash").output() {
+    #[cfg(target_os = "windows")]
+    let where_result = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        std::process::Command::new("where")
+            .arg("bash")
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+    };
+    #[cfg(not(target_os = "windows"))]
+    let where_result = std::process::Command::new("where").arg("bash").output();
+
+    if let Ok(output) = where_result {
         if output.status.success() {
             let content = String::from_utf8_lossy(&output.stdout);
             for line in content.lines() {
