@@ -9,7 +9,7 @@
  */
 
 import { execSync } from 'node:child_process'
-import { mkdirSync, readdirSync, unlinkSync, writeFileSync, copyFileSync, chmodSync, statSync } from 'node:fs'
+import { mkdirSync, readdirSync, unlinkSync, writeFileSync, copyFileSync, chmodSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -113,45 +113,6 @@ function copyBunRuntime() {
 }
 
 copyBunRuntime()
-
-// Download MinGit zip for Windows (bundled as-is so NSIS doesn't drop nested dirs)
-// On non-Windows, creates a placeholder so Tauri resource config doesn't error
-async function downloadMinGit() {
-  const resourcesDir = resolve(root, 'src-tauri', 'resources')
-  mkdirSync(resourcesDir, { recursive: true })
-  const zipDest = resolve(resourcesDir, 'mingit.zip')
-
-  if (process.platform !== 'win32') {
-    // Create an empty placeholder zip so Tauri resource glob doesn't error
-    const { existsSync } = await import('node:fs')
-    if (!existsSync(zipDest)) {
-      // Minimal valid zip (empty archive)
-      const emptyZip = Buffer.from([0x50, 0x4B, 0x05, 0x06, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-      const { writeFileSync: wfs } = await import('node:fs')
-      wfs(zipDest, emptyZip)
-    }
-    console.log('Skipping MinGit download (not Windows)')
-    return
-  }
-
-  const { existsSync } = await import('node:fs')
-  if (existsSync(zipDest) && statSync(zipDest).size > 1000) {
-    console.log('MinGit zip already present, skipping download')
-    return
-  }
-
-  const version = '2.49.0'
-  // Regular MinGit includes MSYS2 runtime with usr/bin/bash.exe
-  // (busybox variant does NOT have bash.exe)
-  const zipName = `MinGit-${version}-64-bit.zip`
-  const url = `https://github.com/git-for-windows/git/releases/download/v${version}.windows.1/${zipName}`
-
-  console.log(`Downloading MinGit ${version}...`)
-  execSync(`curl -fsSL -o "${zipDest}" "${url}"`, { stdio: 'inherit' })
-  console.log('MinGit zip downloaded successfully')
-}
-
-await downloadMinGit()
 
 // 清理 bun build --compile 产生的临时文件
 for (const f of readdirSync(root)) {

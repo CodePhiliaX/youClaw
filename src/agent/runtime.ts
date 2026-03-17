@@ -314,73 +314,16 @@ function setWindowsGitBashPath(bashPath: string, source: string): void {
   safeLog('info', 'Git Bash ready for claude-agent-sdk on Windows', { source, bashPath })
 }
 
-function extractZipOnWindows(zipPath: string, destination: string): boolean {
-  const escapedZip = zipPath.replaceAll("'", "''")
-  const escapedDestination = destination.replaceAll("'", "''")
-  try {
-    mkdirSync(destination, { recursive: true })
-    execSync(
-      `powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Force -LiteralPath '${escapedZip}' -DestinationPath '${escapedDestination}'"`,
-      { timeout: 60_000, stdio: 'pipe' },
-    )
-    return true
-  } catch (err) {
-    safeLog('warn', 'Failed to extract MinGit archive', {
-      zipPath,
-      destination,
-      error: err instanceof Error ? err.message : String(err),
-    })
-    return false
-  }
-}
-
-let _windowsMinGitDownloadTried = false
-
 function ensureWindowsGitBash(): string | null {
   if (process.platform !== 'win32') return null
 
   const existing = process.env.CLAUDE_CODE_GIT_BASH_PATH
   if (existing && existsSync(existing)) {
+    setWindowsGitBashPath(existing, 'environment')
     return existing
   }
 
-  const dataDir = process.env.DATA_DIR
-  const resourcesDir = process.env.RESOURCES_DIR
-  const mingitDir = dataDir ? resolve(dataDir, 'mingit') : null
-
-  // Priority 1: already extracted bundled MinGit
-  const directCandidates = [
-    mingitDir ? resolve(mingitDir, 'usr', 'bin', 'bash.exe') : null,
-    resourcesDir ? resolve(resourcesDir, 'mingit', 'usr', 'bin', 'bash.exe') : null,
-    resourcesDir ? resolve(resourcesDir, '_up_', 'src-tauri', 'resources', 'mingit', 'usr', 'bin', 'bash.exe') : null,
-  ].filter(Boolean) as string[]
-
-  for (const candidate of directCandidates) {
-    if (existsSync(candidate)) {
-      setWindowsGitBashPath(candidate, 'bundled-mingit-dir')
-      return candidate
-    }
-  }
-
-  // Priority 2: extract bundled mingit.zip into DATA_DIR/mingit
-  if (mingitDir && resourcesDir) {
-    const bashPath = resolve(mingitDir, 'usr', 'bin', 'bash.exe')
-    const zipCandidates = [
-      resolve(resourcesDir, 'mingit.zip'),
-      resolve(resourcesDir, 'resources', 'mingit.zip'),
-      resolve(resourcesDir, '_up_', 'src-tauri', 'resources', 'mingit.zip'),
-    ]
-
-    for (const zipPath of zipCandidates) {
-      if (!existsSync(zipPath)) continue
-      if (extractZipOnWindows(zipPath, mingitDir) && existsSync(bashPath)) {
-        setWindowsGitBashPath(bashPath, 'bundled-mingit-zip')
-        return bashPath
-      }
-    }
-  }
-
-  // Priority 3: system Git installation (standard paths + where)
+  // Auto-detect system Git installation only (no bundled MinGit fallback)
   const programFiles = process.env.ProgramFiles || 'C:\\Program Files'
   const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)'
   const localAppData = process.env.LOCALAPPDATA || ''
@@ -406,38 +349,6 @@ function ensureWindowsGitBash(): string | null {
     if (existsSync(candidate)) {
       setWindowsGitBashPath(candidate, 'system-git')
       return candidate
-    }
-  }
-
-  // Priority 4: last-resort auto-download MinGit when running in packaged desktop app
-  if (mingitDir && dataDir && !_windowsMinGitDownloadTried) {
-    _windowsMinGitDownloadTried = true
-    const mingitZipPath = resolve(dataDir, 'mingit.zip')
-    const version = '2.49.0'
-    const escapedZipPath = mingitZipPath.replaceAll("'", "''")
-    const urls = [
-      `https://cdn.chat2db-ai.com/youclaw/website/MinGit-${version}-64-bit.zip`,
-      `https://github.com/git-for-windows/git/releases/download/v${version}.windows.1/MinGit-${version}-64-bit.zip`,
-    ]
-    for (const url of urls) {
-      const escapedUrl = url.replaceAll("'", "''")
-      try {
-        safeLog('info', 'Downloading MinGit fallback for Windows', { url, mingitZipPath })
-        execSync(
-          `powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri '${escapedUrl}' -OutFile '${escapedZipPath}'"`,
-          { timeout: 180_000, stdio: 'pipe' },
-        )
-        const bashPath = resolve(mingitDir, 'usr', 'bin', 'bash.exe')
-        if (extractZipOnWindows(mingitZipPath, mingitDir) && existsSync(bashPath)) {
-          setWindowsGitBashPath(bashPath, 'downloaded-mingit')
-          return bashPath
-        }
-      } catch (err) {
-        safeLog('warn', 'Failed to download MinGit fallback on Windows', {
-          url,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
     }
   }
 

@@ -11,6 +11,11 @@ use tauri_plugin_store::StoreExt;
 use std::sync::Mutex;
 use std::time::Duration;
 
+#[cfg(target_os = "windows")]
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+#[cfg(target_os = "windows")]
+use tauri_plugin_opener::OpenerExt;
+
 /// Sidecar child process handle
 struct SidecarState(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 
@@ -18,6 +23,121 @@ struct SidecarState(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 struct SidecarEvent {
     status: String,
     message: String,
+}
+
+fn find_windows_git_bash() -> Option<String> {
+    use std::path::Path;
+
+    let mut candidates: Vec<String> = vec![];
+
+    if let Ok(path) = std::env::var("CLAUDE_CODE_GIT_BASH_PATH") {
+        candidates.push(path);
+    }
+
+    let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_default();
+    let user_profile = std::env::var("USERPROFILE").unwrap_or_default();
+    let program_files = std::env::var("ProgramFiles")
+        .unwrap_or_else(|_| "C:\\Program Files".into());
+    let program_files_x86 = std::env::var("ProgramFiles(x86)")
+        .unwrap_or_else(|_| "C:\\Program Files (x86)".into());
+
+    candidates.extend([
+        format!("{}\\Git\\bin\\bash.exe", program_files),
+        format!("{}\\Git\\bin\\bash.exe", program_files_x86),
+        format!("{}\\Programs\\Git\\bin\\bash.exe", local_app_data),
+        format!("{}\\scoop\\apps\\git\\current\\bin\\bash.exe", user_profile),
+    ]);
+
+    if let Ok(output) = std::process::Command::new("where").arg("bash").output() {
+        if output.status.success() {
+            let content = String::from_utf8_lossy(&output.stdout);
+            for line in content.lines() {
+                let candidate = line.trim();
+                if !candidate.is_empty() {
+                    candidates.push(candidate.to_string());
+                }
+            }
+        }
+    }
+
+    for candidate in candidates {
+        if Path::new(&candidate).exists() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+fn add_windows_git_paths(extra_paths: &mut Vec<String>, bash_path: &str) {
+    use std::path::{Path, PathBuf};
+
+    fn push_if_exists(extra_paths: &mut Vec<String>, path: PathBuf) {
+        if path.exists() {
+            let path_str = path.to_string_lossy().to_string();
+            if !extra_paths.contains(&path_str) {
+                extra_paths.push(path_str);
+            }
+        }
+    }
+
+    let bash_path = Path::new(bash_path);
+    let Some(bash_dir) = bash_path.parent() else { return };
+
+    // For ...\\usr\\bin\\bash.exe -> git root is parent of usr
+    // For ...\\bin\\bash.exe -> git root is parent of bin
+    let git_root = if bash_dir.to_string_lossy().to_ascii_lowercase().ends_with("\\usr\\bin") {
+        bash_dir.parent().and_then(|usr| usr.parent())
+    } else {
+        bash_dir.parent()
+    };
+
+    let Some(git_root) = git_root else { return };
+    push_if_exists(extra_paths, git_root.join("bin"));
+    push_if_exists(extra_paths, git_root.join("cmd"));
+    push_if_exists(extra_paths, git_root.join("usr").join("bin"));
+    push_if_exists(extra_paths, git_root.join("mingw64").join("bin"));
+}
+
+#[cfg(target_os = "windows")]
+fn prompt_windows_git_install(app: &AppHandle) {
+    let is_zh = sys_locale::get_locale()
+        .map(|l| l.starts_with("zh"))
+        .unwrap_or(false);
+
+    let (title, message, install_label, later_label) = if is_zh {
+        (
+            "缺少 Git 环境",
+            "检测到当前系统未安装 Git Bash，Claude Agent SDK 在 Windows 上需要 Git 才能正常执行命令。\n\n点击“下载安装”后将打开官方安装包下载地址，安装完成后重启 YouClaw。",
+            "下载安装",
+            "稍后处理",
+        )
+    } else {
+        (
+            "Git is required",
+            "Git Bash was not found on this system. Claude Agent SDK on Windows requires Git to run shell commands.\n\nClick \"Install\" to open the installer download page, then restart YouClaw after installation.",
+            "Install",
+            "Later",
+        )
+    };
+
+    let app_handle = app.clone();
+    app.dialog()
+        .message(message)
+        .title(title)
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            install_label.to_string(),
+            later_label.to_string(),
+        ))
+        .show(move |install_now| {
+            if install_now {
+                let url = "https://cdn.chat2db-ai.com/youclaw/website/Git-2.53.0.2-64-bit.exe";
+                if let Err(err) = app_handle.opener().open_url(url, None::<&str>) {
+                    log::error!("Failed to open Git installer URL: {}", err);
+                }
+            }
+        });
 }
 
 /// Spawn the sidecar backend
@@ -83,133 +203,12 @@ fn spawn_sidecar(app: &AppHandle) -> Result<u16, String> {
                     extra_paths.push(nodejs_dir);
                 }
             }
-
-            // Auto-detect Git for Windows (needed for claude-agent-sdk shell commands)
-            // Priority 1: Bundled MinGit — shipped as mingit.zip, extracted to DATA_DIR/mingit on first launch
-            let mut git_bash_found = false;
-            {
-                // Determine mingit extraction target directory
-                let mingit_dir = app.path().app_data_dir().ok()
-                    .map(|d| format!("{}\\mingit", d.to_string_lossy().to_string().trim_start_matches("\\\\?\\")));
-
-                log::info!("[mingit] target dir: {:?}", mingit_dir);
-
-                if let Some(ref mingit_dir) = mingit_dir {
-                    let bash_path = format!("{}\\usr\\bin\\bash.exe", mingit_dir);
-                    // Extract from bundled zip if not yet extracted
-                    if !std::path::Path::new(&bash_path).exists() {
-                        log::info!("[mingit] bash.exe not found at {}, attempting extraction", bash_path);
-                        if let Ok(resource_dir) = app.path().resource_dir() {
-                            let mut res_str = resource_dir.to_string_lossy().to_string();
-                            if res_str.starts_with("\\\\?\\") {
-                                res_str = res_str[4..].to_string();
-                            }
-                            // Try multiple possible locations for the zip
-                            let zip_candidates = [
-                                format!("{}\\mingit.zip", res_str),
-                                format!("{}\\resources\\mingit.zip", res_str),
-                                format!("{}\\_up_\\src-tauri\\resources\\mingit.zip", res_str),
-                            ];
-                            log::info!("[mingit] resource_dir: {}, checking zip candidates: {:?}", res_str, zip_candidates);
-
-                            // Also list resource dir contents for debugging
-                            if let Ok(entries) = std::fs::read_dir(&res_str) {
-                                let files: Vec<String> = entries
-                                    .filter_map(|e| e.ok())
-                                    .map(|e| e.file_name().to_string_lossy().to_string())
-                                    .collect();
-                                log::info!("[mingit] resource_dir contents: {:?}", files);
-                            }
-
-                            for zip_path in &zip_candidates {
-                                log::info!("[mingit] checking zip at: {} -> exists: {}", zip_path, std::path::Path::new(zip_path).exists());
-                                if std::path::Path::new(zip_path).exists() {
-                                    log::info!("[mingit] Extracting {} to {}", zip_path, mingit_dir);
-                                    let _ = std::fs::create_dir_all(mingit_dir);
-                                    let ps_cmd = format!(
-                                        "Expand-Archive -Force -Path '{}' -DestinationPath '{}'",
-                                        zip_path, mingit_dir
-                                    );
-                                    match std::process::Command::new("powershell")
-                                        .args(["-NoProfile", "-Command", &ps_cmd])
-                                        .output()
-                                    {
-                                        Ok(output) => {
-                                            if output.status.success() {
-                                                log::info!("[mingit] extracted successfully");
-                                            } else {
-                                                log::error!("[mingit] extraction failed: stdout={}, stderr={}",
-                                                    String::from_utf8_lossy(&output.stdout),
-                                                    String::from_utf8_lossy(&output.stderr));
-                                            }
-                                        }
-                                        Err(e) => log::error!("[mingit] PowerShell execution failed: {}", e),
-                                    }
-                                    break;
-                                }
-                            }
-                        } else {
-                            log::warn!("[mingit] failed to get resource_dir");
-                        }
-                    }
-                    // Now check if bash.exe is available
-                    if std::path::Path::new(&bash_path).exists() {
-                        log::info!("[mingit] bash.exe found, setting CLAUDE_CODE_GIT_BASH_PATH");
-                        env_vars.push(("CLAUDE_CODE_GIT_BASH_PATH".into(), bash_path));
-                        let cmd_dir = format!("{}\\cmd", mingit_dir);
-                        let usr_bin_dir = format!("{}\\usr\\bin", mingit_dir);
-                        let mingw64_bin_dir = format!("{}\\mingw64\\bin", mingit_dir);
-                        for dir in [&cmd_dir, &usr_bin_dir, &mingw64_bin_dir] {
-                            if std::path::Path::new(dir).exists() && !extra_paths.contains(dir) {
-                                extra_paths.push(dir.clone());
-                            }
-                        }
-                        git_bash_found = true;
-                    } else {
-                        log::warn!("[mingit] bash.exe still not found after extraction attempt");
-                    }
-                }
-            }
-
-            // Priority 2: System Git installation
-            if !git_bash_found {
-                let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_default();
-                let program_files = std::env::var("ProgramFiles")
-                    .unwrap_or_else(|_| "C:\\Program Files".into());
-                let program_files_x86 = std::env::var("ProgramFiles(x86)")
-                    .unwrap_or_else(|_| "C:\\Program Files (x86)".into());
-
-                let git_candidates = [
-                    format!("{}\\Git\\bin\\bash.exe", program_files),
-                    format!("{}\\Git\\bin\\bash.exe", program_files_x86),
-                    format!("{}\\Programs\\Git\\bin\\bash.exe", local_app_data),
-                ];
-
-                for candidate in &git_candidates {
-                    if std::path::Path::new(candidate).exists() {
-                        log::info!("Git Bash found at: {}", candidate);
-                        env_vars.push(("CLAUDE_CODE_GIT_BASH_PATH".into(), candidate.clone()));
-                        // Add Git's bin/ and usr/bin/ to PATH for unix utilities (cat, grep, etc.)
-                        if let Some(bin_dir) = std::path::Path::new(candidate).parent() {
-                            let bin_str = bin_dir.to_string_lossy().to_string();
-                            if !extra_paths.contains(&bin_str) {
-                                extra_paths.push(bin_str);
-                            }
-                            // usr/bin is sibling to bin/ under Git install root
-                            if let Some(git_root) = bin_dir.parent() {
-                                let usr_bin = format!("{}\\usr\\bin", git_root.to_string_lossy());
-                                if std::path::Path::new(&usr_bin).exists() && !extra_paths.contains(&usr_bin) {
-                                    extra_paths.push(usr_bin);
-                                }
-                            }
-                        }
-                        git_bash_found = true;
-                        break;
-                    }
-                }
-            }
-            if !git_bash_found {
-                log::warn!("Git Bash not found (neither bundled MinGit nor system Git) — claude-agent-sdk shell commands may fail on Windows");
+            if let Some(git_bash_path) = find_windows_git_bash() {
+                log::info!("Git Bash found at: {}", git_bash_path);
+                env_vars.push(("CLAUDE_CODE_GIT_BASH_PATH".into(), git_bash_path.clone()));
+                add_windows_git_paths(&mut extra_paths, &git_bash_path);
+            } else {
+                log::warn!("Git Bash not found on Windows — claude-agent-sdk shell commands may fail");
             }
         } else {
             // Resolve nvm's actual node bin path (nvm does not create ~/.nvm/current)
@@ -496,6 +495,14 @@ pub fn run() {
         ])
         .setup(|app| {
             let handle = app.handle().clone();
+
+            #[cfg(target_os = "windows")]
+            {
+                if find_windows_git_bash().is_none() {
+                    log::warn!("Git Bash not found during startup check");
+                    prompt_windows_git_install(&handle);
+                }
+            }
 
             // macOS: overlay titlebar style (traffic lights over content, hidden title)
             #[cfg(target_os = "macos")]
