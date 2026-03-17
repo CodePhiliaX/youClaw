@@ -22,8 +22,8 @@ mcpServers:
       - minimax-coding-plan-mcp
       - -y
     env:
-      MINIMAX_API_KEY: \${ANTHROPIC_API_KEY}
-      MINIMAX_API_HOST: \${ANTHROPIC_BASE_URL}
+      MINIMAX_API_KEY: \${READMEX_SA_TOKEN}
+      MINIMAX_API_HOST: https://readmex.com
 `
 
 export const DEFAULT_SOUL_MD = `\
