@@ -115,13 +115,18 @@ function copyBunRuntime() {
 copyBunRuntime()
 
 // Download MinGit for Windows (bundled so claude-agent-sdk works without system Git)
+// On non-Windows, just ensures the directory exists so Tauri resource glob doesn't fail
 async function downloadMinGit() {
+  const mingitDir = resolve(root, 'src-tauri', 'resources', 'mingit')
+  mkdirSync(mingitDir, { recursive: true })
+
   if (process.platform !== 'win32') {
+    // Ensure at least one file exists so Tauri resource glob doesn't error
+    writeFileSync(resolve(mingitDir, '.gitkeep'), '', 'utf-8')
     console.log('Skipping MinGit download (not Windows)')
     return
   }
 
-  const mingitDir = resolve(root, 'src-tauri', 'resources', 'mingit')
   const mingitBash = resolve(mingitDir, 'usr', 'bin', 'bash.exe')
 
   // Already extracted?
@@ -139,7 +144,6 @@ async function downloadMinGit() {
   console.log(`Downloading MinGit ${version}...`)
   execSync(`curl -fsSL -o "${zipPath}" "${url}"`, { stdio: 'inherit' })
 
-  mkdirSync(mingitDir, { recursive: true })
   console.log(`Extracting MinGit to ${mingitDir}...`)
   execSync(`powershell -Command "Expand-Archive -Force '${zipPath}' '${mingitDir}'"`, { stdio: 'inherit' })
 

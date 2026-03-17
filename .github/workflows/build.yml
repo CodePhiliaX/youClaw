@@ -118,6 +118,11 @@ jobs:
           chmod 755 src-tauri/resources/bun-runtime/bun
           echo "Embedded Bun runtime: $(file src-tauri/resources/bun-runtime/bun)"
 
+      - name: Create empty mingit directory (Windows-only resource)
+        run: |
+          mkdir -p src-tauri/resources/mingit
+          touch src-tauri/resources/mingit/.gitkeep
+
       - name: Import macOS certificates
         uses: apple-actions/import-codesign-certs@v3
         with:
