@@ -181,6 +181,7 @@ export const en = {
     installing: 'Installing...',
     installSuccess: 'Installed',
     installFailed: 'Install failed',
+    recheckDeps: 'Recheck',
     configureEnv: 'Configure',
     savingEnv: 'Saving...',
     envSaved: 'Saved',

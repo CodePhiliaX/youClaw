@@ -10,6 +10,8 @@ dependencies:
 install:
   curl: "curl -LsSf https://astral.sh/uv/install.sh | sh"
   brew: "brew install uv"
+  powershell: "powershell -ExecutionPolicy ByPass -c \"irm https://astral.sh/uv/install.ps1 | iex\""
+  winget: "winget install astral-sh.uv"
 ---
 
 # Web Search

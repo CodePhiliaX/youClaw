@@ -349,9 +349,20 @@ export function Skills() {
                   {/* Missing dependencies with install commands */}
                   {selectedSkill.eligibilityDetail?.dependencies.passed === false && selectedSkill.frontmatter.install && Object.keys(selectedSkill.frontmatter.install).length > 0 && (
                     <div className="pt-2 border-t border-border/50 space-y-2">
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                        <Download className="h-3.5 w-3.5" />
-                        {t.skills.install}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                          <Download className="h-3.5 w-3.5" />
+                          {t.skills.install}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={loadSkills}
+                          className="h-6 px-2 text-xs text-muted-foreground"
+                        >
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                          {t.skills.recheckDeps}
+                        </Button>
                       </div>
                       {Object.entries(selectedSkill.frontmatter.install).map(([method, command]) => (
                         <InstallButton key={method} method={method} command={command} skillName={selectedSkill.name} onInstalled={loadSkills} />

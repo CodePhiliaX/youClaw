@@ -183,6 +183,7 @@ export const zh: Translations = {
     installing: '安装中...',
     installSuccess: '已安装',
     installFailed: '安装失败',
+    recheckDeps: '重新检查',
     configureEnv: '配置',
     savingEnv: '保存中...',
     envSaved: '已保存',
