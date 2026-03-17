@@ -18,7 +18,8 @@
         "height": 900,
         "minWidth": 800,
         "minHeight": 600,
-        "decorations": true
+        "decorations": true,
+        "visible": false
       }
     ],
     "security": {
@@ -44,7 +45,8 @@
       "../skills/**/*",
       "../prompts/**/*",
       "../node_modules/@anthropic-ai/claude-agent-sdk/cli.js",
-      "../src-tauri/resources/bun-runtime/*"
+      "../src-tauri/resources/bun-runtime/*",
+      "../src-tauri/resources/mingit/**/*"
     ],
     "macOS": {
       "minimumSystemVersion": "10.15"

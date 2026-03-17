@@ -25,7 +25,7 @@ import { useI18n } from "@/i18n";
 import { useAppStore } from "@/stores/app";
 import { Bot, Globe, PlusIcon } from "lucide-react";
 
-const MAX_FILES = 5;
+const MAX_FILES = 10;
 
 // Attachment button that directly opens the file browser
 function AddAttachmentButton() {
@@ -112,7 +112,7 @@ export function ChatInput() {
     <div className="bg-background px-5 py-3">
       <PromptInput
         onSubmit={handleSubmit}
-        accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv"
+        accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint"
         maxFiles={MAX_FILES}
         maxFileSize={10 * 1024 * 1024}
       >

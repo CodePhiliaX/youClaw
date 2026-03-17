@@ -13,6 +13,8 @@
     "opener:default",
     "updater:default",
     "process:default",
-    "deep-link:default"
+    "deep-link:default",
+    "dialog:default",
+    "fs:default"
   ]
 }

@@ -1,7 +1,17 @@
 // Local type definitions, replacing ai package dependency
 type ChatStatus = "submitted" | "streaming" | "ready" | "error";
-type FileUIPart = { type: "file"; filename: string; url: string; mediaType: string };
-type SourceDocumentUIPart = { type: "source-document"; sourceId: string; title: string; url?: string };
+type FileUIPart = {
+  type: "file";
+  filename: string;
+  url: string;
+  mediaType: string;
+};
+type SourceDocumentUIPart = {
+  type: "source-document";
+  sourceId: string;
+  title: string;
+  url?: string;
+};
 import type {
   ChangeEvent,
   ChangeEventHandler,
@@ -16,6 +26,7 @@ import type {
   RefObject,
 } from "react";
 
+import { isTauri } from "@/api/transport";
 import {
   Command,
   CommandEmpty,
@@ -99,6 +110,106 @@ const convertBlobUrlToDataUrl = async (url: string): Promise<string | null> => {
 };
 
 // ============================================================================
+// Tauri native file dialog helpers
+// ============================================================================
+
+const MIME_TO_EXTENSIONS: Record<string, string[]> = {
+  "image/jpeg": ["jpg", "jpeg"],
+  "image/png": ["png"],
+  "image/gif": ["gif"],
+  "image/webp": ["webp"],
+  "image/svg+xml": ["svg"],
+  "image/bmp": ["bmp"],
+  "image/tiff": ["tiff", "tif"],
+  "application/pdf": ["pdf"],
+  "text/plain": ["txt", "text", "log"],
+  "text/markdown": ["md", "markdown"],
+  "text/csv": ["csv"],
+  "text/html": ["html", "htm"],
+  "application/json": ["json"],
+  "application/xml": ["xml"],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ["docx"],
+  "application/msword": ["doc"],
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ["xlsx"],
+  "application/vnd.ms-excel": ["xls"],
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": ["pptx"],
+  "application/vnd.ms-powerpoint": ["ppt"],
+};
+
+const EXTENSION_TO_MIME: Record<string, string> = {};
+for (const [mime, exts] of Object.entries(MIME_TO_EXTENSIONS)) {
+  for (const ext of exts) {
+    EXTENSION_TO_MIME[ext] = mime;
+  }
+}
+
+interface DialogFilter {
+  name: string;
+  extensions: string[];
+}
+
+function mimeAcceptToDialogFilters(accept: string | undefined): DialogFilter[] {
+  if (!accept || accept.trim() === "") return [];
+
+  const patterns = accept
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const allExtensions: string[] = [];
+
+  for (const pattern of patterns) {
+    if (pattern.endsWith("/*")) {
+      // Wildcard like "image/*"
+      const prefix = pattern.slice(0, -2); // "image"
+      for (const [mime, exts] of Object.entries(MIME_TO_EXTENSIONS)) {
+        if (mime.startsWith(prefix + "/")) {
+          allExtensions.push(...exts);
+        }
+      }
+    } else if (MIME_TO_EXTENSIONS[pattern]) {
+      allExtensions.push(...MIME_TO_EXTENSIONS[pattern]);
+    }
+  }
+
+  if (allExtensions.length === 0) return [];
+  // Deduplicate
+  const unique = [...new Set(allExtensions)];
+  return [{ name: "Allowed files", extensions: unique }];
+}
+
+function getMimeFromPath(path: string): string {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  return EXTENSION_TO_MIME[ext] ?? "application/octet-stream";
+}
+
+async function openTauriFileDialog(
+  accept: string | undefined,
+  multiple: boolean | undefined,
+): Promise<File[]> {
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const { readFile } = await import("@tauri-apps/plugin-fs");
+
+  const filters = mimeAcceptToDialogFilters(accept);
+  const result = await open({
+    multiple: multiple ?? false,
+    directory: false,
+    filters: filters.length > 0 ? filters : undefined,
+  });
+
+  if (!result) return [];
+  const paths = Array.isArray(result) ? result : [result];
+
+  const files: File[] = [];
+  for (const filePath of paths) {
+    const bytes = await readFile(filePath);
+    const name = filePath.split(/[\\/]/).pop() ?? "file";
+    const mime = getMimeFromPath(filePath);
+    files.push(new File([bytes], name, { type: mime }));
+  }
+  return files;
+}
+
+// ============================================================================
 // Provider Context & Types
 // ============================================================================
 
@@ -123,22 +234,22 @@ export interface PromptInputControllerProps {
   /** INTERNAL: Allows PromptInput to register its file textInput + "open" callback */
   __registerFileInput: (
     ref: RefObject<HTMLInputElement | null>,
-    open: () => void
+    open: () => void,
   ) => void;
 }
 
 const PromptInputController = createContext<PromptInputControllerProps | null>(
-  null
+  null,
 );
 const ProviderAttachmentsContext = createContext<AttachmentsContext | null>(
-  null
+  null,
 );
 
 export const usePromptInputController = () => {
   const ctx = useContext(PromptInputController);
   if (!ctx) {
     throw new Error(
-      "Wrap your component inside <PromptInputProvider> to use usePromptInputController()."
+      "Wrap your component inside <PromptInputProvider> to use usePromptInputController().",
     );
   }
   return ctx;
@@ -152,7 +263,7 @@ export const useProviderAttachments = () => {
   const ctx = useContext(ProviderAttachmentsContext);
   if (!ctx) {
     throw new Error(
-      "Wrap your component inside <PromptInputProvider> to use useProviderAttachments()."
+      "Wrap your component inside <PromptInputProvider> to use useProviderAttachments().",
     );
   }
   return ctx;
@@ -240,7 +351,7 @@ export const PromptInputProvider = ({
         }
       }
     },
-    []
+    [],
   );
 
   const openFileDialog = useCallback(() => {
@@ -256,7 +367,7 @@ export const PromptInputProvider = ({
       openFileDialog,
       remove,
     }),
-    [attachmentFiles, add, remove, clear, openFileDialog]
+    [attachmentFiles, add, remove, clear, openFileDialog],
   );
 
   const __registerFileInput = useCallback(
@@ -264,7 +375,7 @@ export const PromptInputProvider = ({
       fileInputRef.current = ref.current;
       openRef.current = open;
     },
-    []
+    [],
   );
 
   const controller = useMemo<PromptInputControllerProps>(
@@ -277,7 +388,7 @@ export const PromptInputProvider = ({
         value: textInput,
       },
     }),
-    [textInput, clearInput, attachments, __registerFileInput]
+    [textInput, clearInput, attachments, __registerFileInput],
   );
 
   return (
@@ -302,7 +413,7 @@ export const usePromptInputAttachments = () => {
   const context = local ?? provider;
   if (!context) {
     throw new Error(
-      "usePromptInputAttachments must be used within a PromptInput or PromptInputProvider"
+      "usePromptInputAttachments must be used within a PromptInput or PromptInputProvider",
     );
   }
   return context;
@@ -326,7 +437,7 @@ export const usePromptInputReferencedSources = () => {
   const ctx = useContext(LocalReferencedSourcesContext);
   if (!ctx) {
     throw new Error(
-      "usePromptInputReferencedSources must be used within a LocalReferencedSourcesContext.Provider"
+      "usePromptInputReferencedSources must be used within a LocalReferencedSourcesContext.Provider",
     );
   }
   return ctx;
@@ -349,7 +460,7 @@ export const PromptInputActionAddAttachments = ({
       e.preventDefault();
       attachments.openFileDialog();
     },
-    [attachments]
+    [attachments],
   );
 
   return (
@@ -385,7 +496,7 @@ export type PromptInputProps = Omit<
   }) => void;
   onSubmit: (
     message: PromptInputMessage,
-    event: FormEvent<HTMLFormElement>
+    event: FormEvent<HTMLFormElement>,
   ) => void | Promise<void>;
 };
 
@@ -426,10 +537,6 @@ export const PromptInput = ({
     filesRef.current = files;
   }, [files]);
 
-  const openFileDialogLocal = useCallback(() => {
-    inputRef.current?.click();
-  }, []);
-
   const matchesAccept = useCallback(
     (f: File) => {
       if (!accept || accept.trim() === "") {
@@ -450,7 +557,7 @@ export const PromptInput = ({
         return f.type === pattern;
       });
     },
-    [accept]
+    [accept],
   );
 
   const addLocal = useCallback(
@@ -501,7 +608,7 @@ export const PromptInput = ({
         return [...prev, ...next];
       });
     },
-    [matchesAccept, maxFiles, maxFileSize, onError]
+    [matchesAccept, maxFiles, maxFileSize, onError],
   );
 
   const removeLocal = useCallback(
@@ -513,7 +620,7 @@ export const PromptInput = ({
         }
         return prev.filter((file) => file.id !== id);
       }),
-    []
+    [],
   );
 
   // Wrapper that validates files before calling provider's add
@@ -557,7 +664,7 @@ export const PromptInput = ({
         controller?.attachments.add(capped);
       }
     },
-    [matchesAccept, maxFileSize, maxFiles, onError, files.length, controller]
+    [matchesAccept, maxFileSize, maxFiles, onError, files.length, controller],
   );
 
   const clearAttachments = useCallback(
@@ -572,16 +679,27 @@ export const PromptInput = ({
             }
             return [];
           }),
-    [usingProvider, controller]
+    [usingProvider, controller],
   );
 
   const clearReferencedSources = useCallback(
     () => setReferencedSources([]),
-    []
+    [],
   );
 
   const add = usingProvider ? addWithProviderValidation : addLocal;
   const remove = usingProvider ? controller.attachments.remove : removeLocal;
+
+  const openFileDialogLocal = useCallback(() => {
+    if (isTauri) {
+      openTauriFileDialog(accept, multiple).then((files) => {
+        if (files.length > 0) add(files);
+      });
+      return;
+    }
+    inputRef.current?.click();
+  }, [accept, multiple, add]);
+
   const openFileDialog = usingProvider
     ? controller.attachments.openFileDialog
     : openFileDialogLocal;
@@ -596,8 +714,8 @@ export const PromptInput = ({
     if (!usingProvider) {
       return;
     }
-    controller.__registerFileInput(inputRef, () => inputRef.current?.click());
-  }, [usingProvider, controller]);
+    controller.__registerFileInput(inputRef, openFileDialogLocal);
+  }, [usingProvider, controller, openFileDialogLocal]);
 
   // Note: File input cannot be programmatically set for security reasons
   // The syncHiddenInput prop is no longer functional
@@ -676,7 +794,7 @@ export const PromptInput = ({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup only on unmount; filesRef always current
-    [usingProvider]
+    [usingProvider],
   );
 
   const handleChange: ChangeEventHandler<HTMLInputElement> = useCallback(
@@ -687,7 +805,7 @@ export const PromptInput = ({
       // Reset input value to allow selecting files that were previously removed
       event.currentTarget.value = "";
     },
-    [add]
+    [add],
   );
 
   const attachmentsCtx = useMemo<AttachmentsContext>(
@@ -699,7 +817,7 @@ export const PromptInput = ({
       openFileDialog,
       remove,
     }),
-    [files, add, remove, clearAttachments, openFileDialog]
+    [files, add, remove, clearAttachments, openFileDialog],
   );
 
   const refsCtx = useMemo<ReferencedSourcesContext>(
@@ -717,7 +835,7 @@ export const PromptInput = ({
       },
       sources: referencedSources,
     }),
-    [referencedSources, clearReferencedSources]
+    [referencedSources, clearReferencedSources],
   );
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = useCallback(
@@ -751,7 +869,7 @@ export const PromptInput = ({
               };
             }
             return item;
-          })
+          }),
         );
 
         const result = onSubmit({ files: convertedFiles, text }, event);
@@ -778,7 +896,7 @@ export const PromptInput = ({
         // Don't clear on error - user may want to retry
       }
     },
-    [usingProvider, controller, files, onSubmit, clear]
+    [usingProvider, controller, files, onSubmit, clear],
   );
 
   // Render with or without local provider
@@ -865,7 +983,7 @@ export const PromptInputTextarea = ({
         // Check if the submit button is disabled before submitting
         const { form } = e.currentTarget;
         const submitButton = form?.querySelector(
-          'button[type="submit"]'
+          'button[type="submit"]',
         ) as HTMLButtonElement | null;
         if (submitButton?.disabled) {
           return;
@@ -887,7 +1005,7 @@ export const PromptInputTextarea = ({
         }
       }
     },
-    [onKeyDown, attachments]
+    [onKeyDown, attachments],
   );
 
   const handlePaste: ClipboardEventHandler<HTMLTextAreaElement> = useCallback(
@@ -914,16 +1032,18 @@ export const PromptInputTextarea = ({
         attachments.add(files);
       }
     },
-    [attachments]
+    [attachments],
   );
 
   const handleCompositionEnd = useCallback(() => {
     // Delay resetting the flag so the Enter keydown that finalizes
     // IME composition is still treated as "composing" and ignored.
-    // In Chrome, compositionend fires before the final keydown.
+    // In some browsers/WebViews, compositionend fires and setTimeout(0)
+    // resolves before the final Enter keydown arrives, so we use a
+    // longer delay to reliably catch it.
     setTimeout(() => {
       isComposingRef.current = false;
-    }, 0);
+    }, 100);
   }, []);
   const handleCompositionStart = useCallback(() => {
     isComposingRef.current = true;
@@ -1132,7 +1252,7 @@ export const PromptInputSubmit = ({
       }
       onClick?.(e);
     },
-    [isGenerating, onStop, onClick]
+    [isGenerating, onStop, onClick],
   );
 
   return (
@@ -1168,7 +1288,7 @@ export const PromptInputSelectTrigger = ({
     className={cn(
       "border-none bg-transparent font-medium text-muted-foreground shadow-none transition-colors",
       "hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground",
-      className
+      className,
     )}
     {...props}
   />
@@ -1218,7 +1338,7 @@ export type PromptInputHoverCardTriggerProps = ComponentProps<
 >;
 
 export const PromptInputHoverCardTrigger = (
-  props: PromptInputHoverCardTriggerProps
+  props: PromptInputHoverCardTriggerProps,
 ) => <HoverCardTrigger {...props} />;
 
 export type PromptInputHoverCardContentProps = ComponentProps<
@@ -1257,7 +1377,7 @@ export const PromptInputTabLabel = ({
   <h3
     className={cn(
       "mb-2 px-3 font-medium text-muted-foreground text-xs",
-      className
+      className,
     )}
     {...props}
   />
@@ -1281,7 +1401,7 @@ export const PromptInputTabItem = ({
   <div
     className={cn(
       "flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent",
-      className
+      className,
     )}
     {...props}
   />

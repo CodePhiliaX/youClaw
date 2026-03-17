@@ -83,6 +83,80 @@ fn spawn_sidecar(app: &AppHandle) -> Result<u16, String> {
                     extra_paths.push(nodejs_dir);
                 }
             }
+
+            // Auto-detect Git for Windows (needed for claude-agent-sdk shell commands)
+            // Priority 1: Bundled MinGit in resources directory
+            let mut git_bash_found = false;
+            if let Ok(resource_dir) = app.path().resource_dir() {
+                let mut res_str = resource_dir.to_string_lossy().to_string();
+                if res_str.starts_with("\\\\?\\") {
+                    res_str = res_str[4..].to_string();
+                }
+                // Tauri 2 converts ../ to _up_/, so check both possible locations
+                let mingit_candidates = [
+                    format!("{}\\mingit", res_str),
+                    format!("{}\\_up_\\src-tauri\\resources\\mingit", res_str),
+                ];
+                for mingit_dir in &mingit_candidates {
+                    // MinGit busybox variant has bash.exe at mingw64/bin/bash.exe
+                    let bash_path = format!("{}\\mingw64\\bin\\bash.exe", mingit_dir);
+                    if std::path::Path::new(&bash_path).exists() {
+                        log::info!("Bundled MinGit (busybox) found at: {}", mingit_dir);
+                        env_vars.push(("CLAUDE_CODE_GIT_BASH_PATH".into(), bash_path));
+                        // Add MinGit directories to PATH
+                        let cmd_dir = format!("{}\\cmd", mingit_dir);
+                        let mingw64_bin_dir = format!("{}\\mingw64\\bin", mingit_dir);
+                        for dir in [&cmd_dir, &mingw64_bin_dir] {
+                            if std::path::Path::new(dir).exists() && !extra_paths.contains(dir) {
+                                extra_paths.push(dir.clone());
+                            }
+                        }
+                        git_bash_found = true;
+                        break;
+                    }
+                }
+            }
+
+            // Priority 2: System Git installation
+            if !git_bash_found {
+                let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_default();
+                let program_files = std::env::var("ProgramFiles")
+                    .unwrap_or_else(|_| "C:\\Program Files".into());
+                let program_files_x86 = std::env::var("ProgramFiles(x86)")
+                    .unwrap_or_else(|_| "C:\\Program Files (x86)".into());
+
+                let git_candidates = [
+                    format!("{}\\Git\\bin\\bash.exe", program_files),
+                    format!("{}\\Git\\bin\\bash.exe", program_files_x86),
+                    format!("{}\\Programs\\Git\\bin\\bash.exe", local_app_data),
+                ];
+
+                for candidate in &git_candidates {
+                    if std::path::Path::new(candidate).exists() {
+                        log::info!("Git Bash found at: {}", candidate);
+                        env_vars.push(("CLAUDE_CODE_GIT_BASH_PATH".into(), candidate.clone()));
+                        // Add Git's bin/ and usr/bin/ to PATH for unix utilities (cat, grep, etc.)
+                        if let Some(bin_dir) = std::path::Path::new(candidate).parent() {
+                            let bin_str = bin_dir.to_string_lossy().to_string();
+                            if !extra_paths.contains(&bin_str) {
+                                extra_paths.push(bin_str);
+                            }
+                            // usr/bin is sibling to bin/ under Git install root
+                            if let Some(git_root) = bin_dir.parent() {
+                                let usr_bin = format!("{}\\usr\\bin", git_root.to_string_lossy());
+                                if std::path::Path::new(&usr_bin).exists() && !extra_paths.contains(&usr_bin) {
+                                    extra_paths.push(usr_bin);
+                                }
+                            }
+                        }
+                        git_bash_found = true;
+                        break;
+                    }
+                }
+            }
+            if !git_bash_found {
+                log::warn!("Git Bash not found (neither bundled MinGit nor system Git) — claude-agent-sdk shell commands may fail on Windows");
+            }
         } else {
             // Resolve nvm's actual node bin path (nvm does not create ~/.nvm/current)
             let nvm_alias_path = format!("{}/.nvm/alias/default", home);
@@ -326,10 +400,22 @@ pub fn run() {
         )
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::POSITION
+                        | tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::MAXIMIZED
+                        | tauri_plugin_window_state::StateFlags::VISIBLE
+                        | tauri_plugin_window_state::StateFlags::FULLSCREEN,
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             // Windows: when a second instance is launched, args contain deep link URL
@@ -366,6 +452,13 @@ pub fn run() {
                     let _ = win.set_title("");
                 }
             }
+
+            // Show main window after window-state plugin has restored position/size
+            // (window starts hidden via tauri.conf.json to prevent flicker on Windows)
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+            }
+
             // Create system tray (i18n based on system locale)
             let is_zh = sys_locale::get_locale()
                 .map(|l| l.starts_with("zh"))
@@ -490,6 +583,13 @@ pub fn run() {
         .on_window_event(|window, event| {
             // Hide to tray on close instead of quitting
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // macOS: exit fullscreen before hiding to avoid black screen on re-show
+                #[cfg(target_os = "macos")]
+                {
+                    if window.is_fullscreen().unwrap_or(false) {
+                        let _ = window.set_fullscreen(false);
+                    }
+                }
                 let _ = window.hide();
                 api.prevent_close();
             }
