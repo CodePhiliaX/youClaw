@@ -21,7 +21,7 @@ import {
 import { useI18n } from "@/i18n"
 import { useAppStore } from "@/stores/app"
 import { getCreditTransactions, uploadFile, redeemInvitationCode, type CreditTransaction } from "@/api/client"
-import { LogIn, LogOut, Coins, ExternalLink, ChevronRight, Pencil, Camera, Check, X, Loader2, Sparkles, Gift } from "lucide-react"
+import { LogIn, LogOut, Coins, ExternalLink, ChevronRight, Pencil, Camera, Check, X, Loader2, Sparkles, Gift, Copy } from "lucide-react"
 
 export function AccountPanel() {
   const { t } = useI18n()
@@ -223,6 +223,18 @@ export function AccountPanel() {
             </div>
           )}
           {user?.email && <p className="text-sm text-muted-foreground truncate mt-0.5">{user.email}</p>}
+          {user?.id && (
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="text-xs text-muted-foreground font-mono">ID: {user.id}</span>
+              <button
+                onClick={() => navigator.clipboard.writeText(user.id)}
+                className="p-0.5 rounded hover:bg-muted transition-colors"
+                title="Copy ID"
+              >
+                <Copy size={11} className="text-muted-foreground" />
+              </button>
+            </div>
+          )}
           <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-primary/15 text-primary rounded-full text-[10px] font-bold uppercase tracking-wider">
             <Sparkles size={10} />
             Pro Member
