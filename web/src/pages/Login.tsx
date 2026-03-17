@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useI18n } from "@/i18n"
 import { useAppStore } from "@/stores/app"
-import { LogIn, Loader2, Calendar, MessageSquare, ShieldCheck, Minus, Square, X } from "lucide-react"
+import { LogIn, Loader2, Calendar, MessageSquare, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { isTauri } from "@/api/transport"
 import { useDragRegion } from "@/hooks/useDragRegion"
@@ -11,29 +11,17 @@ export function Login() {
   const { t, locale, setLocale } = useI18n()
   const { authLoading, login } = useAppStore()
   const [version, setVersion] = useState("")
-  const [platform, setPlatform] = useState("")
   const drag = useDragRegion()
 
   useEffect(() => {
     if (!isTauri) return
     import("@tauri-apps/api/core").then(({ invoke }) => {
       invoke<string>("get_version").then((v) => setVersion("v" + v))
-      invoke<string>("get_platform").then(setPlatform)
     })
   }, [])
 
-  const isWin = platform === "windows"
-
   return (
     <div className="h-screen w-screen flex flex-col bg-gradient-to-br from-background to-muted/30">
-      {/* Windows: titlebar with controls */}
-      {isWin && (
-        <div className="h-9 shrink-0 flex items-center select-none border-b border-border/50" {...drag}>
-          <div className="flex-1" />
-          <LoginWindowControls />
-        </div>
-      )}
-
       <div className="flex-1 flex overflow-hidden">
         {/* Left hero area - large screens only, draggable */}
         <section
@@ -164,37 +152,6 @@ export function Login() {
           }
         `}</style>
       </div>
-    </div>
-  )
-}
-
-function LoginWindowControls() {
-  const btnBase =
-    'inline-flex items-center justify-center w-[46px] h-full transition-colors duration-150 text-foreground/70 hover:text-foreground'
-
-  const handleMinimize = () => {
-    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().minimize())
-  }
-  const handleToggleMaximize = () => {
-    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().toggleMaximize())
-  }
-  const handleClose = () => {
-    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().close())
-  }
-
-  const stopDrag = (e: React.MouseEvent) => e.stopPropagation()
-
-  return (
-    <div className="flex h-full shrink-0">
-      <button type="button" onClick={handleMinimize} onMouseDown={stopDrag} className={`${btnBase} hover:bg-muted`} aria-label="Minimize">
-        <Minus className="h-3.5 w-3.5" />
-      </button>
-      <button type="button" onClick={handleToggleMaximize} onMouseDown={stopDrag} className={`${btnBase} hover:bg-muted`} aria-label="Maximize">
-        <Square className="h-3 w-3" />
-      </button>
-      <button type="button" onClick={handleClose} onMouseDown={stopDrag} className={`${btnBase} hover:bg-destructive hover:text-destructive-foreground`} aria-label="Close">
-        <X className="h-4 w-4" />
-      </button>
     </div>
   )
 }
