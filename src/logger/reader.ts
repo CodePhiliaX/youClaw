@@ -48,7 +48,7 @@ export async function readLogEntries(date: string, options: {
   const search = options.search?.toLowerCase()
   const offset = options.offset ?? 0
   const limit = options.limit ?? 100
-  const order = options.order ?? 'desc'
+  const order = options.order ?? 'asc'
 
   const filtered: PinoLogEntry[] = []
   for (const line of lines) {

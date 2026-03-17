@@ -47,7 +47,7 @@ export function createLogsRoutes() {
       search: c.req.query('search') || undefined,
       offset: parseInt(c.req.query('offset') ?? '0', 10),
       limit: Math.min(parseInt(c.req.query('limit') ?? '100', 10), 500),
-      order: (c.req.query('order') as 'asc' | 'desc') || 'desc',
+      order: (c.req.query('order') as 'asc' | 'desc') || undefined,
     })
     return c.json(result)
   })
