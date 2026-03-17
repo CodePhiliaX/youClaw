@@ -118,8 +118,8 @@ jobs:
 
       - name: Create placeholder mingit.zip (Windows-only resource)
         run: |
-          mkdir -p src-tauri/resources
-          python3 -c "import zipfile; zipfile.ZipFile('src-tauri/resources/mingit.zip','w').close()"
+          mkdir -p src-tauri/resources/mingit
+          python3 -c "import zipfile; zipfile.ZipFile('src-tauri/resources/mingit/mingit.zip','w').close()"
 
       - name: Import macOS certificates
         uses: apple-actions/import-codesign-certs@v3
@@ -215,9 +215,9 @@ jobs:
           MINGIT_VERSION="2.49.0"
           MINGIT_URL="https://github.com/git-for-windows/git/releases/download/v${MINGIT_VERSION}.windows.1/MinGit-${MINGIT_VERSION}-64-bit.zip"
           echo "Downloading MinGit ${MINGIT_VERSION}: ${MINGIT_URL}"
-          mkdir -p src-tauri/resources
-          curl -fsSL -o src-tauri/resources/mingit.zip "${MINGIT_URL}"
-          echo "MinGit zip size: $(stat --format=%s src-tauri/resources/mingit.zip) bytes"
+          mkdir -p src-tauri/resources/mingit
+          curl -fsSL -o src-tauri/resources/mingit/mingit.zip "${MINGIT_URL}"
+          echo "MinGit zip size: $(stat --format=%s src-tauri/resources/mingit/mingit.zip) bytes"
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
