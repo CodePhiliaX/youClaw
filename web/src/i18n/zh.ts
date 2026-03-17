@@ -458,6 +458,8 @@ export const zh: Translations = {
     searchLogs: '搜索日志...',
     noLogs: '该日期无日志',
     loadMore: '加载更多',
+    loadOlder: '加载更旧的日志...',
+    live: '实时',
     totalEntries: '条记录',
     duration: '耗时',
   },
