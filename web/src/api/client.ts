@@ -377,10 +377,31 @@ export async function deleteBrowserProfile(id: string) {
   })
 }
 
+export class BrowserLaunchError extends Error {
+  code?: string
+  installHint?: string
+  constructor(message: string, code?: string, installHint?: string) {
+    super(message)
+    this.code = code
+    this.installHint = installHint
+  }
+}
+
 export async function launchBrowserProfile(id: string) {
-  return apiFetch<{ ok: boolean; profileDir: string }>(`/api/browser-profiles/${encodeURIComponent(id)}/launch`, {
+  const base = await getBackendBaseUrl()
+  const res = await fetch(`${base}/api/browser-profiles/${encodeURIComponent(id)}/launch`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
   })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new BrowserLaunchError(
+      body?.error || `API error: ${res.status}`,
+      body?.code,
+      body?.installHint,
+    )
+  }
+  return res.json() as Promise<{ ok: boolean; profileDir: string }>
 }
 
 // ===== Scheduled Tasks API =====

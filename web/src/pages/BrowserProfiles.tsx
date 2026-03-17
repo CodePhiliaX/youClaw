@@ -4,6 +4,7 @@ import {
   createBrowserProfile,
   deleteBrowserProfile,
   launchBrowserProfile,
+  BrowserLaunchError,
 } from '../api/client'
 import type { BrowserProfileDTO } from '../api/client'
 import { cn } from '../lib/utils'
@@ -47,8 +48,13 @@ export function BrowserProfiles() {
       await launchBrowserProfile(id)
       setLaunchMessage({ type: 'success', text: t.browser.launchSuccess })
     } catch (err) {
-      const detail = err instanceof Error ? err.message : ''
-      setLaunchMessage({ type: 'error', text: detail || t.browser.launchFailed })
+      if (err instanceof BrowserLaunchError && err.code === 'AGENT_BROWSER_NOT_FOUND') {
+        const hint = err.installHint ? `\n${t.browser.installHint}: ${err.installHint}` : ''
+        setLaunchMessage({ type: 'error', text: `${t.browser.notInstalled}${hint}` })
+      } else {
+        const detail = err instanceof Error ? err.message : ''
+        setLaunchMessage({ type: 'error', text: detail || t.browser.launchFailed })
+      }
     } finally {
       setLaunchingId(null)
     }
@@ -237,7 +243,7 @@ function ProfileDetail({
         <div
           data-testid="browser-launch-message"
           className={cn(
-            'text-xs rounded-xl p-3 border',
+            'text-xs rounded-xl p-3 border whitespace-pre-line',
             launchMessage.type === 'success'
               ? 'bg-green-500/10 border-green-500/30 text-green-500'
               : 'bg-red-500/10 border-red-500/30 text-red-400',

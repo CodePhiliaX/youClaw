@@ -397,6 +397,8 @@ export const en = {
     created: 'Created',
     dataDir: 'Data Directory',
     profileId: 'Profile ID',
+    notInstalled: 'agent-browser is not installed',
+    installHint: 'Install command',
   },
   channels: {
     title: 'Channels',

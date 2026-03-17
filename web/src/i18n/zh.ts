@@ -399,6 +399,8 @@ export const zh: Translations = {
     created: '创建时间',
     dataDir: '数据目录',
     profileId: 'Profile ID',
+    notInstalled: 'agent-browser 未安装',
+    installHint: '安装命令',
   },
   channels: {
     title: '渠道',
