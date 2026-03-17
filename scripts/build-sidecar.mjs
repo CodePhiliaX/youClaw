@@ -114,6 +114,42 @@ function copyBunRuntime() {
 
 copyBunRuntime()
 
+// Download MinGit for Windows (bundled so claude-agent-sdk works without system Git)
+async function downloadMinGit() {
+  if (process.platform !== 'win32') {
+    console.log('Skipping MinGit download (not Windows)')
+    return
+  }
+
+  const mingitDir = resolve(root, 'src-tauri', 'resources', 'mingit')
+  const mingitBash = resolve(mingitDir, 'usr', 'bin', 'bash.exe')
+
+  // Already extracted?
+  const { existsSync } = await import('node:fs')
+  if (existsSync(mingitBash)) {
+    console.log('MinGit already present, skipping download')
+    return
+  }
+
+  const version = '2.49.0'
+  const zipName = `MinGit-${version}-64-bit.zip`
+  const url = `https://github.com/git-for-windows/git/releases/download/v${version}.windows.1/${zipName}`
+  const zipPath = resolve(root, zipName)
+
+  console.log(`Downloading MinGit ${version}...`)
+  execSync(`curl -fsSL -o "${zipPath}" "${url}"`, { stdio: 'inherit' })
+
+  mkdirSync(mingitDir, { recursive: true })
+  console.log(`Extracting MinGit to ${mingitDir}...`)
+  execSync(`powershell -Command "Expand-Archive -Force '${zipPath}' '${mingitDir}'"`, { stdio: 'inherit' })
+
+  // Cleanup zip
+  try { unlinkSync(zipPath) } catch {}
+  console.log('MinGit downloaded and extracted successfully')
+}
+
+await downloadMinGit()
+
 // 清理 bun build --compile 产生的临时文件
 for (const f of readdirSync(root)) {
   if (f.endsWith('.bun-build')) {

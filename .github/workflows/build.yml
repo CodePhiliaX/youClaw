@@ -208,6 +208,17 @@ jobs:
           cp /tmp/bun-extract/bun-windows-x64/bun.exe src-tauri/resources/bun-runtime/bun.exe
           echo "Embedded Bun runtime: $(ls -la src-tauri/resources/bun-runtime/bun.exe)"
 
+      - name: Embed MinGit for Windows
+        shell: bash
+        run: |
+          MINGIT_VERSION="2.49.0"
+          MINGIT_URL="https://github.com/git-for-windows/git/releases/download/v${MINGIT_VERSION}.windows.1/MinGit-${MINGIT_VERSION}-64-bit.zip"
+          echo "Downloading MinGit ${MINGIT_VERSION}: ${MINGIT_URL}"
+          curl -fsSL -o /tmp/mingit.zip "${MINGIT_URL}"
+          mkdir -p src-tauri/resources/mingit
+          unzip -o /tmp/mingit.zip -d src-tauri/resources/mingit
+          echo "MinGit extracted: $(ls src-tauri/resources/mingit/ | head -20)"
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:

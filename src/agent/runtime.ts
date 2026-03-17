@@ -638,6 +638,46 @@ export class AgentRuntime {
       process.env.HOME = process.env.USERPROFILE
     }
 
+    // Auto-detect Git Bash on Windows (claude-agent-sdk requires it for shell commands)
+    if (process.platform === 'win32' && !process.env.CLAUDE_CODE_GIT_BASH_PATH) {
+      // Priority 1: Bundled MinGit in resources directory
+      const resourcesDir = process.env.RESOURCES_DIR
+      if (resourcesDir) {
+        const mingitCandidates = [
+          resolve(resourcesDir, 'mingit', 'usr', 'bin', 'bash.exe'),
+          resolve(resourcesDir, '_up_', 'src-tauri', 'resources', 'mingit', 'usr', 'bin', 'bash.exe'),
+        ]
+        for (const candidate of mingitCandidates) {
+          if (existsSync(candidate)) {
+            logger.info({ path: candidate, category: 'agent' }, 'Bundled MinGit detected on Windows')
+            process.env.CLAUDE_CODE_GIT_BASH_PATH = candidate
+            break
+          }
+        }
+      }
+
+      // Priority 2: System Git installation
+      if (!process.env.CLAUDE_CODE_GIT_BASH_PATH) {
+        const programFiles = process.env.ProgramFiles || 'C:\\Program Files'
+        const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)'
+        const localAppData = process.env.LOCALAPPDATA || ''
+
+        const candidates = [
+          `${programFiles}\\Git\\bin\\bash.exe`,
+          `${programFilesX86}\\Git\\bin\\bash.exe`,
+          `${localAppData}\\Programs\\Git\\bin\\bash.exe`,
+        ]
+
+        for (const candidate of candidates) {
+          if (existsSync(candidate)) {
+            logger.info({ path: candidate, category: 'agent' }, 'Git Bash auto-detected on Windows')
+            process.env.CLAUDE_CODE_GIT_BASH_PATH = candidate
+            break
+          }
+        }
+      }
+    }
+
     const cliPath = resolveCliPath()
     ensureStartupChecks(cliPath)
     // Determine JS runtime executable for SDK subprocess
