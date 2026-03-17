@@ -9,6 +9,26 @@ const SEP = isWindows ? ';' : ':'
 let cachedEnv: NodeJS.ProcessEnv | null = null
 
 /**
+ * Return common Git install directories on Windows.
+ * Newly installed Git won't be in process.env.PATH, so we probe well-known locations.
+ */
+function getWindowsGitPaths(): string[] {
+  const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files'
+  const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)'
+  const localAppData = process.env['LOCALAPPDATA'] || ''
+  const userProfile = process.env['USERPROFILE'] || ''
+
+  return [
+    resolve(programFiles, 'Git', 'cmd'),
+    resolve(programFiles, 'Git', 'bin'),
+    resolve(programFilesX86, 'Git', 'cmd'),
+    resolve(programFilesX86, 'Git', 'bin'),
+    ...(localAppData ? [resolve(localAppData, 'Programs', 'Git', 'cmd')] : []),
+    ...(userProfile ? [resolve(userProfile, 'scoop', 'apps', 'git', 'current', 'cmd')] : []),
+  ]
+}
+
+/**
  * Return a copy of process.env with common tool directories appended to PATH.
  * Result is cached until resetShellEnvCache() is called.
  */
@@ -27,6 +47,7 @@ export function getShellEnv(): NodeJS.ProcessEnv {
         resolve(home, '.bun/bin'),
         resolve(home, '.cargo/bin'),
         resolve(home, 'scoop/shims'),
+        ...getWindowsGitPaths(),
       ]
     : [
         resolve(home, '.bun/bin'),
@@ -59,6 +80,7 @@ export function which(cmd: string): string | null {
       encoding: 'utf-8',
       env: getShellEnv(),
       stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
     }).trim().split('\n')[0] || null
   } catch {
     return null

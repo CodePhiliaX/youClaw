@@ -320,7 +320,7 @@ export const zh: Translations = {
   },
   gitSetup: {
     title: '需要安装 Git',
-    description: 'YouClaw 需要 Git 环境来运行 AI Agent 命令。请下载并安装 Git 后继续使用。',
+    description: '需要安装 Git 才能继续使用。',
     downloadButton: '下载 Git 安装包',
     steps: '安装步骤',
     step1: '点击上方按钮下载 Git 安装包（.zip 压缩文件）',

@@ -1,27 +1,34 @@
 import { useEffect, useState } from "react"
 import { useI18n } from "@/i18n"
 import { useAppStore } from "@/stores/app"
-import { Download, Loader2, CheckCircle2, AlertTriangle, Minus, Square, X } from "lucide-react"
+import { Download, Loader2, CheckCircle2, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { isTauri } from "@/api/transport"
-import { useDragRegion } from "@/hooks/useDragRegion"
 import logoUrl from "@/assets/logo.png"
 
 const GIT_DOWNLOAD_URL = "https://cdn.chat2db-ai.com/youclaw/website/Git-2.53.0.2-64-bit.exe.zip"
+const COMPACT_SIZE = { width: 520, height: 720 }
+const DEFAULT_SIZE = { width: 1400, height: 900 }
+
+async function resizeWindow(width: number, height: number) {
+  if (!isTauri) return
+  const { getCurrentWindow } = await import("@tauri-apps/api/window")
+  const { LogicalSize } = await import("@tauri-apps/api/dpi")
+  const win = getCurrentWindow()
+  await win.setMinSize(new LogicalSize(width, height))
+  await win.setSize(new LogicalSize(width, height))
+  await win.center()
+}
 
 export function GitSetup() {
   const { t } = useI18n()
   const recheckGit = useAppStore((s) => s.recheckGit)
   const gitAvailable = useAppStore((s) => s.gitAvailable)
   const [detected, setDetected] = useState(false)
-  const [platform, setPlatform] = useState("")
-  const drag = useDragRegion()
 
   useEffect(() => {
-    if (!isTauri) return
-    import("@tauri-apps/api/core").then(({ invoke }) => {
-      invoke<string>("get_platform").then(setPlatform)
-    })
+    // Shrink window to compact size
+    resizeWindow(COMPACT_SIZE.width, COMPACT_SIZE.height)
   }, [])
 
   // Poll for git availability every 3 seconds
@@ -33,13 +40,19 @@ export function GitSetup() {
       if (available) {
         setDetected(true)
         clearInterval(interval)
+        // Restore default window size
+        await resizeWindow(DEFAULT_SIZE.width, DEFAULT_SIZE.height)
+        // Restore min size to tauri.conf.json defaults
+        if (isTauri) {
+          const { getCurrentWindow } = await import("@tauri-apps/api/window")
+          const { LogicalSize } = await import("@tauri-apps/api/dpi")
+          await getCurrentWindow().setMinSize(new LogicalSize(800, 600))
+        }
       }
     }, 3000)
 
     return () => clearInterval(interval)
   }, [gitAvailable, recheckGit])
-
-  const isWin = platform === "windows"
 
   const handleDownload = () => {
     if (isTauri) {
@@ -60,15 +73,7 @@ export function GitSetup() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-gradient-to-br from-background to-muted/30">
-      {/* Windows: titlebar with controls */}
-      {isWin && (
-        <div className="h-9 shrink-0 flex items-center select-none border-b border-border/50" {...drag}>
-          <div className="flex-1" />
-          <GitSetupWindowControls />
-        </div>
-      )}
-
-      <div className="flex-1 flex items-center justify-center overflow-auto p-8" {...(isWin ? {} : drag)}>
+      <div className="flex-1 flex items-center justify-center overflow-auto p-8">
         <div className="w-full max-w-lg space-y-8">
           {/* Logo & Title */}
           <div className="text-center">
@@ -142,37 +147,6 @@ export function GitSetup() {
           </div>
         </div>
       </div>
-    </div>
-  )
-}
-
-function GitSetupWindowControls() {
-  const btnBase =
-    'inline-flex items-center justify-center w-[46px] h-full transition-colors duration-150 text-foreground/70 hover:text-foreground'
-
-  const handleMinimize = () => {
-    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().minimize())
-  }
-  const handleToggleMaximize = () => {
-    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().toggleMaximize())
-  }
-  const handleClose = () => {
-    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().close())
-  }
-
-  const stopDrag = (e: React.MouseEvent) => e.stopPropagation()
-
-  return (
-    <div className="flex h-full shrink-0">
-      <button type="button" onClick={handleMinimize} onMouseDown={stopDrag} className={`${btnBase} hover:bg-muted`} aria-label="Minimize">
-        <Minus className="h-3.5 w-3.5" />
-      </button>
-      <button type="button" onClick={handleToggleMaximize} onMouseDown={stopDrag} className={`${btnBase} hover:bg-muted`} aria-label="Maximize">
-        <Square className="h-3 w-3" />
-      </button>
-      <button type="button" onClick={handleClose} onMouseDown={stopDrag} className={`${btnBase} hover:bg-destructive hover:text-destructive-foreground`} aria-label="Close">
-        <X className="h-4 w-4" />
-      </button>
     </div>
   )
 }

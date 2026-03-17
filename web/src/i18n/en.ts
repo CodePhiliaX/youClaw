@@ -318,7 +318,7 @@ export const en = {
   },
   gitSetup: {
     title: 'Git is Required',
-    description: 'YouClaw requires Git to run AI agent commands. Please download and install Git to continue.',
+    description: 'Git is required. Please install it to continue.',
     downloadButton: 'Download Git Installer',
     steps: 'Installation Steps',
     step1: 'Click the button above to download the Git installer (.zip)',
