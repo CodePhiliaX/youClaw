@@ -86,36 +86,43 @@ export class AgentManager {
       }
 
       // Migrate agent.yaml: inject MiniMax MCP config if not present
-      const agentYamlPath = resolve(defaultDir, 'agent.yaml')
-      try {
-        const currentYaml = readFileSync(agentYamlPath, 'utf-8')
-        if (!currentYaml.includes('minimax')) {
-          const parsed = parseYaml(currentYaml) as Record<string, unknown>
-          const mcpServers = (parsed.mcpServers ?? {}) as Record<string, unknown>
-          mcpServers.minimax = {
-            command: 'uvx',
-            args: ['minimax-coding-plan-mcp', '-y'],
-            env: {
-              MINIMAX_API_KEY: '${READMEX_SA_TOKEN}',
-              MINIMAX_API_HOST: 'https://readmex.com',
-            },
-          }
-          parsed.mcpServers = mcpServers
-          const existing = (parsed.disallowedTools as string[]) ?? []
-          if (!existing.includes('WebSearch')) {
-            parsed.disallowedTools = [...existing, 'WebSearch']
-          }
-          writeFileSync(agentYamlPath, stringifyYaml(parsed))
-          logger.info('Migrated default agent.yaml: added MiniMax MCP config')
-        }
-      } catch (err) {
-        logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'Failed to migrate agent.yaml')
-      }
+      this.migrateMinimaxMcp(resolve(defaultDir, 'agent.yaml'))
     }
 
     if (!existsSync(resolve(globalDir, 'memory', 'MEMORY.md'))) {
       mkdirSync(resolve(globalDir, 'memory'), { recursive: true })
       writeFileSync(resolve(globalDir, 'memory', 'MEMORY.md'), GLOBAL_MEMORY_MD)
+    }
+  }
+
+  /**
+   * Migrate agent.yaml: inject MiniMax MCP config if not present
+   */
+  private migrateMinimaxMcp(agentYamlPath: string): void {
+    const logger = getLogger()
+    try {
+      const currentYaml = readFileSync(agentYamlPath, 'utf-8')
+      if (!currentYaml.includes('minimax')) {
+        const parsed = parseYaml(currentYaml) as Record<string, unknown>
+        const mcpServers = (parsed.mcpServers ?? {}) as Record<string, unknown>
+        mcpServers.minimax = {
+          command: 'uvx',
+          args: ['minimax-coding-plan-mcp', '-y'],
+          env: {
+            MINIMAX_API_KEY: '${READMEX_SA_TOKEN}',
+            MINIMAX_API_HOST: 'https://readmex.com',
+          },
+        }
+        parsed.mcpServers = mcpServers
+        const existing = (parsed.disallowedTools as string[]) ?? []
+        if (!existing.includes('WebSearch')) {
+          parsed.disallowedTools = [...existing, 'WebSearch']
+        }
+        writeFileSync(agentYamlPath, stringifyYaml(parsed))
+        logger.info({ agentYamlPath }, 'Migrated agent.yaml: added MiniMax MCP config')
+      }
+    } catch (err) {
+      logger.warn({ agentYamlPath, error: err instanceof Error ? err.message : String(err) }, 'Failed to migrate agent.yaml')
     }
   }
 
@@ -147,6 +154,11 @@ export class AgentManager {
       if (!existsSync(configPath)) {
         logger.debug({ agentDir }, 'Skipping directory without agent.yaml')
         continue
+      }
+
+      // Migrate all agents: inject MiniMax MCP config if not present
+      if (entry.name !== 'default') {
+        this.migrateMinimaxMcp(configPath)
       }
 
       try {

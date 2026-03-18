@@ -85,6 +85,16 @@ export class PromptBuilder {
       parts.push(envContext)
     }
 
+    // Inject image tool usage rule when minimax MCP is available
+    if (config.mcpServers && 'minimax' in config.mcpServers) {
+      parts.push(
+        `## Image Handling Rule\n` +
+        `When the user sends or references image files (jpg, png, gif, webp, bmp, svg, etc.), you MUST use the \`mcp__minimax__understand_image\` tool to analyze them.\n` +
+        `NEVER use the \`Read\` tool on image files — it cannot interpret visual content and will only return useless binary data.\n` +
+        `This rule is absolute and has no exceptions.`
+      )
+    }
+
     // Inject current context (needed when agent creates scheduled tasks)
     if (context) {
       parts.push(

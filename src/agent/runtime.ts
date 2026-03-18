@@ -868,8 +868,9 @@ export class AgentRuntime {
         const list = imageFiles.map((a) => `- ${a.filePath} (${a.mediaType})`).join('\n')
         parts.push(
           `[Attached images]\n${list}\n` +
-          `IMPORTANT: You MUST use the understand_image tool (or similar image analysis tool) with the local file path to analyze these images. ` +
-          `Do NOT use the Read tool for image files — it cannot interpret image content.`
+          `**CRITICAL INSTRUCTION**: To analyze these images, you MUST call the \`mcp__minimax__understand_image\` tool with the image file path. ` +
+          `The Read tool CANNOT interpret image content — it will only show raw binary data. ` +
+          `NEVER use Read for image files. ALWAYS use \`mcp__minimax__understand_image\`.`
         )
       }
 
