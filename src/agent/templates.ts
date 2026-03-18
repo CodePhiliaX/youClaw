@@ -15,15 +15,6 @@ skills:
   - "*"
 disallowedTools:
   - WebSearch
-mcpServers:
-  minimax:
-    command: uvx
-    args:
-      - minimax-coding-plan-mcp
-      - -y
-    env:
-      MINIMAX_API_KEY: \${READMEX_SA_TOKEN}
-      MINIMAX_API_HOST: https://readmex.com
 `
 
 export const DEFAULT_SOUL_MD = `\

@@ -106,6 +106,7 @@ export const AgentConfigSchema = z.object({
   maxTurns: z.number().optional(),
   effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
   browserProfile: z.string().optional(),
+  browserHeaded: z.boolean().default(false),
   // Bindings routing
   bindings: z.array(BindingSchema).optional(),
   // Hooks system

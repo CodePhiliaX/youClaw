@@ -12,6 +12,7 @@ import type { PromptBuilder } from './prompt-builder.ts'
 import type { AgentCompiler } from './compiler.ts'
 import type { HooksManager } from './hooks.ts'
 import { resolveMcpServers } from './mcp-utils.ts'
+import { createBuiltinMcpServer } from './builtin-mcp.ts'
 import { preprocessAttachments } from './document-converter.ts'
 import { abortRegistry } from './abort-registry.ts'
 import { getActiveModelConfig } from '../settings/manager.ts'
@@ -795,10 +796,18 @@ export class AgentRuntime {
       }
     }
 
-    // MCP servers (resolve env vars via shared utility)
+    // MCP servers: resolve env vars + inject built-in image analysis server
+    const mcpServers: Record<string, unknown> = {}
     if (this.config.mcpServers) {
-      queryOptions.mcpServers = resolveMcpServers(this.config.mcpServers)
+      // Filter out legacy external minimax MCP (replaced by built-in)
+      const externalServers = { ...this.config.mcpServers }
+      delete externalServers['minimax']
+      const resolved = resolveMcpServers(externalServers)
+      Object.assign(mcpServers, resolved)
     }
+    // Always inject built-in minimax MCP (runs in-process, no external dependency)
+    mcpServers['minimax'] = createBuiltinMcpServer()
+    queryOptions.mcpServers = mcpServers as Record<string, import('@anthropic-ai/claude-agent-sdk').McpServerConfig>
 
     // Tool access control (ensure Skill tool is always included)
     if (this.config.allowedTools) {
