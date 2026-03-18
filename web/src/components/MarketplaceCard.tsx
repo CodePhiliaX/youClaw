@@ -3,20 +3,11 @@ import type { MarketplaceSkill, MarketplaceSkillDetail } from '../api/client'
 import { getMarketplaceSkill, installRecommendedSkill, uninstallRecommendedSkill, updateMarketplaceSkill } from '../api/client'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-  AlertDialogAction,
-} from '../components/ui/alert-dialog'
+import { MarketplaceInstallDialog } from '../components/MarketplaceInstallDialog'
 import { useI18n } from '../i18n'
-import { Puzzle, Download, Loader2, Trash2, RefreshCw, AlertTriangle, User, ShieldAlert, ExternalLink } from 'lucide-react'
+import { Puzzle, Download, Loader2, Trash2, RefreshCw } from 'lucide-react'
 
-export function formatMarketplaceDate(timestamp: number) {
+function formatMarketplaceDate(timestamp: number) {
   return new Date(timestamp).toLocaleDateString()
 }
 
@@ -245,82 +236,17 @@ export function MarketplaceCard({
         <div className="text-xs text-red-400 mt-3">{errorMsg}</div>
       )}
 
-      <AlertDialog open={!!confirmDetail} onOpenChange={(open) => !open && setConfirmDetail(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t.skills.confirmInstallTitle}</AlertDialogTitle>
-            <AlertDialogDescription>{t.skills.confirmInstallDesc}</AlertDialogDescription>
-          </AlertDialogHeader>
-          {confirmDetail && (
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center gap-2 font-medium">
-                {confirmDetail.displayName}
-                {confirmDetail.ownerHandle && confirmDetail.slug && (
-                  <a
-                    href={`https://clawhub.ai/${confirmDetail.ownerHandle}/${confirmDetail.slug}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                )}
-              </div>
-              <div className="text-xs text-muted-foreground">{confirmDetail.summary}</div>
-
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                {typeof confirmDetail.downloads === 'number' && (
-                  <span>{t.skills.marketplaceDownloadsLabel}: {confirmDetail.downloads}</span>
-                )}
-                {typeof confirmDetail.stars === 'number' && (
-                  <span>{t.skills.marketplaceStarsLabel}: {confirmDetail.stars}</span>
-                )}
-                {typeof confirmDetail.installsCurrent === 'number' && (
-                  <span>{t.skills.marketplaceInstallsLabel}: {confirmDetail.installsCurrent}</span>
-                )}
-              </div>
-
-              {(confirmDetail.ownerHandle || confirmDetail.ownerDisplayName) && (
-                <div className="flex items-center gap-2 text-xs">
-                  {confirmDetail.ownerImage ? (
-                    <img src={confirmDetail.ownerImage} alt="" className="w-5 h-5 rounded-full" />
-                  ) : (
-                    <User className="h-4 w-4 text-muted-foreground" />
-                  )}
-                  <span className="text-muted-foreground">{t.skills.skillAuthor}:</span>
-                  <span>{confirmDetail.ownerDisplayName || confirmDetail.ownerHandle}</span>
-                </div>
-              )}
-
-              {confirmDetail.moderation?.isSuspicious && (
-                <div className="flex items-center gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2 text-xs text-yellow-500">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  <span>{t.skills.skillSuspicious}</span>
-                </div>
-              )}
-
-              {confirmDetail.moderation?.isMalwareBlocked && (
-                <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-500">
-                  <ShieldAlert className="h-4 w-4 shrink-0" />
-                  <span>{t.skills.skillBlocked}</span>
-                </div>
-              )}
-            </div>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setConfirmDetail(null)
-                handleInstall()
-              }}
-              disabled={confirmDetail?.moderation?.isMalwareBlocked}
-            >
-              {t.skills.confirmInstall}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <MarketplaceInstallDialog
+        open={!!confirmDetail}
+        detail={confirmDetail}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDetail(null)
+        }}
+        onConfirm={() => {
+          setConfirmDetail(null)
+          handleInstall()
+        }}
+      />
     </div>
   )
 }

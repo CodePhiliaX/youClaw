@@ -17,6 +17,7 @@
     "dev": "bun run src/index.ts",
     "start": "bun run src/index.ts",
     "typecheck": "tsc --noEmit",
+    "validate:recommended-skills": "bun run scripts/validate-recommended-skills.ts",
     "dev:web": "cd web && bun run dev",
     "dev:tauri": "bun tauri dev",
     "build:sidecar": "bun scripts/build-sidecar.mjs",

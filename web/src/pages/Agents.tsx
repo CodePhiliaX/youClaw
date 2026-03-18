@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { getAgents, getAgentDocs, updateAgentDoc, createAgent, deleteAgent, getAgentConfig, updateAgentConfig, getBrowserProfiles, getSkills, getMarketplaceSkills, getRecommendedSkills, installRecommendedSkill } from '../api/client'
-import type { BrowserProfileDTO, Skill, MarketplaceSkill } from '../api/client'
+import { getAgents, getAgentDocs, updateAgentDoc, createAgent, deleteAgent, getAgentConfig, updateAgentConfig, getBrowserProfiles, getSkills, getMarketplaceSkills, getRecommendedSkills, getMarketplaceSkill, installRecommendedSkill } from '../api/client'
+import type { BrowserProfileDTO, Skill, MarketplaceSkill, MarketplaceSkillDetail } from '../api/client'
 import { useNavigate } from 'react-router-dom'
 import {
   Bot, FolderOpen, MessageSquare, Plus, Trash2,
@@ -9,8 +9,8 @@ import {
   Store, Loader2,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,8 @@ import { useI18n } from '../i18n'
 import { useChatContext } from '../hooks/chatCtx'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { MarketplaceCard } from '@/components/MarketplaceCard'
+import { MarketplaceDisclaimer } from '@/components/MarketplaceDisclaimer'
+import { MarketplaceInstallDialog } from '@/components/MarketplaceInstallDialog'
 import { useDragRegion } from "@/hooks/useDragRegion"
 
 enum MarketplaceAction {
@@ -799,8 +801,10 @@ function AgentSkillsSection({
   const [marketplaceResults, setMarketplaceResults] = useState<MarketplaceSkill[]>([])
   const [marketplaceLoading, setMarketplaceLoading] = useState(false)
   const [installingSlug, setInstallingSlug] = useState<string | null>(null)
+  const [loadingConfirmSlug, setLoadingConfirmSlug] = useState<string | null>(null)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [marketplaceError, setMarketplaceError] = useState<string | null>(null)
+  const [confirmDetail, setConfirmDetail] = useState<MarketplaceSkillDetail | null>(null)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const filteredSkills = allSkills.filter(s =>
@@ -901,7 +905,7 @@ function AgentSkillsSection({
     setMarketplaceError(null)
   }
 
-  const handleInstallAndBind = async (slug: string) => {
+  const installAndBindSkill = async (slug: string) => {
     setInstallingSlug(slug)
     try {
       const beforeNames = new Set(allSkills.map(s => s.name))
@@ -925,6 +929,24 @@ function AgentSkillsSection({
     }
   }
 
+  const handleConfirmInstallAndBind = async (skill: MarketplaceSkill) => {
+    setLoadingConfirmSlug(skill.slug)
+    try {
+      const detail = await getMarketplaceSkill(skill.slug)
+      setConfirmDetail(detail)
+    } catch {
+      setConfirmDetail({
+        ...skill,
+        ownerHandle: null,
+        ownerDisplayName: null,
+        ownerImage: null,
+        moderation: null,
+      })
+    } finally {
+      setLoadingConfirmSlug(null)
+    }
+  }
+
   const handleBindSkill = async (skillName: string) => {
     await handleToggleSkill(skillName, true)
     handleCloseMarketplace()
@@ -941,8 +963,16 @@ function AgentSkillsSection({
 
   return (
     <div className="space-y-3">
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setExpanded(!expanded)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setExpanded(!expanded)
+          }
+        }}
         className="flex items-center gap-2 w-full text-left"
       >
         <ChevronRight className={cn('h-3.5 w-3.5 transition-transform shrink-0', expanded && 'rotate-90')} />
@@ -956,7 +986,7 @@ function AgentSkillsSection({
           {t.agents.browseClawHub}
         </button>
         <span className="text-xs text-muted-foreground ml-auto">{selectedCount}/{allSkills.length}</span>
-      </button>
+      </div>
 
       {expanded && (
         <div className="space-y-2 pl-5">
@@ -1029,6 +1059,8 @@ function AgentSkillsSection({
           />
 
           <div className="mt-4 space-y-1 flex-1 overflow-y-auto pr-1">
+            <MarketplaceDisclaimer compact className="mb-3" />
+
             {/* Error */}
             {marketplaceError && !marketplaceLoading && (
               <p className="text-xs text-red-400 py-2">{marketplaceError}</p>
@@ -1062,8 +1094,18 @@ function AgentSkillsSection({
                         {t.agents.bindSkill}
                       </Button>
                     ) : (
-                      <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => handleInstallAndBind(skill.slug)}>
-                        {t.agents.installAndBind}
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-7 text-xs"
+                        onClick={() => handleConfirmInstallAndBind(skill)}
+                        disabled={loadingConfirmSlug === skill.slug}
+                      >
+                        {loadingConfirmSlug === skill.slug ? (
+                          <><Loader2 className="h-3 w-3 animate-spin mr-1" />{t.common.loading}</>
+                        ) : (
+                          t.agents.installAndBind
+                        )}
                       </Button>
                     )
                   }
@@ -1086,6 +1128,22 @@ function AgentSkillsSection({
               </Button>
             </div>
           )}
+
+          <MarketplaceInstallDialog
+            open={!!confirmDetail}
+            detail={confirmDetail}
+            confirmLabel={t.agents.installAndBind}
+            onOpenChange={(open) => {
+              if (!open) setConfirmDetail(null)
+            }}
+            onConfirm={() => {
+              const slug = confirmDetail?.slug
+              setConfirmDetail(null)
+              if (slug) {
+                void installAndBindSkill(slug)
+              }
+            }}
+          />
         </DialogContent>
       </Dialog>
     </div>

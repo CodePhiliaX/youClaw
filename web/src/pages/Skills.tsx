@@ -7,6 +7,7 @@ import {
   toggleSkill,
   deleteSkill,
   getMarketplaceSkills,
+  getRecommendedSkills,
 } from '../api/client'
 import type { Skill, MarketplacePage, MarketplaceSort } from '../api/client'
 import {
@@ -36,6 +37,7 @@ import { Input } from '../components/ui/input'
 import { cn } from '../lib/utils'
 import { useI18n } from '../i18n'
 import { MarketplaceCard } from '@/components/MarketplaceCard'
+import { MarketplaceDisclaimer } from '@/components/MarketplaceDisclaimer'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { useDragRegion } from "@/hooks/useDragRegion"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
@@ -66,7 +68,7 @@ export function Skills() {
   const [marketplace, setMarketplace] = useState<MarketplacePage>({
     items: [],
     nextCursor: null,
-    source: 'clawhub',
+    source: 'fallback',
     query: '',
     sort: 'trending',
   })
@@ -78,13 +80,10 @@ export function Skills() {
   const [deleteAffectedAgents, setDeleteAffectedAgents] = useState<Array<{ id: string; name: string }>>([])
 
   useEffect(() => {
-    if (deleteTarget) {
-      getSkillAgents(deleteTarget)
-        .then(res => setDeleteAffectedAgents(res.agents))
-        .catch(() => setDeleteAffectedAgents([]))
-    } else {
-      setDeleteAffectedAgents([])
-    }
+    if (!deleteTarget) return
+    getSkillAgents(deleteTarget)
+      .then(res => setDeleteAffectedAgents(res.agents))
+      .catch(() => setDeleteAffectedAgents([]))
   }, [deleteTarget])
 
   // Unified search state
@@ -107,14 +106,24 @@ export function Skills() {
   const loadMarketplace = useCallback(
     (options?: { append?: boolean; cursor?: string | null; query?: string; sort?: MarketplaceSort }) => {
       const append = Boolean(options?.append)
-      const query = options?.query ?? searchQuery
+      const query = (options?.query ?? searchQuery).trim()
       const sort = options?.sort ?? marketplaceSort
       const cursor = append ? (options?.cursor ?? marketplace.nextCursor) : null
 
       setMarketplaceStatus(append ? 'loading-more' : 'loading')
       setMarketplaceError('')
 
-      getMarketplaceSkills({ query, sort, cursor, limit: 24 })
+      const request = query
+        ? getMarketplaceSkills({ query, sort, cursor, limit: 24 })
+        : getRecommendedSkills().then((items) => ({
+            items,
+            nextCursor: null,
+            source: 'fallback' as const,
+            query: '',
+            sort,
+          }))
+
+      request
         .then((page) => {
           setMarketplace((current) => ({
             ...page,
@@ -135,10 +144,17 @@ export function Skills() {
 
   useEffect(() => { loadSkills() }, [loadSkills])
   useEffect(() => {
-    if (tab === 'marketplace') {
+    if (tab !== 'marketplace') return
+    const timer = window.setTimeout(() => {
       loadMarketplace({ query: searchQuery })
-    }
-  }, [tab, searchQuery, marketplaceSort]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [tab, searchQuery, marketplaceSort, loadMarketplace])
+
+  const closeDeleteDialog = useCallback(() => {
+    setDeleteTarget(null)
+    setDeleteAffectedAgents([])
+  }, [])
 
   // Debounce search input by 300ms
   const handleSearchChange = useCallback((value: string) => {
@@ -163,7 +179,7 @@ export function Skills() {
 
   const isSearching = searchQuery.trim().length > 0
   const hasMarketplaceItems = marketplace.items.length > 0
-  const canLoadMore = Boolean(marketplace.nextCursor)
+  const canLoadMore = isSearching && Boolean(marketplace.nextCursor)
 
   return (
     <div className="flex h-full flex-col">
@@ -445,7 +461,7 @@ export function Skills() {
                   className="pl-9"
                 />
               </div>
-              {(
+              {isSearching && (
                 <>
                   <select
                     data-testid="marketplace-sort-select"
@@ -468,13 +484,15 @@ export function Skills() {
               )}
             </div>
 
+            <MarketplaceDisclaimer />
+
             {/* Section header */}
-            {!isSearching && (
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-medium">{t.skills.marketplaceBrowseSummary}</h3>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-medium">
+                {isSearching ? t.skills.searchMarketplace : t.skills.recommended}
+              </h3>
+            </div>
 
             {/* Loading state */}
             {marketplaceStatus === 'loading' && (
@@ -529,7 +547,7 @@ export function Skills() {
         </div>
       )}
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && closeDeleteDialog()}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t.skills.deleteSkill}</AlertDialogTitle>
@@ -561,7 +579,7 @@ export function Skills() {
                 } catch (error) {
                   console.error('Failed to delete skill:', error)
                 }
-                setDeleteTarget(null)
+                closeDeleteDialog()
               }}
             >
               {t.common.delete}

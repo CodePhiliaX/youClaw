@@ -1,62 +1,62 @@
 [
   {
     "slug": "self-improving-agent",
-    "displayName": "Self Improving Agent",
-    "summary": "Captures learnings, errors, and corrections for continuous self-improvement",
+    "displayName": "self-improving-agent",
+    "summary": "Captures learnings, errors, and corrections to enable continuous improvement. Use when: (1) A command or operation fails unexpectedly, (2) User corrects Clau...",
     "category": "agent"
   },
   {
     "slug": "ddg-web-search",
     "displayName": "DuckDuckGo Web Search",
-    "summary": "Web search without API key using DuckDuckGo Lite",
+    "summary": "Web search without an API key using DuckDuckGo Lite via web_fetch. Use as a fallback when web_search fails with missing_brave_api_key error, or whenever you...",
     "category": "search"
   },
   {
     "slug": "web-search-exa",
     "displayName": "Web Search by Exa",
-    "summary": "Precise real-time web search powered by Exa",
+    "summary": "Neural web search, content extraction, company and people research, code search, and deep research via the Exa MCP server. Use when you need to: (1) search t...",
     "category": "search"
   },
   {
-    "slug": "agent-browser",
+    "slug": "agent-browser-clawdbot",
     "displayName": "Agent Browser",
-    "summary": "Rust-based headless browser automation CLI",
+    "summary": "Headless browser automation CLI optimized for AI agents with accessibility tree snapshots and ref-based element selection",
     "category": "browser"
   },
   {
     "slug": "agentic-coding",
     "displayName": "Agentic Coding",
-    "summary": "Delivers production code through acceptance contracts, micro-diffs, and red-green cycles",
+    "summary": "Ship production code with AI agents through acceptance contracts, micro diffs, red green loops, and deterministic handoff checkpoints.",
     "category": "coding"
   },
   {
     "slug": "coding",
     "displayName": "Coding",
-    "summary": "Coding style memory that adapts to your preferences and patterns",
+    "summary": "Coding style memory that adapts to your preferences, conventions, and patterns for consistent coding.",
     "category": "coding"
   },
   {
     "slug": "find-skills",
     "displayName": "Find Skills",
-    "summary": "Helps users discover and install agent skills",
+    "summary": "Helps users discover and install agent skills when they ask questions like \"how do I do X\", \"find a skill for X\", \"is there a skill that can...\", or express interest in extending capabilities. This skill should be used when the user is looking for functionality that might exist as an installable skill.",
     "category": "agent"
   },
   {
-    "slug": "ai-web-automation",
-    "displayName": "AI Web Automation",
-    "summary": "Automates web tasks like form filling, data scraping, testing, and monitoring",
+    "slug": "browser-research-lite",
+    "displayName": "Browser Research Lite",
+    "summary": "API-key-free online research via the built-in browser tool. Use this skill when web_search fails due to missing keys, and you still need web evidence.",
     "category": "browser"
   },
   {
-    "slug": "coding-agent-backup",
-    "displayName": "Coding Agent Backup",
-    "summary": "Delegates coding tasks to a background agent",
+    "slug": "vibe-coding",
+    "displayName": "Vibe Coding",
+    "summary": "Build software with AI by describing what you want. Covers prompting techniques, workflow patterns, rules files, and when to intervene.",
     "category": "coding"
   },
   {
-    "slug": "browser-automation",
-    "displayName": "Browser Automation",
-    "summary": "Automates browser interactions via natural language CLI commands",
+    "slug": "web-browsing",
+    "displayName": "Web Browsing",
+    "summary": "Browse and summarize websites, extract content from URLs, search the web for information. Use when user asks to visit a website, get webpage content, search...",
     "category": "browser"
   }
 ]

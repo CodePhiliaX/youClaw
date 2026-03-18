@@ -105,31 +105,6 @@ interface NormalizedMarketplaceQuery {
   nonSuspiciousOnly: boolean
 }
 
-interface ClawHubListSkill {
-  slug: string
-  displayName: string
-  summary?: string | null
-  tags?: Record<string, string>
-  stats?: unknown
-  createdAt?: number
-  updatedAt?: number
-  latestVersion?: {
-    version?: string
-    createdAt?: number
-    changelog?: string
-    license?: string | null
-  } | null
-  metadata?: {
-    os?: string[] | null
-    systems?: string[] | null
-  } | null
-}
-
-interface ClawHubListResponse {
-  items?: ClawHubListSkill[]
-  nextCursor?: string | null
-}
-
 interface ClawHubSearchResult {
   score?: number
   slug?: string
@@ -272,15 +247,12 @@ export class RegistryManager {
     const normalized = this.normalizeMarketplaceQuery(query)
     const installed = this.collectInstalledSkillStates()
 
+    if (!normalized.query) {
+      return this.listMarketplaceFallback(normalized, installed)
+    }
+
     try {
-      if (normalized.query) {
-        return await this.searchMarketplaceRemote(normalized, installed)
-      }
-      const result = await this.listMarketplaceRemote(normalized, installed)
-      if (result.items.length === 0 && !result.nextCursor) {
-        return this.listMarketplaceFallback(normalized, installed)
-      }
-      return result
+      return await this.searchMarketplaceRemote(normalized, installed)
     } catch (error) {
       const logger = getLogger()
       const message = error instanceof Error ? error.message : String(error)
@@ -372,34 +344,6 @@ export class RegistryManager {
 
     this.skillsLoader.refresh()
     logger.info({ slug: normalizedSlug }, 'Skill uninstalled')
-  }
-
-  private async listMarketplaceRemote(
-    query: NormalizedMarketplaceQuery,
-    installed: Map<string, InstalledSkillState>,
-  ): Promise<MarketplacePage> {
-    const url = new URL(this.resolveSkillsUrl())
-    url.searchParams.set('limit', String(query.limit))
-    url.searchParams.set('sort', query.sort)
-    if (query.cursor) {
-      url.searchParams.set('cursor', query.cursor)
-    }
-    if (query.nonSuspiciousOnly) {
-      url.searchParams.set('nonSuspiciousOnly', 'true')
-    }
-
-    const payload = await this.fetchJson<ClawHubListResponse>(url.toString())
-    const items = (payload.items ?? []).map((item) =>
-      this.buildRemoteListSkill(item, installed.get(item.slug)),
-    )
-
-    return {
-      items,
-      nextCursor: payload.nextCursor ?? null,
-      source: 'clawhub',
-      query: query.query,
-      sort: query.sort,
-    }
   }
 
   private async searchMarketplaceRemote(
@@ -534,34 +478,6 @@ export class RegistryManager {
             summary: payload.moderation.summary ?? null,
           }
         : null,
-    }
-  }
-
-  private buildRemoteListSkill(
-    item: ClawHubListSkill,
-    installedState?: InstalledSkillState,
-  ): MarketplaceSkill {
-    const latestVersion = item.latestVersion?.version ?? this.resolveLatestVersion(item.tags)
-    const stats = this.normalizeStats(item.stats)
-    return {
-      slug: item.slug,
-      displayName: item.displayName,
-      summary: item.summary ?? '',
-      installed: Boolean(installedState),
-      installSource: installedState?.installSource,
-      installedVersion: installedState?.version,
-      latestVersion,
-      hasUpdate: Boolean(installedState?.version && latestVersion && installedState.version !== latestVersion),
-      createdAt: item.createdAt ?? null,
-      updatedAt: item.updatedAt ?? null,
-      downloads: stats.downloads,
-      stars: stats.stars,
-      installsCurrent: stats.installsCurrent,
-      installsAllTime: stats.installsAllTime,
-      tags: Object.keys(item.tags ?? {}),
-      category: this.resolveCategory(item.slug, Object.keys(item.tags ?? {})),
-      source: 'clawhub',
-      metadata: this.normalizeMetadata(item.metadata),
     }
   }
 
@@ -763,10 +679,6 @@ export class RegistryManager {
 
   private resolveUserSkillsDir(): string {
     return this.options.userSkillsDir ?? resolve(homedir(), '.youclaw', 'skills')
-  }
-
-  private resolveSkillsUrl(): string {
-    return `${this.resolveApiBaseUrl()}/skills`
   }
 
   private resolveSearchUrl(): string {
