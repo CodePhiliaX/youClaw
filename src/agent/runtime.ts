@@ -1,7 +1,7 @@
 import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
-import { existsSync, copyFileSync, mkdirSync, statSync, chmodSync } from 'node:fs'
+import { existsSync, copyFileSync, mkdirSync, statSync, chmodSync, writeFileSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { getEnv } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
@@ -61,6 +61,13 @@ function resolveCliPath(): string {
             mkdirSync(cacheDir, { recursive: true })
             copyFileSync(resourceCliPath, cachedCliPath)
             safeLog('info', `Copied cli.js to sdk-cache (quarantine bypass)`, { src: resourceCliPath, dst: cachedCliPath })
+          }
+
+          // Ensure Node.js recognises cli.js as ESM (required on Windows where Node is the runtime).
+          // Written outside needsCopy so existing caches without package.json are also fixed.
+          const pkgJsonPath = resolve(cacheDir, 'package.json')
+          if (!existsSync(pkgJsonPath)) {
+            writeFileSync(pkgJsonPath, '{"type":"module"}', 'utf-8')
           }
 
           // Strip macOS quarantine attribute from the cached copy
