@@ -389,6 +389,8 @@ export const en = {
     redeemSuccess: 'Redeemed successfully',
     redeemFailed: 'Redemption failed',
     redeeming: 'Redeeming...',
+    redeemErrorCodeNotFound: 'Invitation code not found',
+    redeemErrorAlreadyUsed: 'You have already used an invitation code',
   },
   invitation: {
     title: 'My Invitation',
@@ -399,7 +401,6 @@ export const en = {
     stats: 'Invitation Stats',
     totalInvited: 'Total Invited',
     totalCreditsEarned: 'Credits Earned',
-    recentInvitees: 'Recent Invitees',
     noInvitees: 'No invitees yet. Share your referral code to get started!',
     loading: 'Loading...',
     loadFailed: 'Failed to load referral info',

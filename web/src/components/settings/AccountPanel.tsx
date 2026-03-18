@@ -104,7 +104,13 @@ export function AccountPanel() {
       // Refresh credit balance
       fetchCreditBalance()
     } catch (err: any) {
-      setRedeemResult({ success: false, message: err?.message || t.account.redeemFailed })
+      const msg = err?.message || ''
+      const errorMap: Record<string, string> = {
+        CODE_NOT_FOUND: t.account.redeemErrorCodeNotFound,
+        REFERRAL_ALREADY_USED: t.account.redeemErrorAlreadyUsed,
+      }
+      const matched = Object.keys(errorMap).find(key => msg.includes(key))
+      setRedeemResult({ success: false, message: matched ? errorMap[matched] : (msg || t.account.redeemFailed) })
     }
     setRedeemingCode(false)
   }

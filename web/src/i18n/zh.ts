@@ -391,6 +391,8 @@ export const zh: Translations = {
     redeemSuccess: '兑换成功',
     redeemFailed: '兑换失败',
     redeeming: '兑换中...',
+    redeemErrorCodeNotFound: '邀请码不存在',
+    redeemErrorAlreadyUsed: '你已经使用过邀请码了',
   },
   invitation: {
     title: '我的邀请',
@@ -401,7 +403,6 @@ export const zh: Translations = {
     stats: '邀请统计',
     totalInvited: '已邀请人数',
     totalCreditsEarned: '获得积分',
-    recentInvitees: '最近邀请',
     noInvitees: '暂无邀请记录，分享你的邀请码开始邀请吧！',
     loading: '加载中...',
     loadFailed: '加载邀请信息失败',

@@ -568,16 +568,17 @@ export interface ReferralCode {
   usedCount: number
   expiredAt: string | null
   enabled: boolean
+  type: string
+  userId: number
+  createdAt: number
+  updatedAt: number
 }
 
 export interface ReferralStats {
-  totalInvited: number
-  totalCreditsEarned: number
-  recentInvitees: Array<{
-    displayName: string
-    avatar: string | null
-    createdAt: number
-  }>
+  invitedCount: number
+  totalCredits: number
+  code: string
+  maxCredits: number
 }
 
 export async function getReferralCode() {

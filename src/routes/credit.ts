@@ -103,7 +103,11 @@ export function createCreditRoutes() {
         return c.json({ error: 'Failed to redeem code' }, res.status as any)
       }
 
-      const data = await res.json()
+      const data = await res.json() as { success?: boolean; errorCode?: string; errorMessage?: string }
+      // Java backend may return 200 with success: false
+      if (data.success === false) {
+        return c.json({ error: data.errorCode || data.errorMessage || 'Failed to redeem code' }, 400)
+      }
       return c.json(data)
     } catch (err) {
       const logger = getLogger()

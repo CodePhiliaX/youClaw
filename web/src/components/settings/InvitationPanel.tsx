@@ -112,7 +112,7 @@ export function InvitationPanel() {
               <span className="text-xs font-medium text-muted-foreground">{t.invitation.totalInvited}</span>
             </div>
             <div className="text-2xl font-bold">
-              {stats?.totalInvited ?? 0}
+              {stats?.invitedCount ?? 0}
               <span className="text-sm font-normal text-muted-foreground ml-1">{t.invitation.people}</span>
             </div>
           </div>
@@ -124,42 +124,13 @@ export function InvitationPanel() {
               <span className="text-xs font-medium text-muted-foreground">{t.invitation.totalCreditsEarned}</span>
             </div>
             <div className="text-2xl font-bold">
-              {(stats?.totalCreditsEarned ?? 0).toLocaleString()}
+              {(stats?.totalCredits ?? 0).toLocaleString()}
+              {stats?.maxCredits ? (
+                <span className="text-sm font-normal text-muted-foreground ml-1">/ {stats.maxCredits.toLocaleString()}</span>
+              ) : null}
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Recent invitees */}
-      <div>
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
-          {t.invitation.recentInvitees}
-        </h4>
-        {!stats?.recentInvitees?.length ? (
-          <div className="text-sm text-muted-foreground text-center py-6 border-2 border-dashed rounded-2xl">
-            {t.invitation.noInvitees}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {stats.recentInvitees.map((invitee, idx) => (
-              <div key={idx} className="flex items-center gap-3 p-4 rounded-2xl border border-border hover:border-muted-foreground/20 transition-all">
-                {invitee.avatar ? (
-                  <img src={invitee.avatar} alt={invitee.displayName} className="w-9 h-9 rounded-xl object-cover" />
-                ) : (
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-sm font-bold text-primary-foreground">
-                    {invitee.displayName?.[0]?.toUpperCase() ?? '?'}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">{invitee.displayName}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(invitee.createdAt).toLocaleDateString()}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   )
