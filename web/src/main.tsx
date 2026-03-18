@@ -1,3 +1,11 @@
+// Polyfill ES2022+ APIs for older WebViews (Safari 13/14 on macOS 10.15–11)
+import 'core-js/actual/array/at'
+import 'core-js/actual/string/at'
+import 'core-js/actual/object/has-own'
+import 'core-js/actual/structured-clone'
+import 'core-js/actual/array/find-last'
+import 'core-js/actual/array/find-last-index'
+
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
