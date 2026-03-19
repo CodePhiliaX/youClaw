@@ -59,37 +59,67 @@ export default function App() {
 
     let unlisten: (() => void) | null = null
     const handledUrls = new Set<string>()
+    const inFlightUrls = new Set<string>()
+
+    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+    const persistAuthTokenWithRetry = async (token: string) => {
+      let lastError: unknown = null
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        try {
+          await saveAuthToken(token)
+          return
+        } catch (err) {
+          lastError = err
+          await delay(500)
+        }
+      }
+      throw lastError ?? new Error('Failed to persist auth token from deep link')
+    }
 
     const handleDeepLink = async (rawUrl: string) => {
-      if (!rawUrl || handledUrls.has(rawUrl)) return
-      handledUrls.add(rawUrl)
+      if (!rawUrl || handledUrls.has(rawUrl) || inFlightUrls.has(rawUrl)) return
+      inFlightUrls.add(rawUrl)
 
       let url: URL
       try {
         url = new URL(rawUrl)
       } catch {
+        inFlightUrls.delete(rawUrl)
         return
       }
 
-      if (url.protocol !== 'youclaw:') return
+      if (url.protocol !== 'youclaw:') {
+        inFlightUrls.delete(rawUrl)
+        return
+      }
 
       const route = `${url.hostname}${url.pathname}`
       if (route === 'auth/callback') {
         const token = url.searchParams.get('token')
-        if (!token) return
+        if (!token) {
+          inFlightUrls.delete(rawUrl)
+          return
+        }
         try {
-          await saveAuthToken(token)
+          await persistAuthTokenWithRetry(token)
+          handledUrls.add(rawUrl)
           await fetchUser()
           await fetchCreditBalance()
         } catch (err) {
           console.error('Failed to persist auth token from deep link:', err)
+        } finally {
+          inFlightUrls.delete(rawUrl)
         }
         return
       }
 
       if (route === 'pay/callback' && url.searchParams.get('status') === 'success') {
+        handledUrls.add(rawUrl)
         void fetchCreditBalance()
       }
+
+      inFlightUrls.delete(rawUrl)
     }
 
     void import('@tauri-apps/plugin-deep-link').then(async ({ getCurrent }) => {
