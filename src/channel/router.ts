@@ -115,6 +115,11 @@ export class MessageRouter {
         processedAttachments,
       )
 
+      if (!reply.trim()) {
+        logger.warn({ agentId: config.id, chatId: message.chatId }, 'Agent returned an empty reply, skipping assistant message persistence')
+        return
+      }
+
       // Store bot reply
       saveMessage({
         id: randomUUID(),

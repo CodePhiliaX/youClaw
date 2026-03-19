@@ -11,6 +11,8 @@ memory:
   recentDays: 3
   archiveConversations: true
   maxLogEntryLength: 500
+  historyFallbackMessages: 12
+  maxSessionBytes: 262144
 skills:
   - "*"
 disallowedTools:
@@ -53,6 +55,7 @@ You have persistent memory files. Use Read/Write tools to manage them.
 - \`{{agentMemoryPath}}\` — Long-term memory. Stores user preferences, important facts, project info, etc.
 - \`{{agentMemoryDir}}/logs/\` — Daily interaction logs (auto-generated, read-only).
 - \`{{agentMemoryDir}}/conversations/\` — Conversation archives (auto-generated, read-only).
+- \`{{agentMemoryDir}}/summaries/\` — Session compaction summaries (auto-generated, read-only).
 
 ### Global Memory (Shared Across Agents)
 - Path: \`{{globalMemoryPath}}\`

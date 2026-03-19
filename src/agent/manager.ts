@@ -5,6 +5,7 @@ import { getPaths } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
 import { inferChannelType } from '../channel/config-schema.ts'
 import type { EventBus } from '../events/index.ts'
+import type { MemoryManager } from '../memory/index.ts'
 import { AgentConfigSchema } from './schema.ts'
 import { AgentRuntime } from './runtime.ts'
 import { PromptBuilder } from './prompt-builder.ts'
@@ -26,6 +27,7 @@ export class AgentManager {
   private agentRouter: AgentRouter | null
   private secretsManager: SecretsManager | null
   private skillsLoader: SkillsLoader | null
+  private memoryManager: MemoryManager | null
 
   constructor(
     eventBus: EventBus,
@@ -34,6 +36,7 @@ export class AgentManager {
     agentRouter?: AgentRouter,
     secretsManager?: SecretsManager,
     skillsLoader?: SkillsLoader,
+    memoryManager?: MemoryManager,
   ) {
     this.eventBus = eventBus
     this.promptBuilder = promptBuilder
@@ -41,6 +44,7 @@ export class AgentManager {
     this.agentRouter = agentRouter ?? null
     this.secretsManager = secretsManager ?? null
     this.skillsLoader = skillsLoader ?? null
+    this.memoryManager = memoryManager ?? null
   }
 
   /**
@@ -208,6 +212,7 @@ export class AgentManager {
           this.promptBuilder,
           this.hooksManager ?? undefined,
           this.skillsLoader ?? undefined,
+          this.memoryManager ?? undefined,
         )
 
         this.agents.set(config.id, {

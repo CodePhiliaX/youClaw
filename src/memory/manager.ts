@@ -16,6 +16,11 @@ export interface ArchivedConversation {
   size: number
 }
 
+export interface SavedSessionSummary {
+  filename: string
+  filePath: string
+}
+
 export class MemoryManager {
   private getAgentMemoryDir(agentId: string): string {
     const agentsDir = getPaths().agents
@@ -42,6 +47,10 @@ export class MemoryManager {
     return base
   }
 
+  private getSummariesDir(agentId: string): string {
+    return resolve(this.getAgentMemoryDir(agentId), 'summaries')
+  }
+
   private ensureMemoryDir(agentId: string): void {
     const memoryDir = this.getAgentMemoryDir(agentId)
     if (!existsSync(memoryDir)) {
@@ -58,6 +67,13 @@ export class MemoryManager {
 
   private ensureConversationsDir(agentId: string): void {
     const dir = this.getConversationsDir(agentId)
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true })
+    }
+  }
+
+  private ensureSummariesDir(agentId: string): void {
+    const dir = this.getSummariesDir(agentId)
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true })
     }
@@ -209,9 +225,11 @@ export class MemoryManager {
     const longTermMemory = this.getMemory(agentId)
     const dates = this.getDailyLogDates(agentId)
     const recentDates = dates.slice(0, recentDays)
+    const summaryFiles = this.getSessionSummaryFiles(agentId).slice(0, recentDays)
 
     let recentLogs = ''
-    let totalChars = longTermMemory.length
+    let recentSummaries = ''
+    let totalChars = globalMemory.length + longTermMemory.length
 
     for (const date of recentDates) {
       const log = this.getDailyLog(agentId, date)
@@ -230,6 +248,25 @@ export class MemoryManager {
       }
     }
 
+    for (const filename of summaryFiles) {
+      const filePath = resolve(this.getSummariesDir(agentId), filename)
+      if (!existsSync(filePath)) continue
+
+      const content = readFileSync(filePath, 'utf-8')
+      if (!content.trim()) continue
+
+      if (totalChars + content.length > maxContextChars) {
+        const remaining = maxContextChars - totalChars
+        if (remaining > 100) {
+          recentSummaries += content.slice(0, remaining) + '\n...[session summaries truncated]\n'
+        }
+        break
+      }
+
+      totalChars += content.length
+      recentSummaries += content + '\n'
+    }
+
     const parts: string[] = ['<memory>']
 
     if (globalMemory) {
@@ -238,6 +275,9 @@ export class MemoryManager {
 
     parts.push(`<long_term>\n${longTermMemory}\n</long_term>`)
     parts.push(`<recent_logs>\n${recentLogs.trimEnd()}\n</recent_logs>`)
+    if (recentSummaries.trim()) {
+      parts.push(`<session_summaries>\n${recentSummaries.trimEnd()}\n</session_summaries>`)
+    }
     parts.push('</memory>')
 
     return parts.join('\n')
@@ -443,5 +483,51 @@ export class MemoryManager {
     }
 
     return readFileSync(filePath, 'utf-8')
+  }
+
+  getSessionSummaryFiles(agentId: string): string[] {
+    const dir = this.getSummariesDir(agentId)
+    if (!existsSync(dir)) return []
+
+    return readdirSync(dir)
+      .filter((file) => file.endsWith('.md'))
+      .sort((a, b) => b.localeCompare(a))
+  }
+
+  saveSessionSummary(
+    agentId: string,
+    chatId: string,
+    sessionId: string,
+    summary: string,
+    metadata?: { trigger?: string; model?: string },
+  ): SavedSessionSummary | null {
+    const cleanedSummary = summary.trim()
+    if (!cleanedSummary) return null
+
+    this.ensureSummariesDir(agentId)
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const safeChatId = chatId.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 80) || 'chat'
+    const filename = `${timestamp}-${safeChatId}-${sessionId}.md`
+    const filePath = resolve(this.getSummariesDir(agentId), filename)
+    const content = [
+      '# Session Summary',
+      '',
+      `- Agent: ${agentId}`,
+      `- Chat: ${chatId}`,
+      `- Session: ${sessionId}`,
+      metadata?.trigger ? `- Trigger: ${metadata.trigger}` : null,
+      metadata?.model ? `- Model: ${metadata.model}` : null,
+      `- Saved: ${new Date().toISOString()}`,
+      '',
+      '## Summary',
+      '',
+      cleanedSummary,
+      '',
+    ].filter(Boolean).join('\n')
+
+    writeFileSync(filePath, content, 'utf-8')
+    getLogger().info({ agentId, chatId, sessionId, filename }, 'session summary saved')
+    return { filename, filePath }
   }
 }

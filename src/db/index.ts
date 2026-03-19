@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   agent_id TEXT NOT NULL,
   chat_id TEXT NOT NULL,
   session_id TEXT NOT NULL,
+  session_file TEXT,
   PRIMARY KEY (agent_id, chat_id)
 );
 
@@ -129,6 +130,9 @@ export function initDatabase(): Database {
   // Migration: add chat avatar column
   try { _db.exec('ALTER TABLE chats ADD COLUMN avatar TEXT') } catch {}
 
+  // Migration: persist pi session file path for reliable resume
+  try { _db.exec('ALTER TABLE sessions ADD COLUMN session_file TEXT') } catch {}
+
   getLogger().info({ path: paths.db }, 'Database initialized')
   return _db
 }
@@ -223,17 +227,33 @@ export function deleteChat(chatId: string) {
 
 // ===== Session Operations =====
 
-export function getSession(agentId: string, chatId: string): string | null {
+export function getSessionEntry(agentId: string, chatId: string): {
+  sessionId: string
+  sessionFile: string | null
+} | null {
   const db = getDatabase()
-  const row = queryGet<{ session_id: string }>(db, 'SELECT session_id FROM sessions WHERE agent_id = ? AND chat_id = ?', agentId, chatId)
-  return row?.session_id ?? null
+  const row = queryGet<{ session_id: string; session_file: string | null }>(
+    db,
+    'SELECT session_id, session_file FROM sessions WHERE agent_id = ? AND chat_id = ?',
+    agentId,
+    chatId,
+  )
+  if (!row) return null
+  return {
+    sessionId: row.session_id,
+    sessionFile: row.session_file ?? null,
+  }
 }
 
-export function saveSession(agentId: string, chatId: string, sessionId: string) {
+export function getSession(agentId: string, chatId: string): string | null {
+  return getSessionEntry(agentId, chatId)?.sessionId ?? null
+}
+
+export function saveSession(agentId: string, chatId: string, sessionId: string, sessionFile?: string | null) {
   const db = getDatabase()
   db.run(
-    `INSERT OR REPLACE INTO sessions (agent_id, chat_id, session_id) VALUES (?, ?, ?)`,
-    [agentId, chatId, sessionId]
+    `INSERT OR REPLACE INTO sessions (agent_id, chat_id, session_id, session_file) VALUES (?, ?, ?, ?)`,
+    [agentId, chatId, sessionId, sessionFile ?? null]
   )
 }
 

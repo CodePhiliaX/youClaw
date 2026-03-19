@@ -5,6 +5,7 @@ import {
   getChats,
   getMessages,
   getSession,
+  getSessionEntry,
   saveMessage,
   saveSession,
   upsertChat,
@@ -55,10 +56,18 @@ describe('session storage', () => {
   })
 
   test('can be read after saving, repeated saves overwrite', () => {
-    saveSession('agent-1', 'web:chat-1', 'session-1')
+    saveSession('agent-1', 'web:chat-1', 'session-1', '/tmp/session-1.jsonl')
     expect(getSession('agent-1', 'web:chat-1')).toBe('session-1')
+    expect(getSessionEntry('agent-1', 'web:chat-1')).toEqual({
+      sessionId: 'session-1',
+      sessionFile: '/tmp/session-1.jsonl',
+    })
 
-    saveSession('agent-1', 'web:chat-1', 'session-2')
+    saveSession('agent-1', 'web:chat-1', 'session-2', '/tmp/session-2.jsonl')
     expect(getSession('agent-1', 'web:chat-1')).toBe('session-2')
+    expect(getSessionEntry('agent-1', 'web:chat-1')).toEqual({
+      sessionId: 'session-2',
+      sessionFile: '/tmp/session-2.jsonl',
+    })
   })
 })

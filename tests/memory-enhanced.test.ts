@@ -190,4 +190,18 @@ describe('MemoryManager enhanced features', () => {
     expect(contentA).toContain('A')
     expect(contentB).toContain('B')
   })
+
+  test('session summaries are included in memory context', () => {
+    const agentId = createAgentId('mem-summary')
+    mkdirSync(getAgentMemoryDir(agentId), { recursive: true })
+    writeFileSync(getMemoryFile(agentId), 'stable facts')
+
+    memoryManager.saveSessionSummary(agentId, 'web:chat-1', 'session-1', 'Summary A')
+    memoryManager.saveSessionSummary(agentId, 'web:chat-1', 'session-2', 'Summary B')
+
+    const context = memoryManager.getMemoryContext(agentId, { recentDays: 2, maxContextChars: 2000 })
+    expect(context).toContain('<session_summaries>')
+    expect(context).toContain('Summary A')
+    expect(context).toContain('Summary B')
+  })
 })
