@@ -147,9 +147,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       if (isTauri) {
-        // Use HTTP callback + polling for reliable token delivery.
-        // Deep link is only used to bring the app window to foreground (triggered by the callback page).
-        const { loginUrl } = await getAuthLoginUrl()
+        // New desktop builds opt into the Tauri deep-link callback explicitly.
+        // Older clients keep calling /api/auth/login without platform=tauri and continue
+        // using the legacy localhost callback flow, so we preserve backwards compatibility.
+        const { loginUrl } = await getAuthLoginUrl('tauri')
         const { openUrl } = await import('@tauri-apps/plugin-opener')
         await openUrl(loginUrl)
         startPolling()
@@ -193,11 +194,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   openPayPage: async () => {
     try {
-      const { payUrl } = await getPayUrl()
       if (isTauri) {
+        const { payUrl } = await getPayUrl('tauri')
         const { openUrl } = await import('@tauri-apps/plugin-opener')
         await openUrl(payUrl)
       } else {
+        const { payUrl } = await getPayUrl()
         window.open(payUrl, '_blank')
       }
 

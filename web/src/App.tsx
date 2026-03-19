@@ -12,6 +12,7 @@ import { PortConflictDialog } from './components/PortConflictDialog'
 import { useTheme } from './hooks/useTheme'
 import { useAppStore } from './stores/app'
 import { isTauri, updateCachedBaseUrl } from './api/transport'
+import { saveAuthToken } from './api/client'
 
 function AuthGuard() {
   const isLoggedIn = useAppStore((s) => s.isLoggedIn)
@@ -27,6 +28,8 @@ export default function App() {
   const isLoggedIn = useAppStore((s) => s.isLoggedIn)
   const cloudEnabled = useAppStore((s) => s.cloudEnabled)
   const gitAvailable = useAppStore((s) => s.gitAvailable)
+  const fetchUser = useAppStore((s) => s.fetchUser)
+  const fetchCreditBalance = useAppStore((s) => s.fetchCreditBalance)
   const canPass = !cloudEnabled || isLoggedIn
   const [portConflict, setPortConflict] = useState(false)
 
@@ -50,6 +53,64 @@ export default function App() {
 
     return () => { cleanup?.() }
   }, [])
+
+  useEffect(() => {
+    if (!isTauri) return
+
+    let unlisten: (() => void) | null = null
+    const handledUrls = new Set<string>()
+
+    const handleDeepLink = async (rawUrl: string) => {
+      if (!rawUrl || handledUrls.has(rawUrl)) return
+      handledUrls.add(rawUrl)
+
+      let url: URL
+      try {
+        url = new URL(rawUrl)
+      } catch {
+        return
+      }
+
+      if (url.protocol !== 'youclaw:') return
+
+      const route = `${url.hostname}${url.pathname}`
+      if (route === 'auth/callback') {
+        const token = url.searchParams.get('token')
+        if (!token) return
+        try {
+          await saveAuthToken(token)
+          await fetchUser()
+          await fetchCreditBalance()
+        } catch (err) {
+          console.error('Failed to persist auth token from deep link:', err)
+        }
+        return
+      }
+
+      if (route === 'pay/callback' && url.searchParams.get('status') === 'success') {
+        void fetchCreditBalance()
+      }
+    }
+
+    void import('@tauri-apps/plugin-deep-link').then(async ({ getCurrent }) => {
+      const urls = await getCurrent().catch(() => null)
+      for (const url of urls ?? []) {
+        await handleDeepLink(url)
+      }
+    })
+
+    void import('@tauri-apps/api/event').then(({ listen }) => {
+      listen<string>('deep-link-received', (event) => {
+        void handleDeepLink(event.payload)
+      }).then((fn) => {
+        unlisten = fn
+      })
+    })
+
+    return () => {
+      unlisten?.()
+    }
+  }, [fetchCreditBalance, fetchUser])
 
   // Block all pages until Git is available (Windows only)
   if (!gitAvailable) {
