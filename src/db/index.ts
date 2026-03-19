@@ -82,6 +82,39 @@ CREATE TABLE IF NOT EXISTS channels (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS documents (
+  id TEXT PRIMARY KEY,
+  chat_id TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  status TEXT NOT NULL,
+  source_path TEXT NOT NULL,
+  markdown_path TEXT,
+  json_path TEXT,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  metadata_json TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_documents_chat_status ON documents(chat_id, status, updated_at);
+
+CREATE TABLE IF NOT EXISTS document_chunks (
+  id TEXT PRIMARY KEY,
+  document_id TEXT NOT NULL,
+  chat_id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL,
+  title TEXT,
+  content TEXT NOT NULL,
+  page INTEGER,
+  sheet TEXT,
+  slide INTEGER,
+  metadata_json TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_document_chunks_document_ordinal ON document_chunks(document_id, ordinal);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_chat_document ON document_chunks(chat_id, document_id);
 `
 
 // bun:sqlite query result type helpers

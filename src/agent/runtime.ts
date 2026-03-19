@@ -13,6 +13,7 @@ import type { AgentCompiler } from './compiler.ts'
 import type { HooksManager } from './hooks.ts'
 import { resolveMcpServers } from './mcp-utils.ts'
 import { createBuiltinMcpServer } from './builtin-mcp.ts'
+import { buildParsedDocumentsPrompt, createDocumentMcpServer, ingestDocumentAttachments } from './document-mcp.ts'
 import { preprocessAttachments } from './document-converter.ts'
 import { abortRegistry } from './abort-registry.ts'
 import { getActiveModelConfig } from '../settings/manager.ts'
@@ -804,7 +805,7 @@ export class AgentRuntime {
       }
     }
 
-    // MCP servers: resolve env vars + inject built-in image analysis server
+    // MCP servers: resolve env vars + inject built-in image analysis/document servers
     const mcpServers: Record<string, unknown> = {}
     if (this.config.mcpServers) {
       // Filter out legacy external minimax MCP (replaced by built-in)
@@ -815,6 +816,7 @@ export class AgentRuntime {
     }
     // Always inject built-in minimax MCP (runs in-process, no external dependency)
     mcpServers['minimax'] = createBuiltinMcpServer()
+    mcpServers['document'] = createDocumentMcpServer(chatId)
     queryOptions.mcpServers = mcpServers as Record<string, import('@anthropic-ai/claude-agent-sdk').McpServerConfig>
 
     // Tool access control (ensure Skill tool is always included)
@@ -867,14 +869,29 @@ export class AgentRuntime {
       category: 'agent',
     }, 'Full SDK query options and env snapshot')
 
-    // Pre-convert binary documents (DOCX/XLSX/PPTX/PDF) to plain text
-    let processedAttachments = attachments
-    if (attachments && attachments.length > 0) {
-      processedAttachments = await preprocessAttachments(attachments)
+    // Parse PDF attachments into the document store before query so the agent
+    // can use stable document tools instead of reading raw local file paths.
+    const { parsedDocuments, remainingAttachments } = await ingestDocumentAttachments(
+      chatId,
+      attachments,
+      ({ documentId, filename, status, error }) => {
+        this.emitDocumentStatus(agentId, chatId, documentId, filename, status, error)
+      },
+    )
+
+    // Pre-convert remaining binary documents (DOCX/XLSX/PPTX/PDF) to plain text
+    let processedAttachments = remainingAttachments
+    if (remainingAttachments.length > 0) {
+      processedAttachments = await preprocessAttachments(remainingAttachments)
     }
 
     // Append file path hints so the agent can access attached files via its tools
     let finalUserPrompt = prompt
+    const parsedDocumentsPrompt = buildParsedDocumentsPrompt(parsedDocuments)
+    if (parsedDocumentsPrompt) {
+      finalUserPrompt = (finalUserPrompt || '') + '\n\n' + parsedDocumentsPrompt
+    }
+
     if (processedAttachments && processedAttachments.length > 0) {
       const imageFiles = processedAttachments.filter((a) => a.mediaType.startsWith('image/'))
       const otherFiles = processedAttachments.filter((a) => !a.mediaType.startsWith('image/'))
@@ -1236,6 +1253,25 @@ export class AgentRuntime {
       chatId,
       tool,
       input: JSON.stringify(input).slice(0, 200),
+    })
+  }
+
+  private emitDocumentStatus(
+    agentId: string,
+    chatId: string,
+    documentId: string,
+    filename: string,
+    status: 'parsing' | 'parsed' | 'failed',
+    error?: string,
+  ): void {
+    this.eventBus.emit({
+      type: 'document_status',
+      agentId,
+      chatId,
+      documentId,
+      filename,
+      status,
+      error,
     })
   }
 }

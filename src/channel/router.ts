@@ -8,7 +8,6 @@ import type { MemoryManager } from '../memory/index.ts'
 import type { SkillsLoader } from '../skills/index.ts'
 import { parseSkillInvocations } from '../skills/invoke.ts'
 import type { InboundMessage, Channel } from './types.ts'
-import { preprocessAttachments } from '../agent/document-converter.ts'
 
 export class MessageRouter {
   private channels: Channel[] = []
@@ -99,11 +98,6 @@ export class MessageRouter {
 
     logger.info({ agentId: config.id, chatId: message.chatId, requestedSkills }, 'Routing message to agent')
 
-    // Preprocess binary document attachments (PDF/DOCX/XLSX → extracted text files)
-    const processedAttachments = message.attachments
-      ? await preprocessAttachments(message.attachments)
-      : undefined
-
     // Enqueue for processing (pass requestedSkills)
     try {
       const reply = await this.agentQueue.enqueue(
@@ -112,7 +106,7 @@ export class MessageRouter {
         contentForAgent,
         requestedSkills.length > 0 ? requestedSkills : undefined,
         message.browserProfileId,
-        processedAttachments,
+        message.attachments,
       )
 
       // Store bot reply

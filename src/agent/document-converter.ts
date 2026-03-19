@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSy
 import { resolve, basename, extname } from 'node:path'
 import { createHash } from 'node:crypto'
 import { getPaths } from '../config/paths.ts'
+import { extractPdfText } from '../document/parsers/pdf.ts'
 import { getLogger } from '../logger/index.ts'
 import type { Attachment } from '../types/attachment.ts'
 
@@ -274,8 +275,7 @@ async function convertPptx(filePath: string, _cacheDir: string): Promise<Convert
 }
 
 async function convertPdf(filePath: string, _cacheDir: string): Promise<ConvertResult> {
-  const pdfParse = (await import('@cedrugs/pdf-parse')).default
   const buffer = readFileSync(filePath)
-  const data = await pdfParse(buffer)
+  const data = await extractPdfText(buffer)
   return { text: data.text }
 }
