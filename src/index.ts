@@ -1,6 +1,9 @@
 // Remove CLAUDECODE env var to prevent Claude Agent SDK from detecting a nested session
 delete process.env.CLAUDECODE
 
+import { appendFileSync, mkdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { resolve } from 'node:path'
 import { loadEnv, getEnv } from './config/index.ts'
 import { initLogger, getLogger } from './logger/index.ts'
 import { initDatabase, createTask, updateTask, deleteTask, getTasks, getTask } from './db/index.ts'
@@ -17,31 +20,53 @@ import { createApp } from './routes/index.ts'
 
 async function main() {
   // 1. Load environment variables
-  loadEnv()
-  const env = getEnv()
+  let env: ReturnType<typeof getEnv>
+  try {
+    loadEnv()
+    env = getEnv()
+  } catch (err) {
+    console.error('[STARTUP] Step 1 failed: load env', err)
+    throw err
+  }
 
   // 2. Initialize logger
   const logger = initLogger()
   logger.info('YouClaw starting...')
 
   // 2b. Pre-extract embedded Bun runtime (before any agent code runs)
-  const bunRuntimePath = ensureBunRuntime()
-  if (bunRuntimePath) {
-    logger.info({ path: bunRuntimePath }, 'Bun runtime ready (embedded)')
-    resetShellEnvCache()  // Ensure embedded Bun dir is picked up by getShellEnv()
-  } else {
-    logger.info('Using system Bun runtime')
+  try {
+    const bunRuntimePath = ensureBunRuntime()
+    if (bunRuntimePath) {
+      logger.info({ path: bunRuntimePath }, 'Bun runtime ready (embedded)')
+      resetShellEnvCache()  // Ensure embedded Bun dir is picked up by getShellEnv()
+    } else {
+      logger.info('Using system Bun runtime')
+    }
+  } catch (err) {
+    logger.warn({ err }, '[STARTUP] Step 2b failed: ensure Bun runtime, continuing without embedded runtime')
   }
 
   // 3. Initialize database
-  initDatabase()
+  try {
+    initDatabase()
+    logger.info('Database initialized')
+  } catch (err) {
+    logger.error({ err }, '[STARTUP] Step 3 failed: init database')
+    throw err
+  }
 
   // 4. Create EventBus
   const eventBus = new EventBus()
 
   // 5. Create SkillsLoader and SkillsWatcher
-  const skillsLoader = new SkillsLoader()
-  logger.info({ count: skillsLoader.loadAllSkills().length }, 'Skills loaded')
+  let skillsLoader: SkillsLoader
+  try {
+    skillsLoader = new SkillsLoader()
+    logger.info({ count: skillsLoader.loadAllSkills().length }, 'Skills loaded')
+  } catch (err) {
+    logger.error({ err }, '[STARTUP] Step 5 failed: load skills')
+    throw err
+  }
 
   let agentManagerRef: AgentManager | null = null
   const skillsWatcher = new SkillsWatcher(skillsLoader, {
@@ -56,7 +81,14 @@ async function main() {
   const registryManager = new RegistryManager(skillsLoader)
 
   // 6. Create MemoryManager and MemoryIndexer
-  const memoryManager = new MemoryManager()
+  let memoryManager: MemoryManager
+  try {
+    memoryManager = new MemoryManager()
+    logger.info('Memory manager initialized')
+  } catch (err) {
+    logger.error({ err }, '[STARTUP] Step 6 failed: init memory manager')
+    throw err
+  }
   let memoryIndexer: MemoryIndexer | null = null
   try {
     memoryIndexer = new MemoryIndexer()
@@ -69,7 +101,12 @@ async function main() {
 
   // 7. Create SecretsManager
   const secretsManager = new SecretsManager()
-  secretsManager.loadFromEnv()
+  try {
+    secretsManager.loadFromEnv()
+  } catch (err) {
+    logger.error({ err }, '[STARTUP] Step 7 failed: init secrets manager')
+    throw err
+  }
 
   // 8. Create HooksManager
   const hooksManager = new HooksManager()
@@ -80,17 +117,24 @@ async function main() {
   const agentRouter = new AgentRouter()
 
   // 10. Create AgentManager (inject all new modules)
-  const agentManager = new AgentManager(
-    eventBus,
-    promptBuilder,
-    compiler,
-    hooksManager,
-    agentRouter,
-    secretsManager,
-    skillsLoader,
-  )
-  await agentManager.loadAgents()
-  agentManagerRef = agentManager
+  let agentManager: AgentManager
+  try {
+    agentManager = new AgentManager(
+      eventBus,
+      promptBuilder,
+      compiler,
+      hooksManager,
+      agentRouter,
+      secretsManager,
+      skillsLoader,
+    )
+    await agentManager.loadAgents()
+    agentManagerRef = agentManager
+    logger.info({ count: agentManager.getAgents().length }, 'Agents loaded')
+  } catch (err) {
+    logger.error({ err }, '[STARTUP] Step 10 failed: init agent manager / load agents')
+    throw err
+  }
 
   // 11. Create AgentQueue
   const agentQueue = new AgentQueue(agentManager)
@@ -99,9 +143,16 @@ async function main() {
   const router = new MessageRouter(agentManager, agentQueue, eventBus, memoryManager, skillsLoader)
 
   // 13. Create ChannelManager and load channels
-  const channelManager = new ChannelManager(router, (msg) => router.handleInbound(msg), eventBus)
-  await channelManager.seedFromEnv(env)     // Migrate from env on first launch
-  await channelManager.loadFromDatabase()   // Load and connect all enabled channels
+  let channelManager: ChannelManager
+  try {
+    channelManager = new ChannelManager(router, (msg) => router.handleInbound(msg), eventBus)
+    await channelManager.seedFromEnv(env)     // Migrate from env on first launch
+    await channelManager.loadFromDatabase()   // Load and connect all enabled channels
+    logger.info('Channels loaded')
+  } catch (err) {
+    logger.error({ err }, '[STARTUP] Step 13 failed: init channel manager')
+    throw err
+  }
 
   // 14. Create Scheduler and start
   const scheduler = new Scheduler(agentQueue, agentManager, eventBus)
@@ -224,7 +275,23 @@ async function main() {
   process.on('SIGINT', shutdown)
 }
 
+function writeStartupCrashLog(errorText: string): void {
+  try {
+    const baseDir = process.env.DATA_DIR
+      ? resolve(process.env.DATA_DIR)
+      : resolve(tmpdir(), 'youclaw-data')
+    mkdirSync(baseDir, { recursive: true })
+    const logPath = resolve(baseDir, 'startup-crash.log')
+    const line = `[${new Date().toISOString()}] ${errorText}\n`
+    appendFileSync(logPath, line, 'utf-8')
+  } catch {
+    // best-effort only
+  }
+}
+
 main().catch((err) => {
-  console.error('Startup failed:', err)
+  const errorText = err instanceof Error ? err.stack ?? err.message : String(err)
+  console.error('[STARTUP] Fatal error:', errorText)
+  writeStartupCrashLog(errorText)
   process.exit(1)
 })

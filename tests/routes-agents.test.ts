@@ -23,8 +23,16 @@ function getAgentDir(agentId: string) {
   return resolve(getPaths().agents, agentId)
 }
 
-async function createRealManager() {
-  const manager = new AgentManager(new EventBus(), new PromptBuilder(null, null))
+async function createRealManager(skillsLoader?: any) {
+  const manager = new AgentManager(
+    new EventBus(),
+    new PromptBuilder(skillsLoader ?? null, null),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    skillsLoader,
+  )
   await manager.loadAgents()
   return manager
 }
@@ -237,6 +245,37 @@ describe('agents routes', () => {
     expect(res.status).toBe(200)
     expect(body.skills).toEqual(['apple-notes', 'hello-world'])
     expect(yaml.skills).toEqual(['apple-notes', 'hello-world'])
+  })
+
+  test('PUT /agents/:id normalizes legacy registry slugs to local skill names', async () => {
+    const skillsLoader = {
+      normalizeAgentSkillNames: (skills?: string[]) => ({
+        skills: skills?.map((skill) => skill === 'self-improving-agent' ? 'self-improvement' : skill),
+        changed: Boolean(skills?.includes('self-improving-agent')),
+      }),
+      syncAgentClaudeSkills: () => {},
+    }
+    const manager = await createRealManager(skillsLoader)
+    const app = createAgentsRoutes(manager)
+    const agentId = createAgentId('route-skills-normalize')
+
+    await app.request('/agents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: agentId, name: 'Normalize Skills Agent' }),
+    })
+
+    const res = await app.request(`/agents/${agentId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ skills: ['self-improving-agent'] }),
+    })
+    const body = await res.json() as { skills: string[] }
+    const yaml = parseYaml(readFileSync(resolve(getAgentDir(agentId), 'agent.yaml'), 'utf-8')) as Record<string, unknown>
+
+    expect(res.status).toBe(200)
+    expect(body.skills).toEqual(['self-improvement'])
+    expect(yaml.skills).toEqual(['self-improvement'])
   })
 
   test('toggling from specific skills to wildcard and back preserves no stale entries', async () => {

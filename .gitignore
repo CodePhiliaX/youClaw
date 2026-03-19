@@ -55,5 +55,8 @@ src-tauri/target/
 src-tauri/bin/youclaw-server*
 src-tauri/resources/bun-runtime/
 
+# Docs
+docs/
+
 # Claude Code
 .claude/

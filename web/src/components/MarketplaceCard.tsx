@@ -12,16 +12,19 @@ function formatMarketplaceDate(timestamp: number) {
 }
 
 export function MarketplaceCard({
-  skill: initialSkill,
+  skill,
   onChanged,
   extraActions,
+  hideInstalledBadge = false,
+  statusBadges,
 }: {
   skill: MarketplaceSkill
   onChanged: () => void
   extraActions?: ReactNode
+  hideInstalledBadge?: boolean
+  statusBadges?: ReactNode
 }) {
   const { t } = useI18n()
-  const [skill, setSkill] = useState(initialSkill)
   const [status, setStatus] = useState<'idle' | 'installing' | 'updating' | 'uninstalling' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const [confirmDetail, setConfirmDetail] = useState<MarketplaceSkillDetail | null>(null)
@@ -34,7 +37,6 @@ export function MarketplaceCard({
       const result = await installRecommendedSkill(skill.slug)
       if (result.ok) {
         setStatus('idle')
-        setSkill(s => ({ ...s, installed: true, hasUpdate: false }))
         onChanged()
       } else {
         setStatus('error')
@@ -53,7 +55,6 @@ export function MarketplaceCard({
       const result = await updateMarketplaceSkill(skill.slug)
       if (result.ok) {
         setStatus('idle')
-        setSkill(s => ({ ...s, hasUpdate: false, installedVersion: s.latestVersion ?? s.installedVersion }))
         onChanged()
       } else {
         setStatus('error')
@@ -92,7 +93,6 @@ export function MarketplaceCard({
       const result = await uninstallRecommendedSkill(skill.slug)
       if (result.ok) {
         setStatus('idle')
-        setSkill(s => ({ ...s, installed: false, hasUpdate: false, installedVersion: undefined }))
         onChanged()
       } else {
         setStatus('error')
@@ -116,11 +116,12 @@ export function MarketplaceCard({
         <div className="flex-1 min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <div className="font-medium text-sm">{skill.displayName}</div>
-            {skill.installed && (
+            {!hideInstalledBadge && skill.installed && (
               <Badge data-testid={`marketplace-installed-badge-${skill.slug}`} variant="secondary">
                 {t.skills.installed}
               </Badge>
             )}
+            {statusBadges}
             {skill.hasUpdate && (
               <Badge
                 data-testid={`marketplace-update-badge-${skill.slug}`}

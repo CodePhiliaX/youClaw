@@ -40,6 +40,7 @@ export interface MarketplaceSkill {
   summary: string
   score?: number
   installed: boolean
+  installedSkillName?: string
   installSource?: string
   installedVersion?: string
   latestVersion?: string | null
@@ -160,6 +161,7 @@ interface MarketplaceStats {
 
 interface InstalledSkillState {
   slug: string
+  installedSkillName?: string
   installSource?: string
   version?: string
 }
@@ -225,22 +227,27 @@ export class RegistryManager {
     }
     const results = data.results ?? []
 
-    // Get locally installed slug set
-    const installedSlugs = this.getInstalledSlugs()
+    const installed = this.collectInstalledSkillStates()
 
     // Merge install state
-    return results.map((entry): RecommendedSkill => ({
-      slug: entry.slug,
-      displayName: entry.displayName,
-      summary: entry.summary,
-      score: entry.score,
-      latestVersion: entry.version ?? null,
-      updatedAt: entry.updatedAt ? Number(entry.updatedAt) || null : undefined,
-      installed: installedSlugs.has(entry.slug),
-      hasUpdate: false,
-      tags: [],
-      source: 'fallback',
-    }))
+    return results.map((entry): RecommendedSkill => {
+      const installedState = installed.get(entry.slug)
+      return {
+        slug: entry.slug,
+        displayName: entry.displayName,
+        summary: entry.summary,
+        score: entry.score,
+        installed: Boolean(installedState),
+        installedSkillName: installedState?.installedSkillName,
+        installSource: installedState?.installSource,
+        installedVersion: installedState?.version,
+        latestVersion: entry.version ?? null,
+        updatedAt: entry.updatedAt ? Number(entry.updatedAt) || null : undefined,
+        hasUpdate: false,
+        tags: [],
+        source: 'fallback',
+      }
+    })
   }
 
   async listMarketplace(query: MarketplaceQuery = {}): Promise<MarketplacePage> {
@@ -453,6 +460,7 @@ export class RegistryManager {
       displayName: payload.skill.displayName,
       summary: payload.skill.summary ?? '',
       installed: Boolean(installedState),
+      installedSkillName: installedState?.installedSkillName,
       installSource: installedState?.installSource,
       installedVersion: installedState?.version,
       latestVersion,
@@ -491,6 +499,7 @@ export class RegistryManager {
       displayName: item.displayName,
       summary: item.summary ?? '',
       installed: Boolean(installedState),
+      installedSkillName: installedState?.installedSkillName,
       installSource: installedState?.installSource,
       installedVersion: installedState?.version,
       latestVersion,
@@ -516,6 +525,7 @@ export class RegistryManager {
       displayName: entry.displayName,
       summary: entry.summary,
       installed: Boolean(installedState),
+      installedSkillName: installedState?.installedSkillName,
       installSource: installedState?.installSource,
       installedVersion: installedState?.version,
       latestVersion: null,
@@ -822,6 +832,7 @@ export class RegistryManager {
 
       installed.set(meta.slug, {
         slug: meta.slug,
+        installedSkillName: this.readInstalledSkillName(skillDir),
         installSource: meta.source,
         version: meta.version,
       })
@@ -864,6 +875,20 @@ export class RegistryManager {
     }
 
     return null
+  }
+
+  private readInstalledSkillName(skillDir: string): string | undefined {
+    const skillPath = resolve(skillDir, 'SKILL.md')
+    if (!existsSync(skillPath)) {
+      return undefined
+    }
+
+    try {
+      const content = readFileSync(skillPath, 'utf-8')
+      return parseFrontmatter(content).frontmatter.name
+    } catch {
+      return undefined
+    }
   }
 
   private unpackSkillArchive(zipData: Uint8Array): ZipEntry[] {
@@ -960,23 +985,4 @@ export class RegistryManager {
     getLogger().debug({ count: this.recommended.length }, 'Recommendation list loaded')
   }
 
-  /** Get locally installed skill slug set */
-  private getInstalledSlugs(): Set<string> {
-    const installedSlugs = new Set<string>()
-
-    // Check user skills directory for slug directories
-    const userSkillsDir = this.resolveUserSkillsDir()
-    try {
-      const dirs = readdirSync(userSkillsDir)
-      for (const dir of dirs) {
-        if (!installedSlugs.has(dir) && existsSync(resolve(userSkillsDir, dir, 'SKILL.md'))) {
-          installedSlugs.add(dir)
-        }
-      }
-    } catch {
-      // ignore when directory doesn't exist
-    }
-
-    return installedSlugs
-  }
 }

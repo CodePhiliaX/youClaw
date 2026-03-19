@@ -8,7 +8,7 @@ import type { MemoryManager } from '../memory/index.ts'
 import type { SkillsLoader } from '../skills/index.ts'
 import { parseSkillInvocations } from '../skills/invoke.ts'
 import type { InboundMessage, Channel } from './types.ts'
-import { preprocessAttachments } from '../utils/file-extractor.ts'
+import { preprocessAttachments } from '../agent/document-converter.ts'
 
 export class MessageRouter {
   private channels: Channel[] = []

@@ -12,6 +12,8 @@ import type { PromptBuilder } from './prompt-builder.ts'
 import type { AgentCompiler } from './compiler.ts'
 import type { HooksManager } from './hooks.ts'
 import { resolveMcpServers } from './mcp-utils.ts'
+import { createBuiltinMcpServer } from './builtin-mcp.ts'
+import { preprocessAttachments } from './document-converter.ts'
 import { abortRegistry } from './abort-registry.ts'
 import { getActiveModelConfig } from '../settings/manager.ts'
 import { getAuthToken } from '../routes/auth.ts'
@@ -211,16 +213,24 @@ export function ensureBunRuntime(): string | null {
     ]
     for (const src of candidates) {
       if (existsSync(src)) {
-        mkdirSync(targetDir, { recursive: true })
-        copyFileSync(src, targetPath)
-        chmodSync(targetPath, 0o755)
-        // macOS: strip quarantine
-        if (process.platform === 'darwin') {
-          try { execSync(`xattr -d com.apple.quarantine "${targetPath}"`, { timeout: 5000 }) } catch {}
+        try {
+          mkdirSync(targetDir, { recursive: true })
+          copyFileSync(src, targetPath)
+          chmodSync(targetPath, 0o755)
+          // macOS: strip quarantine
+          if (process.platform === 'darwin') {
+            try { execSync(`xattr -d com.apple.quarantine "${targetPath}"`, { timeout: 5000 }) } catch {}
+          }
+          safeLog('info', 'Extracted embedded Bun runtime', { src, dst: targetPath })
+          _bunRuntimePath = targetPath
+          return targetPath
+        } catch (err) {
+          safeLog('warn', 'Failed to extract embedded Bun runtime candidate', {
+            src,
+            dst: targetPath,
+            error: err instanceof Error ? err.message : String(err),
+          })
         }
-        safeLog('info', 'Extracted embedded Bun runtime', { src, dst: targetPath })
-        _bunRuntimePath = targetPath
-        return targetPath
       }
     }
   }
@@ -794,10 +804,18 @@ export class AgentRuntime {
       }
     }
 
-    // MCP servers (resolve env vars via shared utility)
+    // MCP servers: resolve env vars + inject built-in image analysis server
+    const mcpServers: Record<string, unknown> = {}
     if (this.config.mcpServers) {
-      queryOptions.mcpServers = resolveMcpServers(this.config.mcpServers)
+      // Filter out legacy external minimax MCP (replaced by built-in)
+      const externalServers = { ...this.config.mcpServers }
+      delete externalServers['minimax']
+      const resolved = resolveMcpServers(externalServers)
+      Object.assign(mcpServers, resolved)
     }
+    // Always inject built-in minimax MCP (runs in-process, no external dependency)
+    mcpServers['minimax'] = createBuiltinMcpServer()
+    queryOptions.mcpServers = mcpServers as Record<string, import('@anthropic-ai/claude-agent-sdk').McpServerConfig>
 
     // Tool access control (ensure Skill tool is always included)
     if (this.config.allowedTools) {
@@ -849,11 +867,17 @@ export class AgentRuntime {
       category: 'agent',
     }, 'Full SDK query options and env snapshot')
 
+    // Pre-convert binary documents (DOCX/XLSX/PPTX/PDF) to plain text
+    let processedAttachments = attachments
+    if (attachments && attachments.length > 0) {
+      processedAttachments = await preprocessAttachments(attachments)
+    }
+
     // Append file path hints so the agent can access attached files via its tools
     let finalUserPrompt = prompt
-    if (attachments && attachments.length > 0) {
-      const imageFiles = attachments.filter((a) => a.mediaType.startsWith('image/'))
-      const otherFiles = attachments.filter((a) => !a.mediaType.startsWith('image/'))
+    if (processedAttachments && processedAttachments.length > 0) {
+      const imageFiles = processedAttachments.filter((a) => a.mediaType.startsWith('image/'))
+      const otherFiles = processedAttachments.filter((a) => !a.mediaType.startsWith('image/'))
 
       const parts: string[] = []
 
@@ -861,8 +885,9 @@ export class AgentRuntime {
         const list = imageFiles.map((a) => `- ${a.filePath} (${a.mediaType})`).join('\n')
         parts.push(
           `[Attached images]\n${list}\n` +
-          `IMPORTANT: You MUST use the understand_image tool (or similar image analysis tool) with the local file path to analyze these images. ` +
-          `Do NOT use the Read tool for image files — it cannot interpret image content.`
+          `**CRITICAL INSTRUCTION**: To analyze these images, you MUST call the \`mcp__minimax__understand_image\` tool with the image file path. ` +
+          `The Read tool CANNOT interpret image content — it will only show raw binary data. ` +
+          `NEVER use Read for image files. ALWAYS use \`mcp__minimax__understand_image\`.`
         )
       }
 

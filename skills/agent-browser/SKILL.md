@@ -13,40 +13,35 @@ install:
 
 # Browser Automation with agent-browser
 
+## Performance Rules (CRITICAL)
+
+- **ALWAYS chain commands with `&&`** when you don't need intermediate output. Each separate tool call costs seconds of round-trip latency.
+- **ALWAYS combine** open + wait + snapshot into one call: `agent-browser open <url> && agent-browser wait --load load && agent-browser snapshot -i`
+- **ALWAYS batch** multiple interactions (fill, click, select) into one `&&` chain when refs are already known.
+- **Use `--load load`** (DOM load event) by default. Only use `networkidle` when you specifically need all XHR/fetch to complete (e.g., waiting for API-driven content).
+- **Do NOT snapshot after every interaction** — only re-snapshot when you need to discover new element refs (after navigation or major DOM changes).
+
 ## Core Workflow
 
 Every browser automation follows this pattern:
 
-1. **Navigate**: `agent-browser open <url>`
-2. **Snapshot**: `agent-browser snapshot -i` (get element refs like `@e1`, `@e2`)
-3. **Interact**: Use refs to click, fill, select
-4. **Re-snapshot**: After navigation or DOM changes, get fresh refs
+1. **Navigate + Snapshot** (one call): `agent-browser open <url> && agent-browser wait --load load && agent-browser snapshot -i`
+2. **Interact**: Batch all interactions using known refs in one `&&` chain
+3. **Re-snapshot**: Only after navigation or major DOM changes
 
 ```bash
-agent-browser open https://example.com/form
-agent-browser snapshot -i
+# Step 1: Open and discover elements (ONE tool call)
+agent-browser open https://example.com/form && agent-browser wait --load load && agent-browser snapshot -i
 # Output: @e1 [input type="email"], @e2 [input type="password"], @e3 [button] "Submit"
 
-agent-browser fill @e1 "user@example.com"
-agent-browser fill @e2 "password123"
-agent-browser click @e3
-agent-browser wait --load networkidle
-agent-browser snapshot -i  # Check result
+# Step 2: Batch all interactions (ONE tool call)
+agent-browser fill @e1 "user@example.com" && agent-browser fill @e2 "password123" && agent-browser click @e3 && agent-browser wait --load load
+
+# Step 3: Only snapshot if you need to verify or discover new elements
+agent-browser snapshot -i
 ```
 
-## Command Chaining
-
-Commands can be chained with `&&` in a single shell invocation. The browser persists between commands via a background daemon, so chaining is safe and more efficient than separate calls.
-
-```bash
-# Chain open + wait + snapshot in one call
-agent-browser open https://example.com && agent-browser wait --load networkidle && agent-browser snapshot -i
-
-# Chain multiple interactions
-agent-browser fill @e1 "user@example.com" && agent-browser fill @e2 "password123" && agent-browser click @e3
-```
-
-**When to chain:** Use `&&` when you don't need to read the output of an intermediate command before proceeding. Run commands separately when you need to parse the output first (e.g., snapshot to discover refs, then interact using those refs).
+This reduces 7+ round-trips to just 2-3.
 
 ## Essential Commands
 
@@ -76,7 +71,8 @@ agent-browser get title               # Get page title
 
 # Wait
 agent-browser wait @e1                # Wait for element
-agent-browser wait --load networkidle # Wait for network idle
+agent-browser wait --load load        # Wait for DOM load (fast, preferred)
+agent-browser wait --load networkidle # Wait for network idle (slow, use only when needed)
 agent-browser wait --url "**/page"    # Wait for URL pattern
 agent-browser wait 2000               # Wait milliseconds
 
@@ -97,38 +93,32 @@ agent-browser diff url <url1> <url2>                 # Compare two pages
 ### Form Submission
 
 ```bash
-agent-browser open https://example.com/signup
-agent-browser snapshot -i
-agent-browser fill @e1 "Jane Doe"
-agent-browser fill @e2 "jane@example.com"
-agent-browser select @e3 "California"
-agent-browser check @e4
-agent-browser click @e5
-agent-browser wait --load networkidle
+# Step 1: Open and discover elements (ONE call)
+agent-browser open https://example.com/signup && agent-browser wait --load load && agent-browser snapshot -i
+
+# Step 2: Fill and submit (ONE call)
+agent-browser fill @e1 "Jane Doe" && agent-browser fill @e2 "jane@example.com" && agent-browser select @e3 "California" && agent-browser check @e4 && agent-browser click @e5 && agent-browser wait --load load
 ```
 
 ### Authentication with State Persistence
 
 ```bash
-# Login once and save state
-agent-browser open https://app.example.com/login
-agent-browser snapshot -i
-agent-browser fill @e1 "$USERNAME"
-agent-browser fill @e2 "$PASSWORD"
-agent-browser click @e3
-agent-browser wait --url "**/dashboard"
+# Login: open + snapshot (ONE call)
+agent-browser open https://app.example.com/login && agent-browser wait --load load && agent-browser snapshot -i
+
+# Fill credentials + submit (ONE call)
+agent-browser fill @e1 "$USERNAME" && agent-browser fill @e2 "$PASSWORD" && agent-browser click @e3 && agent-browser wait --url "**/dashboard"
 agent-browser state save auth.json
 
 # Reuse in future sessions
-agent-browser state load auth.json
-agent-browser open https://app.example.com/dashboard
+agent-browser state load auth.json && agent-browser open https://app.example.com/dashboard
 ```
 
 ### Data Extraction
 
 ```bash
-agent-browser open https://example.com/products
-agent-browser snapshot -i
+# Open + snapshot in one call
+agent-browser open https://example.com/products && agent-browser wait --load load && agent-browser snapshot -i
 agent-browser get text @e5           # Get specific element text
 agent-browser get text body > page.txt  # Get all page text
 

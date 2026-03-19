@@ -109,7 +109,7 @@ describe('RegistryManager', () => {
     test('merges installed registry metadata into fallback items', () => {
       const skillDir = getUserSkillDir('coding')
       mkdirSync(skillDir, { recursive: true })
-      writeFileSync(resolve(skillDir, 'SKILL.md'), '---\nname: coding\ndescription: test\n---\n')
+      writeFileSync(resolve(skillDir, 'SKILL.md'), '---\nname: coding-helper\ndescription: test\n---\n')
       writeFileSync(resolve(skillDir, '.registry.json'), JSON.stringify(createClawhubMeta('coding', '1.0.0')))
 
       const { loader } = createMockLoader()
@@ -118,6 +118,7 @@ describe('RegistryManager', () => {
       const coding = list.find((skill) => skill.slug === 'coding')!
 
       expect(coding.installed).toBe(true)
+      expect(coding.installedSkillName).toBe('coding-helper')
       expect(coding.installSource).toBe('clawhub')
       expect(coding.installedVersion).toBe('1.0.0')
     })
@@ -141,7 +142,7 @@ describe('RegistryManager', () => {
     test('remote search merges installed state and update availability', async () => {
       const skillDir = getUserSkillDir('coding')
       mkdirSync(skillDir, { recursive: true })
-      writeFileSync(resolve(skillDir, 'SKILL.md'), '---\nname: coding\ndescription: test\n---\n')
+      writeFileSync(resolve(skillDir, 'SKILL.md'), '---\nname: coding-helper\ndescription: test\n---\n')
       writeFileSync(resolve(skillDir, '.registry.json'), JSON.stringify(createClawhubMeta('coding', '1.0.0')))
 
       const { loader } = createMockLoader()
@@ -170,6 +171,7 @@ describe('RegistryManager', () => {
       expect(result.items[0]).toMatchObject({
         slug: 'coding',
         installed: true,
+        installedSkillName: 'coding-helper',
         installedVersion: '1.0.0',
         latestVersion: '1.2.0',
         hasUpdate: true,
@@ -190,6 +192,38 @@ describe('RegistryManager', () => {
   })
 
   describe('getMarketplaceSkill', () => {
+    test('includes the installed local skill name in marketplace detail', async () => {
+      const skillDir = getUserSkillDir('coding')
+      mkdirSync(skillDir, { recursive: true })
+      writeFileSync(resolve(skillDir, 'SKILL.md'), '---\nname: coding-helper\ndescription: test\n---\n')
+      writeFileSync(resolve(skillDir, '.registry.json'), JSON.stringify(createClawhubMeta('coding', '1.0.0')))
+
+      const { loader } = createMockLoader()
+      const manager = createRegistryManager(loader, async (url) => {
+        if (String(url) === `${apiBaseUrl}/skills/coding`) {
+          return Response.json({
+            skill: {
+              slug: 'coding',
+              displayName: 'Coding',
+              summary: 'Ship code',
+              tags: { latest: '2.0.0', coding: '2.0.0' },
+              stats: { downloads: 8, stars: 5, installsCurrent: 2, installsAllTime: 7 },
+              createdAt: 10,
+              updatedAt: 20,
+            },
+            latestVersion: { version: '2.0.0' },
+          })
+        }
+        return new Response('not found', { status: 404 })
+      })
+
+      const detail = await manager.getMarketplaceSkill('coding')
+
+      expect(detail.installed).toBe(true)
+      expect(detail.installedSkillName).toBe('coding-helper')
+      expect(detail.installedVersion).toBe('1.0.0')
+    })
+
     test('reads remote skill detail', async () => {
       const { loader } = createMockLoader()
       const manager = createRegistryManager(loader, async (url) => {

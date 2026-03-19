@@ -201,6 +201,13 @@ export interface Skill {
   eligibilityDetail: EligibilityDetail
   enabled: boolean
   usable: boolean
+  registryMeta?: {
+    source: string
+    slug: string
+    installedAt: string
+    displayName?: string
+    version?: string
+  }
 }
 
 // Get all available skills
@@ -266,6 +273,7 @@ export interface MarketplaceSkill {
   displayName: string
   summary: string
   installed: boolean
+  installedSkillName?: string
   score?: number
   installSource?: string
   installedVersion?: string

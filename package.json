@@ -35,6 +35,7 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.72",
+    "@cedrugs/pdf-parse": "^1.0.0",
     "@larksuiteoapi/node-sdk": "^1.59.0",
     "@tauri-apps/plugin-opener": "^2.5.3",
     "croner": "^10.0.1",
@@ -42,9 +43,11 @@
     "fflate": "^0.8.2",
     "grammy": "^1.41.1",
     "hono": "^4.12.6",
+    "mammoth": "^1.12.0",
     "minimatch": "^10.0.1",
     "pdf-parse": "^2.4.5",
     "pino": "^10.3.1",
+    "xlsx": "^0.18.5",
     "yaml": "^2.8.2",
     "zod": "^4.3.6"
   }

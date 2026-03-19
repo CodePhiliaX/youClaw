@@ -8,11 +8,28 @@ use tauri::{
 use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_store::StoreExt;
-use std::sync::Mutex;
+use std::sync::{Mutex, atomic::{AtomicU8, Ordering}};
 use std::time::Duration;
 
 /// Sidecar child process handle
 struct SidecarState(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
+
+/// Sidecar readiness state: 0 = pending, 1 = ready, 2 = error, 3 = port-conflict
+struct SidecarReadyState {
+    state: AtomicU8,
+    port: Mutex<u16>,
+    message: Mutex<String>,
+}
+
+impl SidecarReadyState {
+    fn new() -> Self {
+        Self {
+            state: AtomicU8::new(0),
+            port: Mutex::new(62601),
+            message: Mutex::new(String::new()),
+        }
+    }
+}
 
 #[derive(Clone, Serialize)]
 struct SidecarEvent {
@@ -369,6 +386,21 @@ fn get_platform() -> String {
     std::env::consts::OS.to_string()
 }
 
+/// Query current sidecar status (for frontend to check on startup, avoiding race condition)
+#[tauri::command]
+fn get_sidecar_status(app: AppHandle) -> SidecarEvent {
+    let ready_state = app.state::<SidecarReadyState>();
+    let state = ready_state.state.load(Ordering::SeqCst);
+    let port = *ready_state.port.lock().unwrap();
+    let message = ready_state.message.lock().unwrap().clone();
+    match state {
+        1 => SidecarEvent { status: "ready".into(), message: format!("Backend ready on port {}", port) },
+        2 => SidecarEvent { status: "error".into(), message },
+        3 => SidecarEvent { status: "port-conflict".into(), message },
+        _ => SidecarEvent { status: "pending".into(), message: "Backend starting...".into() },
+    }
+}
+
 #[tauri::command]
 async fn set_preferred_port(app: AppHandle, port: u16) -> Result<(), String> {
     if port < 1024 {
@@ -389,10 +421,19 @@ async fn restart_sidecar(#[allow(unused)] app: AppHandle) -> Result<(), String> 
     }
     #[cfg(not(debug_assertions))]
     {
+        // Reset ready state to pending during restart
+        let ready_state = app.state::<SidecarReadyState>();
+        ready_state.state.store(0, Ordering::SeqCst);
+
         kill_sidecar(&app);
         tokio::time::sleep(Duration::from_millis(1000)).await;
         let port = spawn_sidecar(&app)?;
         wait_for_health(port, 30).await?;
+
+        let ready_state = app.state::<SidecarReadyState>();
+        *ready_state.port.lock().unwrap() = port;
+        ready_state.state.store(1, Ordering::SeqCst);
+
         let _ = app.emit("sidecar-event", SidecarEvent {
             status: "ready".into(),
             message: format!("Backend ready on port {}", port),
@@ -453,9 +494,11 @@ pub fn run() {
             }
         }))
         .manage(SidecarState(Mutex::new(None)))
+        .manage(SidecarReadyState::new())
         .invoke_handler(tauri::generate_handler![
             get_version,
             get_platform,
+            get_sidecar_status,
             set_preferred_port,
             restart_sidecar,
         ])
@@ -582,6 +625,11 @@ pub fn run() {
 
                 match wait_for_health(port, 60).await {
                     Ok(_) => {
+                        // Update ready state before emitting event (frontend can query this)
+                        let ready_state = app_handle.state::<SidecarReadyState>();
+                        *ready_state.port.lock().unwrap() = port;
+                        ready_state.state.store(1, Ordering::SeqCst);
+
                         let _ = app_handle.emit("sidecar-event", SidecarEvent {
                             status: "ready".into(),
                             message: format!("Backend ready on port {}", port),
@@ -589,6 +637,10 @@ pub fn run() {
                     }
                     Err(e) => {
                         log::error!("Health check failed: {}", e);
+                        let ready_state = app_handle.state::<SidecarReadyState>();
+                        *ready_state.message.lock().unwrap() = e.clone();
+                        ready_state.state.store(2, Ordering::SeqCst);
+
                         let _ = app_handle.emit("sidecar-event", SidecarEvent {
                             status: "error".into(),
                             message: e,

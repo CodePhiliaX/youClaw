@@ -131,23 +131,9 @@ export function createAuthRoutes() {
     }
   })
 
-  // POST /auth/logout — Log out
-  app.post('/auth/logout', async (c) => {
-    const token = getAuthToken()
+  // POST /auth/logout — Log out (local token cleanup only)
+  app.post('/auth/logout', (c) => {
     const logger = getLogger()
-    const apiUrl = getEnv().YOUCLAW_API_URL
-
-    if (token && apiUrl) {
-      // Notify website backend to revoke session
-      try {
-        await fetch(`${apiUrl}/api/oauth/logout`, {
-          method: 'POST',
-          headers: { rdxtoken: token },
-        })
-      } catch {
-        // Remote logout failure does not block local cleanup
-      }
-    }
 
     clearAuthToken()
     logger.info({ category: 'auth' }, 'User logged out')

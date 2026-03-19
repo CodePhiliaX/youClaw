@@ -80,20 +80,72 @@ export class SkillsLoader {
   }
 
   /**
+   * Normalize agent skill bindings to local skill names.
+   * Wildcard always wins; registry slugs are converted to installed local names when possible.
+   */
+  normalizeAgentSkillNames(skills?: string[]): { skills: string[] | undefined; changed: boolean } {
+    if (!skills || skills.length === 0) {
+      return { skills, changed: false }
+    }
+
+    if (skills.includes('*')) {
+      return { skills: ['*'], changed: skills.length !== 1 || skills[0] !== '*' }
+    }
+
+    const allSkills = this.loadAllSkills()
+    const knownNames = new Set(allSkills.map((skill) => skill.name))
+    const namesBySlug = new Map<string, string>()
+    for (const skill of allSkills) {
+      const slug = skill.registryMeta?.slug
+      if (slug) {
+        namesBySlug.set(slug, skill.name)
+      }
+    }
+
+    const normalized: string[] = []
+    const seen = new Set<string>()
+    let changed = false
+
+    for (const skillId of skills) {
+      const normalizedSkill = knownNames.has(skillId)
+        ? skillId
+        : (namesBySlug.get(skillId) ?? skillId)
+
+      if (normalizedSkill !== skillId) {
+        changed = true
+      }
+      if (seen.has(normalizedSkill)) {
+        changed = true
+        continue
+      }
+
+      seen.add(normalizedSkill)
+      normalized.push(normalizedSkill)
+    }
+
+    if (!changed && normalized.length !== skills.length) {
+      changed = true
+    }
+
+    return { skills: normalized, changed }
+  }
+
+  /**
    * Filter loaded skills based on agent.yaml skills field.
    * "*" wildcard = all skills; undefined or empty = no skills; otherwise filter by explicit list.
    */
   loadSkillsForAgent(agentConfig: AgentConfig): Skill[] {
     const allSkills = this.loadAllSkills()
+    const normalized = this.normalizeAgentSkillNames(agentConfig.skills).skills
     // "*" wildcard = all skills
-    if (agentConfig.skills?.includes('*')) {
+    if (normalized?.includes('*')) {
       return allSkills
     }
     // undefined or empty = no skills
-    if (!agentConfig.skills || agentConfig.skills.length === 0) {
+    if (!normalized || normalized.length === 0) {
       return []
     }
-    return allSkills.filter((skill) => agentConfig.skills!.includes(skill.name))
+    return allSkills.filter((skill) => normalized.includes(skill.name))
   }
 
   /**
@@ -110,12 +162,13 @@ export class SkillsLoader {
    */
   getAgentSkillsView(agentConfig: AgentConfig): AgentSkillsView {
     const allSkills = this.loadAllSkills()
+    const normalized = this.normalizeAgentSkillNames(agentConfig.skills).skills
     const available = allSkills
-    const isWildcard = agentConfig.skills?.includes('*')
+    const isWildcard = normalized?.includes('*')
     const enabled = isWildcard
       ? allSkills
-      : agentConfig.skills && agentConfig.skills.length > 0
-        ? allSkills.filter((s) => agentConfig.skills!.includes(s.name))
+      : normalized && normalized.length > 0
+        ? allSkills.filter((s) => normalized.includes(s.name))
         : []
     const eligible = enabled.filter((s) => s.eligible)
     return { available, enabled, eligible }

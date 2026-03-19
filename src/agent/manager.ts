@@ -85,32 +85,6 @@ export class AgentManager {
         }
       }
 
-      // Migrate agent.yaml: inject MiniMax MCP config if not present
-      const agentYamlPath = resolve(defaultDir, 'agent.yaml')
-      try {
-        const currentYaml = readFileSync(agentYamlPath, 'utf-8')
-        if (!currentYaml.includes('minimax')) {
-          const parsed = parseYaml(currentYaml) as Record<string, unknown>
-          const mcpServers = (parsed.mcpServers ?? {}) as Record<string, unknown>
-          mcpServers.minimax = {
-            command: 'uvx',
-            args: ['minimax-coding-plan-mcp', '-y'],
-            env: {
-              MINIMAX_API_KEY: '${READMEX_SA_TOKEN}',
-              MINIMAX_API_HOST: 'https://readmex.com',
-            },
-          }
-          parsed.mcpServers = mcpServers
-          const existing = (parsed.disallowedTools as string[]) ?? []
-          if (!existing.includes('WebSearch')) {
-            parsed.disallowedTools = [...existing, 'WebSearch']
-          }
-          writeFileSync(agentYamlPath, stringifyYaml(parsed))
-          logger.info('Migrated default agent.yaml: added MiniMax MCP config')
-        }
-      } catch (err) {
-        logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'Failed to migrate agent.yaml')
-      }
     }
 
     if (!existsSync(resolve(globalDir, 'memory', 'MEMORY.md'))) {
@@ -168,6 +142,21 @@ export class AgentManager {
         const config: AgentConfig = {
           ...result.data,
           workspaceDir: agentDir,
+        }
+
+        if (this.skillsLoader) {
+          const normalizedSkills = this.skillsLoader.normalizeAgentSkillNames(config.skills)
+          if (normalizedSkills.changed) {
+            config.skills = normalizedSkills.skills
+            const nextYaml = {
+              ...parsed,
+              id: config.id,
+              name: config.name,
+              skills: normalizedSkills.skills,
+            }
+            writeFileSync(configPath, stringifyYaml(nextYaml))
+            logger.info({ agentId: config.id, skills: normalizedSkills.skills }, 'Normalized agent skill bindings')
+          }
         }
 
         // Backward compatibility: auto-migrate legacy telegram.chatIds to bindings

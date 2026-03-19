@@ -83,6 +83,23 @@ export async function openExternal(url: string): Promise<void> {
   }
 }
 
+/** Handle sidecar status payload and update caches */
+function handleSidecarStatus(payload: { status: string; message: string }): boolean {
+  if (payload.status === 'ready') {
+    const match = payload.message.match(/port\s+(\d+)/)
+    if (match) {
+      _cachedBaseUrl = `http://localhost:${match[1]}`
+    }
+    return true
+  } else if (payload.status === 'port-conflict') {
+    _portConflict = payload.message
+    return true
+  } else if (payload.status === 'error') {
+    return true
+  }
+  return false // still pending
+}
+
 /** Called once at app startup, waits for sidecar ready event before rendering */
 export async function initBaseUrl(): Promise<void> {
   if (!isTauri) return
@@ -90,33 +107,30 @@ export async function initBaseUrl(): Promise<void> {
   // Quick-read port from store first
   await getBackendBaseUrl()
 
-  // Wait for Rust-side sidecar-event: ready, then update port cache
   try {
+    const invoke = getTauriInvoke()
+
+    // Check if sidecar is already ready (eliminates race condition with event)
+    const status = await invoke('get_sidecar_status') as { status: string; message: string }
+    if (handleSidecarStatus(status)) return
+
+    // Not ready yet — listen for event
     const { listen } = await import('@tauri-apps/api/event')
     await new Promise<void>((resolve) => {
       const unlisten = listen<{ status: string; message: string }>('sidecar-event', (event) => {
-        if (event.payload.status === 'ready') {
-          const match = event.payload.message.match(/port\s+(\d+)/)
-          if (match) {
-            _cachedBaseUrl = `http://localhost:${match[1]}`
-          }
-          unlisten.then(fn => fn())
-          resolve()
-        } else if (event.payload.status === 'port-conflict') {
-          _portConflict = event.payload.message
-          unlisten.then(fn => fn())
-          resolve()
-        } else if (event.payload.status === 'error') {
-          // Backend failed to start, don't block frontend, use existing port as fallback
+        if (handleSidecarStatus(event.payload)) {
           unlisten.then(fn => fn())
           resolve()
         }
       })
 
-      // Fallback timeout: ready event may have fired before listener was set up
-      setTimeout(resolve, 5000)
+      // Hard fallback timeout in case something goes very wrong
+      setTimeout(() => {
+        unlisten.then(fn => fn())
+        resolve()
+      }, 30000)
     })
   } catch {
-    // Listener failure doesn't block startup
+    // Invoke/listener failure doesn't block startup
   }
 }
