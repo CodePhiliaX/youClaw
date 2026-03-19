@@ -136,6 +136,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         streamingText: activeChatState?.streamingText ?? "",
         isProcessing: activeChatState?.isProcessing ?? false,
         pendingToolUse: activeChatState?.pendingToolUse ?? [],
+        documentStatuses: activeChatState?.documentStatuses ?? {},
         chatStatus: activeChatState?.chatStatus ?? "ready",
         showInsufficientCredits:
           activeChatState?.showInsufficientCredits ?? false,

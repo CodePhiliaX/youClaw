@@ -8,6 +8,9 @@ type SSEEvent = {
   type: string
   agentId: string
   chatId: string
+  documentId?: string
+  filename?: string
+  status?: 'parsing' | 'parsed' | 'failed'
   text?: string
   fullText?: string
   error?: string
@@ -54,6 +57,7 @@ class SSEManager {
     es.addEventListener('error', handleEvent)
     es.addEventListener('processing', handleEvent)
     es.addEventListener('tool_use', handleEvent)
+    es.addEventListener('document_status', handleEvent)
 
     es.onerror = () => {
       // Auto-reconnect handled by EventSource
@@ -136,6 +140,11 @@ class SSEManager {
         store.addToolUse(chatId, tool)
         break
       }
+      case 'document_status':
+        if (event.documentId && event.filename && event.status) {
+          store.setDocumentStatus(chatId, event.documentId, event.filename, event.status, event.error)
+        }
+        break
       case 'complete': {
         const chatState = store.chats[chatId]
         const finalToolUse = (chatState?.pendingToolUse ?? []).map((t) => ({

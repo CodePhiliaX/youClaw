@@ -24,6 +24,7 @@ export interface ChatState {
   streamingText: string
   isProcessing: boolean
   pendingToolUse: ToolUseItem[]
+  documentStatuses: Record<string, { filename: string; status: 'parsing' | 'parsed' | 'failed'; error?: string }>
   chatStatus: 'submitted' | 'streaming' | 'ready' | 'error'
   showInsufficientCredits: boolean
   sseErrorHandled: boolean
@@ -51,6 +52,7 @@ function defaultChatState(chatId: string): ChatState {
     streamingText: '',
     isProcessing: false,
     pendingToolUse: [],
+    documentStatuses: {},
     chatStatus: 'ready',
     showInsufficientCredits: false,
     sseErrorHandled: false,
@@ -76,6 +78,7 @@ interface ChatStore {
   appendStreamText(chatId: string, text: string): void
   setProcessing(chatId: string, isProcessing: boolean): void
   addToolUse(chatId: string, tool: ToolUseItem): void
+  setDocumentStatus(chatId: string, documentId: string, filename: string, status: 'parsing' | 'parsed' | 'failed', error?: string): void
   completeMessage(chatId: string, fullText: string, toolUse: ToolUseItem[]): void
   addUserMessage(chatId: string, message: Message): void
   setMessages(chatId: string, messages: Message[]): void
@@ -127,6 +130,26 @@ export const useChatStore = create<ChatStore>((set) => ({
           t.status === 'running' ? { ...t, status: 'done' as const } : t,
         )
         return { pendingToolUse: [...updated, tool] }
+      }),
+    })),
+
+  setDocumentStatus: (chatId, documentId, filename, status, error) =>
+    set((state) => ({
+      chats: updateChat(state.chats, chatId, (chat) => {
+        const nextStatuses = { ...chat.documentStatuses }
+        if (status !== 'parsing') {
+          for (const [key, value] of Object.entries(nextStatuses)) {
+            if (key.endsWith(':pending') && value.filename === filename) {
+              delete nextStatuses[key]
+            }
+          }
+        }
+        nextStatuses[documentId === 'pending' ? `${filename}:pending` : documentId] = {
+          filename,
+          status,
+          error,
+        }
+        return { documentStatuses: nextStatuses }
       }),
     })),
 
