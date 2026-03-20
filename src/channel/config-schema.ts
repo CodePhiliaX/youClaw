@@ -33,6 +33,8 @@ export const DingTalkConfigSchema = z.object({
   appSecret: z.string().min(1),
 })
 
+export const WechatOAConfigSchema = z.object({})
+
 // ===== Config field descriptors =====
 
 export interface ConfigFieldInfo {
@@ -118,6 +120,15 @@ export const CHANNEL_TYPE_REGISTRY: Record<string, ChannelTypeInfo> = {
     ],
     docsUrl: `${DOCS_BASE_URL}/dingtalk`,
     configSchema: DingTalkConfigSchema,
+  },
+  'wechat-oa': {
+    type: 'wechat-oa',
+    label: 'WeChat Official Account',
+    description: 'WeChat Official Account via ReadmeX Bridge (Long Polling)',
+    chatIdPrefix: 'wxoa:',
+    configFields: [],
+    docsUrl: 'https://readmex.com',
+    configSchema: WechatOAConfigSchema,
   },
 }
 

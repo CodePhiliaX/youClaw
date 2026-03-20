@@ -106,6 +106,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshChats]);
 
+  // Connect system SSE for real-time channel events (new_chat, inbound_message)
+  useEffect(() => {
+    sseManager.connectSystem();
+    const unsubscribe = sseManager.onNewChat(() => {
+      refreshChats();
+    });
+    return () => {
+      unsubscribe();
+      sseManager.disconnectSystem();
+    };
+  }, [refreshChats]);
+
   // Persist agentId
   useEffect(() => {
     if (ready) setItem(LAST_AGENT_KEY, agentId);
