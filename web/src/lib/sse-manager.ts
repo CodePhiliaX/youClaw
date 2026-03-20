@@ -61,8 +61,8 @@ class SSEManager {
         console.log('[SSE system]', data.type, data.chatId)
         if (data.type === 'new_chat') {
           for (const cb of this.onNewChatCallbacks) cb()
-        } else if (data.type === 'inbound_message' && data.chatId) {
-          // Add the inbound user message to the active chat
+        } else if (data.type === 'inbound_message' && data.chatId && !this.connections.has(data.chatId)) {
+          // Add the inbound user message to the active chat (external channels only)
           const store = useChatStore.getState()
           if (store.activeChatId === data.chatId) {
             store.initChat(data.chatId)
