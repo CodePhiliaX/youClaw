@@ -1,14 +1,13 @@
 import { AgentManager } from '../agent/manager.ts'
 import { AgentQueue } from '../agent/queue.ts'
 import { EventBus } from '../events/bus.ts'
-import { saveMessage, upsertChat } from '../db/index.ts'
+import { saveMessage, upsertChat, getDatabase } from '../db/index.ts'
 import { randomUUID } from 'node:crypto'
 import { getLogger } from '../logger/index.ts'
 import type { MemoryManager } from '../memory/index.ts'
 import type { SkillsLoader } from '../skills/index.ts'
 import { parseSkillInvocations } from '../skills/invoke.ts'
 import type { InboundMessage, Channel } from './types.ts'
-import { preprocessAttachments } from '../agent/document-converter.ts'
 
 export class MessageRouter {
   private channels: Channel[] = []
@@ -82,8 +81,12 @@ export class MessageRouter {
       contentForAgent = parsed.cleanContent || message.content
     }
 
-    // Save to database (use first 50 chars of message as chat title)
+    // Check if chat already exists (for new_chat event)
     const chatTitle = message.content.replace(/\n/g, ' ').slice(0, 50)
+    const db = getDatabase()
+    const existingChat = db.query("SELECT 1 FROM chats WHERE chat_id = ?").get(message.chatId)
+
+    // Save to database
     upsertChat(message.chatId, config.id, chatTitle, channel)
     saveMessage({
       id: message.id,
@@ -97,12 +100,16 @@ export class MessageRouter {
       attachments: message.attachments ? JSON.stringify(message.attachments) : undefined,
     })
 
-    logger.info({ agentId: config.id, chatId: message.chatId, requestedSkills }, 'Routing message to agent')
+    // Emit events for frontend real-time updates
+    if (!existingChat) {
+      this.eventBus.emit({ type: 'new_chat', agentId: config.id, chatId: message.chatId, name: chatTitle, channel })
+    }
+    this.eventBus.emit({
+      type: 'inbound_message', agentId: config.id, chatId: message.chatId,
+      messageId: message.id, content: message.content, senderName: message.senderName, timestamp: message.timestamp,
+    })
 
-    // Preprocess binary document attachments (PDF/DOCX/XLSX → extracted text files)
-    const processedAttachments = message.attachments
-      ? await preprocessAttachments(message.attachments)
-      : undefined
+    logger.info({ agentId: config.id, chatId: message.chatId, requestedSkills }, 'Routing message to agent')
 
     // Enqueue for processing (pass requestedSkills)
     try {
@@ -112,7 +119,7 @@ export class MessageRouter {
         contentForAgent,
         requestedSkills.length > 0 ? requestedSkills : undefined,
         message.browserProfileId,
-        processedAttachments,
+        message.attachments,
       )
 
       if (!reply.trim()) {

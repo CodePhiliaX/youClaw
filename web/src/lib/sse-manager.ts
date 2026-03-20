@@ -8,6 +8,9 @@ type SSEEvent = {
   type: string
   agentId: string
   chatId: string
+  documentId?: string
+  filename?: string
+  status?: 'parsing' | 'parsed' | 'failed'
   text?: string
   fullText?: string
   error?: string
@@ -15,16 +18,102 @@ type SSEEvent = {
   isProcessing?: boolean
   tool?: string
   input?: string
+  // inbound_message fields
+  messageId?: string
+  content?: string
+  senderName?: string
+  timestamp?: string
+  // new_chat fields
+  name?: string
+  channel?: string
 }
 
 class SSEManager {
   private connections = new Map<string, EventSource>()
   private lastEventTime = new Map<string, number>()
   private fallbackTimers = new Map<string, ReturnType<typeof setInterval>>()
+  private systemEs: EventSource | null = null
+  private onNewChatCallbacks = new Set<() => void>()
 
   constructor() {
     if (typeof window !== 'undefined') {
       window.addEventListener('beforeunload', () => this.disconnectAll())
+    }
+  }
+
+  /** Subscribe to new_chat events for chat list refresh */
+  onNewChat(cb: () => void): () => void {
+    this.onNewChatCallbacks.add(cb)
+    return () => { this.onNewChatCallbacks.delete(cb) }
+  }
+
+  /** Connect to system-level SSE for global events (new_chat, inbound_message) */
+  connectSystem(): void {
+    if (this.systemEs) return
+    const baseUrl = getBaseUrlSync()
+    const es = new EventSource(`${baseUrl}/api/stream/system`)
+    this.systemEs = es
+
+    const handleSystemEvent = (e: Event) => {
+      try {
+        const me = e as MessageEvent
+        const data = JSON.parse(me.data) as SSEEvent
+        console.log('[SSE system]', data.type, data.chatId)
+        if (data.type === 'new_chat') {
+          for (const cb of this.onNewChatCallbacks) cb()
+        } else if (data.type === 'inbound_message' && data.chatId && !this.connections.has(data.chatId)) {
+          // Add the inbound user message to the active chat (external channels only)
+          const store = useChatStore.getState()
+          if (store.activeChatId === data.chatId) {
+            store.initChat(data.chatId)
+            store.addUserMessage(data.chatId, {
+              id: data.messageId ?? Date.now().toString(),
+              role: 'user' as const,
+              content: data.content ?? '',
+              timestamp: data.timestamp ?? new Date().toISOString(),
+            })
+          }
+          // Also refresh chat list (updates last_message)
+          for (const cb of this.onNewChatCallbacks) cb()
+        } else if (data.chatId && !this.connections.has(data.chatId)) {
+          // Route agent events for external channel chats (no Chat SSE connected)
+          const store = useChatStore.getState()
+          if (store.activeChatId === data.chatId) {
+            if (data.type === 'processing' && data.isProcessing) {
+              store.initChat(data.chatId)
+            }
+            this.handleSSEEvent(data.chatId, data)
+          }
+          if (data.type === 'complete') {
+            // Refresh chat list regardless of active chat (updates last_message)
+            for (const cb of this.onNewChatCallbacks) cb()
+          }
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    }
+
+    es.addEventListener('new_chat', handleSystemEvent)
+    es.addEventListener('inbound_message', handleSystemEvent)
+    es.addEventListener('processing', handleSystemEvent)
+    es.addEventListener('stream', handleSystemEvent)
+    es.addEventListener('tool_use', handleSystemEvent)
+    es.addEventListener('complete', handleSystemEvent)
+    es.addEventListener('error', handleSystemEvent)
+    es.addEventListener('document_status', handleSystemEvent)
+    es.onopen = () => {
+      console.log('[SSE system] connected')
+    }
+    es.onerror = () => {
+      console.log('[SSE system] error/reconnecting')
+    }
+  }
+
+  disconnectSystem(): void {
+    if (this.systemEs) {
+      this.systemEs.close()
+      this.systemEs = null
     }
   }
 
@@ -54,6 +143,7 @@ class SSEManager {
     es.addEventListener('error', handleEvent)
     es.addEventListener('processing', handleEvent)
     es.addEventListener('tool_use', handleEvent)
+    es.addEventListener('document_status', handleEvent)
 
     es.onerror = () => {
       // Auto-reconnect handled by EventSource
@@ -114,6 +204,7 @@ class SSEManager {
     for (const chatId of this.connections.keys()) {
       this.disconnect(chatId)
     }
+    this.disconnectSystem()
   }
 
   isConnected(chatId: string): boolean {
@@ -136,6 +227,11 @@ class SSEManager {
         store.addToolUse(chatId, tool)
         break
       }
+      case 'document_status':
+        if (event.documentId && event.filename && event.status) {
+          store.setDocumentStatus(chatId, event.documentId, event.filename, event.status, event.error)
+        }
+        break
       case 'complete': {
         const chatState = store.chats[chatId]
         const finalToolUse = (chatState?.pendingToolUse ?? []).map((t) => ({
@@ -143,7 +239,6 @@ class SSEManager {
           status: 'done' as const,
         }))
         store.completeMessage(chatId, event.fullText ?? '', finalToolUse)
-        this.disconnect(chatId)
         break
       }
       case 'processing':

@@ -13,6 +13,7 @@ import {
   Github,
   BookOpen,
   User,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
@@ -32,6 +33,26 @@ import {
 /** Inline horizontal padding, keeps icon centered within 52px when collapsed (8+36+8=52) */
 const ROW_PX = "px-2";
 
+function AvatarView({ size = "md", user, isLoggedIn }: { size?: "sm" | "md"; user: { name: string; avatar?: string } | null; isLoggedIn: boolean }) {
+  const sizeClass = size === "sm" ? "w-6 h-6 text-[10px]" : "w-8 h-8 text-xs";
+
+  if (isLoggedIn && user?.avatar) {
+    return <img src={user.avatar} alt={user.name} className={cn("rounded-full object-cover", sizeClass)} />;
+  }
+  if (isLoggedIn && user) {
+    return (
+      <div className={cn("rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-primary-foreground font-bold", sizeClass)}>
+        {user.name?.[0]?.toUpperCase() ?? '?'}
+      </div>
+    );
+  }
+  return (
+    <div className={cn("rounded-full bg-muted flex items-center justify-center text-muted-foreground", sizeClass)}>
+      <User className={size === "sm" ? "h-3 w-3" : "h-4 w-4"} />
+    </div>
+  );
+}
+
 interface AppSidebarProps {
   onOpenSettings: (tab?: string) => void;
 }
@@ -47,30 +68,10 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
     { to: "/", icon: SquarePen, label: t.nav.chat },
     { to: "/agents", icon: Bot, label: t.nav.agents },
     { to: "/cron", icon: CalendarClock, label: t.nav.tasks },
+    { to: "/skills", icon: Wrench, label: t.nav.skills },
     { to: "/memory", icon: Brain, label: t.nav.memory },
     { to: "/logs", icon: ScrollText, label: t.nav.logs },
   ];
-
-  // Avatar component
-  const AvatarView = ({ size = "md" }: { size?: "sm" | "md" }) => {
-    const sizeClass = size === "sm" ? "w-6 h-6 text-[10px]" : "w-8 h-8 text-xs";
-
-    if (isLoggedIn && user?.avatar) {
-      return <img src={user.avatar} alt={user.name} className={cn("rounded-full object-cover", sizeClass)} />;
-    }
-    if (isLoggedIn && user) {
-      return (
-        <div className={cn("rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-primary-foreground font-bold", sizeClass)}>
-          {user.name?.[0]?.toUpperCase() ?? '?'}
-        </div>
-      );
-    }
-    return (
-      <div className={cn("rounded-full bg-muted flex items-center justify-center text-muted-foreground", sizeClass)}>
-        <User className={size === "sm" ? "h-3 w-3" : "h-4 w-4"} />
-      </div>
-    );
-  };
 
   const displayName = isLoggedIn && user ? user.name : (cloudEnabled ? t.account.notLoggedIn : t.account.offlineMode);
   const displaySub = isLoggedIn && user ? "Pro Plan" : (cloudEnabled ? t.account.loginHint : t.account.offlineModeHint);
@@ -86,42 +87,72 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
         )}
         aria-expanded={!isCollapsed}
       >
-        {/* macOS: traffic light spacing — draggable */}
-        {isMac && <div className="h-11 shrink-0" {...drag} />}
-
         {/* Top action bar */}
-        <div className={cn("flex items-center h-[52px] shrink-0", ROW_PX)}>
-          {isCollapsed ? (
+        {!isMac ? (
+          <div className={cn("flex items-center h-[52px] shrink-0", ROW_PX)}>
+            {isCollapsed ? (
+              <button
+                type="button"
+                onClick={toggle}
+                className="w-9 h-9 shrink-0 rounded-[10px] flex items-center justify-center hover:bg-[var(--surface-hover)] transition-all duration-200 ease-[var(--ease-soft)]"
+                aria-label={t.sidebar.expand}
+              >
+                <PanelLeft className="h-4 w-4" />
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 ml-1.5 mr-1">
+                <img src="/icon.svg" alt="YouClaw" className="h-5 w-5" />
+                <span className="text-md font-semibold tracking-tight whitespace-nowrap text-primary">
+                  YouClaw
+                </span>
+              </div>
+            )}
+            <div className="flex-1 min-w-0" />
             <button
               type="button"
               onClick={toggle}
-              className="w-9 h-9 shrink-0 rounded-[10px] flex items-center justify-center hover:bg-[var(--surface-hover)] transition-all duration-200 ease-[var(--ease-soft)]"
-              aria-label={t.sidebar.expand}
+              className={cn(
+                "w-9 h-9 shrink-0 rounded-[10px] flex items-center justify-center hover:bg-[var(--surface-hover)] transition-all duration-200 ease-[var(--ease-soft)]",
+                isCollapsed ? "opacity-0 pointer-events-none" : "opacity-100",
+              )}
+              aria-label={t.sidebar.collapse}
+              tabIndex={isCollapsed ? -1 : 0}
             >
-              <PanelLeft className="h-4 w-4" />
+              <PanelLeftClose className="h-4 w-4" />
             </button>
-          ) : (
-            <div className="flex items-center gap-1.5 ml-1.5 mr-1">
-              <img src="/icon.svg" alt="YouClaw" className="h-5 w-5" />
-              <span className="text-md font-semibold tracking-tight whitespace-nowrap text-primary">
-                YouClaw
-              </span>
-            </div>
-          )}
-          <div className="flex-1 min-w-0" />
-          <button
-            type="button"
-            onClick={toggle}
-            className={cn(
-              "w-9 h-9 shrink-0 rounded-[10px] flex items-center justify-center hover:bg-[var(--surface-hover)] transition-all duration-200 ease-[var(--ease-soft)]",
-              isCollapsed ? "opacity-0 pointer-events-none" : "opacity-100",
+          </div>
+        ) : (
+          <div className={cn("flex items-center h-10 shrink-0", ROW_PX)} {...drag}>
+            {isCollapsed ? (
+              <button
+                type="button"
+                onClick={toggle}
+                className="w-9 h-9 shrink-0 rounded-[10px] flex items-center justify-center hover:bg-[var(--surface-hover)] transition-all duration-200 ease-[var(--ease-soft)]"
+                aria-label={t.sidebar.expand}
+              >
+                <PanelLeft className="h-4 w-4" />
+              </button>
+            ) : (
+              <>
+                <div className="flex items-center gap-1.5 ml-1.5 mr-1 min-w-0">
+                  <img src="/icon.svg" alt="YouClaw" className="h-5 w-5 shrink-0" />
+                  <span className="text-md font-semibold tracking-tight whitespace-nowrap text-primary truncate">
+                    YouClaw
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0" />
+                <button
+                  type="button"
+                  onClick={toggle}
+                  className="w-9 h-9 shrink-0 rounded-[10px] flex items-center justify-center hover:bg-[var(--surface-hover)] transition-all duration-200 ease-[var(--ease-soft)]"
+                  aria-label={t.sidebar.collapse}
+                >
+                  <PanelLeftClose className="h-4 w-4" />
+                </button>
+              </>
             )}
-            aria-label={t.sidebar.collapse}
-            tabIndex={isCollapsed ? -1 : 0}
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </button>
-        </div>
+          </div>
+        )}
 
         {/* Page navigation */}
         <nav className="space-y-0.5 px-1.5">
@@ -175,7 +206,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
                 )}
               >
                 <div className="w-9 h-9 shrink-0 flex items-center justify-center">
-                  <AvatarView size="md" />
+                  <AvatarView size="md" user={user} isLoggedIn={isLoggedIn} />
                 </div>
                 <div
                   className={cn(
@@ -199,7 +230,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
             >
               <div className="flex flex-col items-center py-3 px-2">
                 <div className="mb-2">
-                  <AvatarView size="md" />
+                  <AvatarView size="md" user={user} isLoggedIn={isLoggedIn} />
                 </div>
                 <p className="text-sm font-semibold truncate max-w-full">{displayName}</p>
                 <p className="text-[11px] text-muted-foreground truncate max-w-full">{displaySub}</p>

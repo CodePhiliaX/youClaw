@@ -74,6 +74,7 @@ export function Skills() {
   })
   const [marketplaceStatus, setMarketplaceStatus] = useState<'idle' | 'loading' | 'loading-more' | 'error'>('idle')
   const [marketplaceError, setMarketplaceError] = useState('')
+  const [marketplaceAppendError, setMarketplaceAppendError] = useState('')
   const [marketplaceSort, setMarketplaceSort] = useState<MarketplaceSort>('trending')
 
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
@@ -89,6 +90,9 @@ export function Skills() {
   // Unified search state
   const [searchQuery, setSearchQuery] = useState('')
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const marketplaceScrollRef = useRef<HTMLDivElement | null>(null)
+  const marketplaceLoadMoreRef = useRef<HTMLDivElement | null>(null)
+  const marketplacePendingCursorRef = useRef<string | null>(null)
 
   const sourceLabels: Record<Skill['source'], string> = {
     workspace: t.skills.workspace,
@@ -110,6 +114,15 @@ export function Skills() {
       const sort = options?.sort ?? marketplaceSort
       const cursor = append ? (options?.cursor ?? marketplace.nextCursor) : null
 
+      if (append) {
+        if (!cursor || marketplacePendingCursorRef.current === cursor) return
+        marketplacePendingCursorRef.current = cursor
+        setMarketplaceAppendError('')
+      } else {
+        marketplacePendingCursorRef.current = null
+        setMarketplaceAppendError('')
+      }
+
       setMarketplaceStatus(append ? 'loading-more' : 'loading')
       setMarketplaceError('')
 
@@ -130,13 +143,21 @@ export function Skills() {
             items: append ? [...current.items, ...page.items] : page.items,
           }))
           setMarketplaceStatus('idle')
+          if (append) {
+            marketplacePendingCursorRef.current = null
+          }
         })
         .catch((error) => {
           if (!append) {
             setMarketplace((current) => ({ ...current, items: [], nextCursor: null }))
+            marketplacePendingCursorRef.current = null
+            setMarketplaceStatus('error')
+            setMarketplaceError(error instanceof Error ? error.message : t.skills.marketplaceLoadFailed)
+            return
           }
-          setMarketplaceStatus('error')
-          setMarketplaceError(error instanceof Error ? error.message : t.skills.marketplaceLoadFailed)
+          marketplacePendingCursorRef.current = null
+          setMarketplaceStatus('idle')
+          setMarketplaceAppendError(error instanceof Error ? error.message : t.skills.marketplaceLoadFailed)
         })
     },
     [marketplace.nextCursor, searchQuery, marketplaceSort, t.skills.marketplaceLoadFailed],
@@ -194,17 +215,45 @@ export function Skills() {
   )
   const hasMarketplaceItems = visibleMarketplaceItems.length > 0
   const canLoadMore = isSearching && Boolean(marketplace.nextCursor)
+  const canAutoLoadMore = canLoadMore && !marketplaceAppendError
+
+  const handleMarketplaceLoadMore = useCallback(() => {
+    if (!canAutoLoadMore || marketplaceStatus !== 'idle') return
+    loadMarketplace({ append: true })
+  }, [canAutoLoadMore, marketplaceStatus, loadMarketplace])
+
+  useEffect(() => {
+    const container = marketplaceScrollRef.current
+    const sentinel = marketplaceLoadMoreRef.current
+    if (!container || !sentinel || !canAutoLoadMore) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          handleMarketplaceLoadMore()
+        }
+      },
+      {
+        root: container,
+        threshold: 0,
+        rootMargin: '0px 0px 240px 0px',
+      },
+    )
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [canAutoLoadMore, handleMarketplaceLoadMore])
 
   return (
     <div className="flex h-full flex-col">
       {/* Tab switcher */}
-      <div className="px-4 py-3 border-b border-border">
-        <div className="inline-flex items-center gap-1 rounded-xl bg-muted/60 p-1">
+      <div className="px-4 py-2 border-b border-border">
+        <div className="inline-flex items-center gap-0.5 rounded-lg bg-muted/60 p-0.5">
           <button
             data-testid="skills-installed-tab"
             onClick={() => setTab('installed')}
             className={cn(
-              'px-4 py-1.5 text-sm font-medium rounded-lg transition-all',
+              'px-3 py-1 text-[13px] font-semibold rounded-md transition-all',
               tab === 'installed'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
@@ -216,13 +265,13 @@ export function Skills() {
             data-testid="skills-marketplace-tab"
             onClick={() => setTab('marketplace')}
             className={cn(
-              'px-4 py-1.5 text-sm font-medium rounded-lg transition-all flex items-center gap-1.5',
+              'px-3 py-1 text-[13px] font-semibold rounded-md transition-all flex items-center gap-1',
               tab === 'marketplace'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <Store className="h-3.5 w-3.5" />
+            <Store className="h-3 w-3" />
             {t.skills.marketplace}
           </button>
         </div>
@@ -233,7 +282,7 @@ export function Skills() {
         <div className="flex flex-1 min-h-0">
           {/* Left panel: skill list */}
           <SidePanel>
-            <div className="h-12 shrink-0 px-3 border-b border-border flex items-center" {...drag}>
+            <div className="h-9 shrink-0 px-3 border-b border-border flex items-center" {...drag}>
               <h2 className="font-semibold text-sm">{t.skills.title}</h2>
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-3">
@@ -461,7 +510,7 @@ export function Skills() {
         </div>
       ) : (
         /* Marketplace tab */
-        <div className="flex-1 overflow-y-auto p-6">
+        <div ref={marketplaceScrollRef} className="flex-1 overflow-y-auto p-6">
           <div className="max-w-3xl mx-auto space-y-6">
             {/* Single search bar */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -545,16 +594,29 @@ export function Skills() {
             )}
 
             {canLoadMore && (
-              <div className="flex justify-center">
-                <Button
-                  data-testid="marketplace-load-more"
-                  variant="secondary"
-                  onClick={() => loadMarketplace({ append: true })}
-                  disabled={marketplaceStatus === 'loading-more'}
-                >
-                  {marketplaceStatus === 'loading-more' && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  {t.skills.marketplaceLoadMore}
-                </Button>
+              <div className="space-y-3">
+                <div ref={marketplaceLoadMoreRef} className="h-1" aria-hidden="true" />
+                {marketplaceStatus === 'loading-more' && (
+                  <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>{t.common.loading}</span>
+                  </div>
+                )}
+                {marketplaceAppendError && (
+                  <div className="flex flex-col items-center gap-2 py-2 text-sm text-muted-foreground">
+                    <p>{marketplaceAppendError}</p>
+                    <Button
+                      data-testid="marketplace-load-more-retry"
+                      variant="secondary"
+                      onClick={() => {
+                        setMarketplaceAppendError('')
+                        loadMarketplace({ append: true })
+                      }}
+                    >
+                      {t.common.retry}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>

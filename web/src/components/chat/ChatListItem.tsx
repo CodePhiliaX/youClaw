@@ -24,6 +24,15 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
+const CHANNEL_LABELS: Record<string, string> = {
+  telegram: 'TG',
+  feishu: 'Feishu',
+  qq: 'QQ',
+  wecom: 'WeCom',
+  dingtalk: 'DingTalk',
+  'wechat-oa': 'WeChat',
+}
+
 interface ChatListItemProps {
   chat: ChatItem;
   isActive: boolean;
@@ -132,7 +141,12 @@ export function ChatListItem({
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <span className="text-[13px] font-medium truncate flex-1 text-foreground">
+            <span className="text-[13px] font-medium truncate flex-1 text-foreground flex items-center gap-1.5">
+              {chat.channel && chat.channel !== 'web' && (
+                <span className="shrink-0 text-[9px] font-medium px-1 py-px rounded bg-muted text-muted-foreground">
+                  {CHANNEL_LABELS[chat.channel] ?? chat.channel}
+                </span>
+              )}
               {chat.name}
             </span>
           )}

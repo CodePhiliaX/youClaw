@@ -9,6 +9,7 @@ import {
   updateChannel, deleteChannel, connectChannel, disconnectChannel,
 } from '../api/client'
 import type { ChannelInstance, ChannelTypeInfo } from '../api/client'
+import { openExternal } from '../api/transport'
 import { cn } from '../lib/utils'
 import { useI18n } from '../i18n'
 import { SidePanel } from '@/components/layout/SidePanel'
@@ -46,7 +47,7 @@ export function Channels() {
     <div className="flex h-full">
       {/* Left: Channel list */}
       <SidePanel>
-        <div className="h-12 shrink-0 px-3 border-b border-border flex items-center justify-between" {...drag}>
+        <div className="h-9 shrink-0 px-3 border-b border-border flex items-center justify-between" {...drag}>
           <h2 className="font-semibold text-sm">{t.channels.title}</h2>
           <div className="flex items-center gap-1">
             <button
@@ -183,7 +184,7 @@ function CreateChannelForm({
       setLabel(typeInfo.label)
       setConfigValues({})
     }
-  }, [selectedType])
+  }, [typeInfo])
 
   const handleCreate = async () => {
     if (!selectedType) return
@@ -205,7 +206,18 @@ function CreateChannelForm({
 
   return (
     <div className="p-6 max-w-2xl space-y-5">
-      <h1 className="text-xl font-bold">{t.channels.addChannel}</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-xl font-bold">{t.channels.addChannel}</h1>
+        {typeInfo?.docsUrl && (
+          <button
+            onClick={() => void openExternal(typeInfo.docsUrl)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-xl text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            {t.channels.docs}
+          </button>
+        )}
+      </div>
 
       {/* Select type */}
       <div>
@@ -435,15 +447,13 @@ function ChannelDetail({
         </div>
         <div className="flex items-center gap-2">
           {channel.docsUrl && (
-            <a
-              href={channel.docsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={() => void openExternal(channel.docsUrl)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-xl text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               {t.channels.docs}
-            </a>
+            </button>
           )}
         </div>
       </div>

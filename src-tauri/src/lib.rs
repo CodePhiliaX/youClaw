@@ -1,4 +1,9 @@
 use serde::Serialize;
+use std::sync::{
+    Mutex,
+    atomic::{AtomicBool, AtomicU8, Ordering},
+};
+use std::time::Duration;
 use tauri::{
     AppHandle, Emitter, Listener, Manager,
     image::Image,
@@ -8,8 +13,6 @@ use tauri::{
 use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_store::StoreExt;
-use std::sync::{Mutex, atomic::{AtomicU8, Ordering}};
-use std::time::Duration;
 
 /// Sidecar child process handle
 struct SidecarState(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
@@ -19,6 +22,21 @@ struct SidecarReadyState {
     state: AtomicU8,
     port: Mutex<u16>,
     message: Mutex<String>,
+}
+
+/// Deep-link delivery state shared between startup and the running frontend.
+struct DeepLinkState {
+    pending: Mutex<Vec<String>>,
+    frontend_ready: AtomicBool,
+}
+
+impl DeepLinkState {
+    fn new() -> Self {
+        Self {
+            pending: Mutex::new(Vec::new()),
+            frontend_ready: AtomicBool::new(false),
+        }
+    }
 }
 
 impl SidecarReadyState {
@@ -35,6 +53,76 @@ impl SidecarReadyState {
 struct SidecarEvent {
     status: String,
     message: String,
+}
+
+fn enqueue_deep_link(app: &AppHandle, url: String) {
+    let state = app.state::<DeepLinkState>();
+    let mut guard = state.pending.lock().unwrap();
+    if !guard.contains(&url) {
+        guard.push(url);
+    }
+}
+
+fn normalize_deep_link(raw: &str) -> Option<String> {
+    let start = raw.find("youclaw://")?;
+    let candidate = raw[start..]
+        .trim()
+        .trim_matches(|c: char| c == '"' || c == '\'' || c.is_whitespace())
+        .trim_end_matches(|c: char| c == '"' || c == '\'' || c.is_whitespace())
+        .to_string();
+
+    if candidate.starts_with("youclaw://") {
+        Some(candidate)
+    } else {
+        None
+    }
+}
+
+fn forward_deep_link(app: &AppHandle, url: String) {
+    let state = app.state::<DeepLinkState>();
+    if state.frontend_ready.load(Ordering::SeqCst) {
+        let _ = app.emit("deep-link-received", url);
+        return;
+    }
+    enqueue_deep_link(app, url);
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CloseAction {
+    Ask,
+    Minimize,
+    Quit,
+}
+
+fn get_close_action(app: &AppHandle) -> CloseAction {
+    match app.store("settings.json").ok()
+        .and_then(|store| store.get("close_action"))
+        .and_then(|v| v.as_str().map(str::trim).map(str::to_owned))
+        .as_deref()
+    {
+        Some("minimize") => CloseAction::Minimize,
+        Some("quit") => CloseAction::Quit,
+        _ => CloseAction::Ask,
+    }
+}
+
+fn hide_main_window(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.hide();
+    }
+}
+
+fn show_main_window(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.show();
+        let _ = win.unminimize();
+        let _ = win.set_focus();
+    }
+}
+
+fn quit_application(app: &AppHandle) {
+    kill_sidecar(app);
+    app.exit(0);
 }
 
 fn find_windows_git_bash() -> Option<String> {
@@ -236,6 +324,14 @@ fn spawn_sidecar(app: &AppHandle) -> Result<u16, String> {
                 env_vars.push(("HOME".into(), userprofile));
             }
         }
+        // Inject TEMP/TMP/BUN_TMPDIR so Bun uses the correct temp directory on Windows.
+        // Without these, Bun may fall back to an unexpected drive (e.g. B:\~BUN\root)
+        // which can cause port binding failures if that drive has restricted permissions.
+        if let Ok(temp) = std::env::var("TEMP") {
+            env_vars.push(("TEMP".into(), temp.clone()));
+            env_vars.push(("TMP".into(), temp.clone()));
+            env_vars.push(("BUN_TMPDIR".into(), temp));
+        }
     }
 
     // Set resource directory (read-only templates for agents/skills/prompts)
@@ -402,16 +498,18 @@ fn get_sidecar_status(app: AppHandle) -> SidecarEvent {
 }
 
 #[tauri::command]
-async fn set_preferred_port(app: AppHandle, port: u16) -> Result<(), String> {
-    if port < 1024 {
-        return Err("Port must be between 1024 and 65535".into());
-    }
-    if let Ok(store) = app.store("settings.json") {
-        let _ = store.set("preferred_port", serde_json::Value::String(port.to_string()));
-        let _ = store.save();
-    }
-    Ok(())
+fn take_pending_deep_links(app: AppHandle) -> Vec<String> {
+    let state = app.state::<DeepLinkState>();
+    let mut guard = state.pending.lock().unwrap();
+    std::mem::take(&mut *guard)
 }
+
+#[tauri::command]
+fn set_deep_link_frontend_ready(app: AppHandle, ready: bool) {
+    let state = app.state::<DeepLinkState>();
+    state.frontend_ready.store(ready, Ordering::SeqCst);
+}
+
 
 #[tauri::command]
 async fn restart_sidecar(#[allow(unused)] app: AppHandle) -> Result<(), String> {
@@ -482,8 +580,8 @@ pub fn run() {
             // Forward the URL to the running instance and bring its window to front
             log::info!("Single instance callback, args: {:?}", args);
             for arg in &args {
-                if arg.starts_with("youclaw://") {
-                    let _ = app.emit("deep-link-received", arg.clone());
+                if let Some(url) = normalize_deep_link(arg) {
+                    forward_deep_link(app, url);
                     break;
                 }
             }
@@ -495,15 +593,23 @@ pub fn run() {
         }))
         .manage(SidecarState(Mutex::new(None)))
         .manage(SidecarReadyState::new())
+        .manage(DeepLinkState::new())
         .invoke_handler(tauri::generate_handler![
             get_version,
             get_platform,
             get_sidecar_status,
-            set_preferred_port,
+            take_pending_deep_links,
+            set_deep_link_frontend_ready,
             restart_sidecar,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
+
+            for arg in std::env::args().skip(1) {
+                if let Some(url) = normalize_deep_link(&arg) {
+                    enqueue_deep_link(&handle, url);
+                }
+            }
 
             // macOS: overlay titlebar style (traffic lights over content, hidden title)
             #[cfg(target_os = "macos")]
@@ -542,14 +648,10 @@ pub fn run() {
                 .on_menu_event(move |app, event| {
                     match event.id.as_ref() {
                         "show" => {
-                            if let Some(win) = app.get_webview_window("main") {
-                                let _ = win.show();
-                                let _ = win.set_focus();
-                            }
+                            show_main_window(app);
                         }
                         "quit" => {
-                            kill_sidecar(app);
-                            app.exit(0);
+                            quit_application(app);
                         }
                         _ => {}
                     }
@@ -557,10 +659,7 @@ pub fn run() {
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
                         let app = tray.app_handle();
-                        if let Some(win) = app.get_webview_window("main") {
-                            let _ = win.show();
-                            let _ = win.set_focus();
-                        }
+                        show_main_window(app);
                     }
                 })
                 .build(app)?;
@@ -569,16 +668,25 @@ pub fn run() {
             let dl_handle = handle.clone();
             app.listen("deep-link://new-url", move |event: tauri::Event| {
                 if let Ok(urls) = serde_json::from_str::<Vec<String>>(event.payload()) {
-                    if let Some(url) = urls.first() {
-                        log::info!("Deep link received: {}", url);
-                        let _ = dl_handle.emit("deep-link-received", url.clone());
-                        // Bring window to foreground
-                        if let Some(win) = dl_handle.get_webview_window("main") {
-                            let _ = win.show();
-                            let _ = win.set_focus();
-                        }
+                    for url in urls {
+                        forward_deep_link(&dl_handle, url);
+                    }
+                    // Bring window to foreground
+                    if let Some(win) = dl_handle.get_webview_window("main") {
+                        let _ = win.show();
+                        let _ = win.set_focus();
                     }
                 }
+            });
+
+            let minimize_handle = handle.clone();
+            app.listen("close-action-minimize", move |_| {
+                hide_main_window(&minimize_handle);
+            });
+
+            let quit_handle = handle.clone();
+            app.listen("close-action-quit", move |_| {
+                quit_application(&quit_handle);
             });
 
             // Start backend (dev mode uses beforeDevCommand, release mode uses sidecar)
@@ -652,9 +760,21 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
-                kill_sidecar(window.app_handle());
-                // Let the window close normally — app will exit
+            if window.label() != "main" {
+                return;
+            }
+
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+
+                let handle = window.app_handle().clone();
+                match get_close_action(&handle) {
+                    CloseAction::Minimize => hide_main_window(&handle),
+                    CloseAction::Quit => quit_application(&handle),
+                    CloseAction::Ask => {
+                        let _ = handle.emit("close-requested", ());
+                    }
+                }
             }
         })
         .build(tauri::generate_context!())

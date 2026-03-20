@@ -1,5 +1,7 @@
+import { useEffect, useRef } from "react";
 import {
   Attachment,
+  AttachmentInfo,
   AttachmentPreview,
   AttachmentRemove,
   Attachments,
@@ -57,6 +59,7 @@ function AttachmentPreviews() {
             onRemove={() => attachments.remove(file.id)}
           >
             <AttachmentPreview />
+            <AttachmentInfo />
             <AttachmentRemove />
           </Attachment>
         ))}
@@ -68,6 +71,7 @@ function AttachmentPreviews() {
 export function ChatInput() {
   const { t } = useI18n();
   const {
+    chatId,
     send,
     chatStatus,
     stop,
@@ -79,6 +83,17 @@ export function ChatInput() {
     setSelectedProfileId,
   } = useChatContext();
   const modelReady = useAppStore((s) => s.modelReady);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (chatStatus === "submitted" || chatStatus === "streaming") return;
+
+    const frameId = requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [chatId, chatStatus]);
 
   const handleSubmit = async (msg: PromptInputMessage) => {
     const text = msg.text.trim();
@@ -115,6 +130,7 @@ export function ChatInput() {
       >
         <AttachmentPreviews />
         <PromptInputTextarea
+          ref={textareaRef}
           placeholder={t.chat.placeholder}
           data-testid="chat-input"
         />

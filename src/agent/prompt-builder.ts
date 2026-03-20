@@ -85,6 +85,21 @@ export class PromptBuilder {
       parts.push(envContext)
     }
 
+    // Inject image tool usage rule (built-in minimax MCP is always available)
+    parts.push(
+      `## Image Handling Rule\n` +
+      `When the user sends or references image files (jpg, png, gif, webp, bmp, svg, etc.), you MUST use the \`mcp__minimax__understand_image\` tool to analyze them.\n` +
+      `NEVER use the \`Read\` tool on image files — it cannot interpret visual content and will only return useless binary data.\n` +
+      `This rule is absolute and has no exceptions.`
+    )
+
+    parts.push(
+      `## Document Handling Rule\n` +
+      `When parsed document ids are available, you MUST use the \`mcp__document__search_document\` and \`mcp__document__read_document_chunk\` tools first.\n` +
+      `Do NOT use the \`Read\` tool on the original document file when a parsed document is available.\n` +
+      `If document parsing fails, be explicit about the failure instead of pretending the document was read.`
+    )
+
     // Inject current context (needed when agent creates scheduled tasks)
     if (context) {
       parts.push(

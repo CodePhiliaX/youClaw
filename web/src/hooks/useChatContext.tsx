@@ -66,12 +66,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     refreshAgents();
   }, [refreshAgents]);
 
-  // Load browser profiles
-  useEffect(() => {
+  const refreshBrowserProfiles = useCallback(() => {
     getBrowserProfiles()
       .then(setBrowserProfiles)
       .catch(() => {});
   }, []);
+
+  // Load browser profiles
+  useEffect(() => {
+    refreshBrowserProfiles();
+  }, [refreshBrowserProfiles]);
 
   // Load chat list
   const refreshChats = useCallback(() => {
@@ -99,6 +103,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     return () => {
       unsubscribe();
       if (timeout) clearTimeout(timeout);
+    };
+  }, [refreshChats]);
+
+  // Connect system SSE for real-time channel events (new_chat, inbound_message)
+  useEffect(() => {
+    sseManager.connectSystem();
+    const unsubscribe = sseManager.onNewChat(() => {
+      refreshChats();
+    });
+    return () => {
+      unsubscribe();
+      sseManager.disconnectSystem();
     };
   }, [refreshChats]);
 
@@ -133,9 +149,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       value={{
         chatId: activeChatState?.chatId ?? null,
         messages: activeChatState?.messages ?? [],
+        timelineItems: activeChatState?.timelineItems ?? [],
         streamingText: activeChatState?.streamingText ?? "",
         isProcessing: activeChatState?.isProcessing ?? false,
         pendingToolUse: activeChatState?.pendingToolUse ?? [],
+        documentStatuses: activeChatState?.documentStatuses ?? {},
         chatStatus: activeChatState?.chatStatus ?? "ready",
         showInsufficientCredits:
           activeChatState?.showInsufficientCredits ?? false,
@@ -151,6 +169,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         agents,
         refreshAgents,
         browserProfiles,
+        refreshBrowserProfiles,
         selectedProfileId,
         setSelectedProfileId,
       }}

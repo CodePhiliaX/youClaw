@@ -3,7 +3,7 @@ import { useI18n } from "@/i18n"
 import { useAppStore } from "@/stores/app"
 import { Download, Loader2, CheckCircle2, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { isTauri } from "@/api/transport"
+import { isTauri, openExternal } from "@/api/transport"
 import logoUrl from "@/assets/logo.png"
 
 const GIT_DOWNLOAD_URL = "https://cdn.chat2db-ai.com/youclaw/website/Git-2.53.0.2-64-bit.exe.zip"
@@ -55,13 +55,7 @@ export function GitSetup() {
   }, [gitAvailable, recheckGit])
 
   const handleDownload = () => {
-    if (isTauri) {
-      import("@tauri-apps/plugin-opener").then(({ openUrl }) => {
-        openUrl(GIT_DOWNLOAD_URL)
-      })
-    } else {
-      window.open(GIT_DOWNLOAD_URL, "_blank")
-    }
+    void openExternal(GIT_DOWNLOAD_URL)
   }
 
   const steps = [

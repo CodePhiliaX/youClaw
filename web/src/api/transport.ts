@@ -1,6 +1,18 @@
 // Transport abstraction layer: auto-detect Tauri / Web environment
 
-export const isTauri = typeof window !== "undefined" && !!(window as any).__TAURI_INTERNALS__
+type TauriInternals = {
+  invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>
+}
+
+type TauriWindow = Window & {
+  __TAURI_INTERNALS__?: TauriInternals
+}
+
+function getTauriInternals(): TauriInternals | undefined {
+  return (window as TauriWindow).__TAURI_INTERNALS__
+}
+
+export const isTauri = typeof window !== "undefined" && !!getTauriInternals()
 
 /**
  * Convert a local file path to a URL loadable by the webview.
@@ -19,25 +31,26 @@ export function localAssetUrl(filePath: string): string {
 
 export function getTauriInvoke(): (cmd: string, args?: Record<string, unknown>) => Promise<unknown> {
   if (!isTauri) throw new Error("Not in Tauri environment")
-  return (window as any).__TAURI_INTERNALS__.invoke
+  return getTauriInternals()!.invoke
 }
 
 // Cache backend baseUrl to avoid repeated store reads
 let _cachedBaseUrl: string | null = null
 
-// Port conflict status
-let _portConflict: string | null = null
-
-export function getPortConflict(): string | null {
-  return _portConflict
-}
-
-export function clearPortConflict(): void {
-  _portConflict = null
-}
-
 export function updateCachedBaseUrl(url: string): void {
   _cachedBaseUrl = url
+}
+
+/**
+ * Persist preferred port to Tauri Store (JS instance only).
+ * Must not go through the Rust app.store() to avoid cache divergence.
+ */
+export async function savePreferredPort(port: number): Promise<void> {
+  if (port < 1024 || port > 65535) throw new Error('Port must be between 1024 and 65535')
+  const { load } = await import('@tauri-apps/plugin-store')
+  const store = await load('settings.json')
+  await store.set('preferred_port', String(port))
+  await store.save()
 }
 
 /**
@@ -79,58 +92,28 @@ export async function openExternal(url: string): Promise<void> {
     const { openUrl } = await import('@tauri-apps/plugin-opener')
     await openUrl(url)
   } else {
-    window.open(url, '_blank')
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
 }
 
-/** Handle sidecar status payload and update caches */
-function handleSidecarStatus(payload: { status: string; message: string }): boolean {
-  if (payload.status === 'ready') {
-    const match = payload.message.match(/port\s+(\d+)/)
-    if (match) {
-      _cachedBaseUrl = `http://localhost:${match[1]}`
-    }
-    return true
-  } else if (payload.status === 'port-conflict') {
-    _portConflict = payload.message
-    return true
-  } else if (payload.status === 'error') {
-    return true
-  }
-  return false // still pending
-}
-
-/** Called once at app startup, waits for sidecar ready event before rendering */
-export async function initBaseUrl(): Promise<void> {
-  if (!isTauri) return
+/** Called once at app startup, polls backend health until ready before rendering */
+export async function initBaseUrl(): Promise<boolean> {
+  if (!isTauri) return true
 
   // Quick-read port from store first
   await getBackendBaseUrl()
 
-  try {
-    const invoke = getTauriInvoke()
-
-    // Check if sidecar is already ready (eliminates race condition with event)
-    const status = await invoke('get_sidecar_status') as { status: string; message: string }
-    if (handleSidecarStatus(status)) return
-
-    // Not ready yet — listen for event
-    const { listen } = await import('@tauri-apps/api/event')
-    await new Promise<void>((resolve) => {
-      const unlisten = listen<{ status: string; message: string }>('sidecar-event', (event) => {
-        if (handleSidecarStatus(event.payload)) {
-          unlisten.then(fn => fn())
-          resolve()
-        }
-      })
-
-      // Hard fallback timeout in case something goes very wrong
-      setTimeout(() => {
-        unlisten.then(fn => fn())
-        resolve()
-      }, 30000)
-    })
-  } catch {
-    // Invoke/listener failure doesn't block startup
+  // Poll backend health endpoint directly — no Rust IPC middleman
+  const maxWait = 30000
+  const interval = 300
+  for (let elapsed = 0; elapsed < maxWait; elapsed += interval) {
+    try {
+      const res = await fetch(`${_cachedBaseUrl}/api/health`, { signal: AbortSignal.timeout(500) })
+      if (res.ok) return true
+    } catch {
+      // Not ready yet
+    }
+    await new Promise(r => setTimeout(r, interval))
   }
+  return false
 }

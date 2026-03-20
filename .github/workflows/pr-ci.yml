@@ -1,0 +1,42 @@
+name: PR CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+
+concurrency:
+  group: pr-ci-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock', 'web/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install root dependencies
+        run: bun install
+
+      - name: Install web dependencies
+        run: bun install
+        working-directory: web
+
+      - name: Typecheck
+        run: bun typecheck
+
+      - name: Test
+        run: bun test

@@ -4,9 +4,11 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
+import { openExternal } from "@/api/transport"
 import { useI18n } from "@/i18n"
+import { getOfficialDocsUrl } from "@/lib/external-links"
 import { cn } from "@/lib/utils"
-import { Plus, Pencil, Trash2, Check, Settings2, Cloud, Cpu } from "lucide-react"
+import { Plus, Pencil, Trash2, Check, Settings2, Cloud, Cpu, ExternalLink } from "lucide-react"
 import { getSettings, updateSettings as apiUpdateSettings, type SettingsDTO, type CustomModelDTO } from "@/api/client"
 import { useAppStore } from "@/stores/app"
 
@@ -18,6 +20,8 @@ const BUILTIN_MODELS = [
     description: "Most capable built-in model",
   },
 ] as const
+
+const CUSTOM_MODEL_DOCS_URL = getOfficialDocsUrl('custom-models')
 
 interface ActiveModel {
   provider: "builtin" | "custom" | "cloud"
@@ -342,6 +346,27 @@ export function ModelsPanel() {
             {t.settings.addCustomModel}
           </Button>
         </div>
+        <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-foreground">
+                {t.settings.customModelSupportTitle}
+              </div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                {t.settings.customModelSupportDesc}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 gap-1.5 rounded-xl"
+              onClick={() => void openExternal(CUSTOM_MODEL_DOCS_URL)}
+            >
+              <ExternalLink size={13} />
+              {t.settings.customModelDocs}
+            </Button>
+          </div>
+        </div>
         {customModels.length === 0 ? (
           <div className="text-sm text-muted-foreground py-6 text-center border-2 border-dashed rounded-2xl">
             {t.settings.customDesc}
@@ -415,9 +440,20 @@ export function ModelsPanel() {
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="w-[90vw] max-w-2xl p-6">
-          <h2 className="text-lg font-semibold mb-4">
-            {editingModel ? t.settings.editModel : t.settings.addCustomModel}
-          </h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">
+              {editingModel ? t.settings.editModel : t.settings.addCustomModel}
+            </h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 rounded-xl"
+              onClick={() => void openExternal(CUSTOM_MODEL_DOCS_URL)}
+            >
+              <ExternalLink size={13} />
+              {t.settings.customModelDocs}
+            </Button>
+          </div>
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>{t.settings.modelName}</Label>
@@ -471,6 +507,9 @@ export function ModelsPanel() {
               {touched.baseUrl && formErrors.baseUrl && (
                 <p className="text-xs text-destructive">{formErrors.baseUrl}</p>
               )}
+              <p className="text-xs text-muted-foreground">
+                {t.settings.baseUrlFormatHint}
+              </p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setDialogOpen(false)} className="rounded-xl">

@@ -5,15 +5,14 @@ import { ModelsPanel } from "./ModelsPanel"
 import { AccountPanel } from "./AccountPanel"
 import { AboutPanel } from "./AboutPanel"
 import { InvitationPanel } from "./InvitationPanel"
-import { Skills } from "@/pages/Skills"
 import { Channels } from "@/pages/Channels"
 import { BrowserProfiles } from "@/pages/BrowserProfiles"
-import { X, User, Palette, Cpu, Wrench, Radio, Globe, Info, UserPlus } from "lucide-react"
+import { X, User, Palette, Cpu, Radio, Globe, Info, UserPlus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/i18n"
 import { useAppStore } from "@/stores/app"
 
-type Tab = "account" | "general" | "models" | "skills" | "channels" | "browser" | "invitation" | "about"
+type Tab = "account" | "general" | "models" | "channels" | "browser" | "invitation" | "about"
 
 export type SettingsTab = Tab
 
@@ -39,7 +38,6 @@ export function SettingsDialog({ open, onOpenChange, initialTab }: SettingsDialo
     { id: "account", label: t.account.title, icon: User, cloud: true },
     { id: "general", label: t.settings.general, icon: Palette },
     { id: "models", label: t.settings.models, icon: Cpu },
-    { id: "skills", label: t.nav.skills, icon: Wrench },
     { id: "channels", label: t.nav.channels, icon: Radio },
     { id: "browser", label: t.nav.browser, icon: Globe },
     { id: "invitation", label: t.invitation.title, icon: UserPlus, cloud: true },
@@ -89,7 +87,6 @@ export function SettingsDialog({ open, onOpenChange, initialTab }: SettingsDialo
           {currentTab === "account" && <AccountPanel />}
           {currentTab === "general" && <GeneralPanel />}
           {currentTab === "models" && <ModelsPanel />}
-          {currentTab === "skills" && <Skills />}
           {currentTab === "channels" && <Channels />}
           {currentTab === "browser" && <BrowserProfiles />}
           {currentTab === "invitation" && <InvitationPanel />}

@@ -63,7 +63,7 @@ const envSchema = z.object({
   ANTHROPIC_BASE_URL: z.string().optional(),
   PORT: z.coerce.number().default(62601),
   DATA_DIR: z.string().default('./data'),
-  AGENT_MODEL: z.string().default('minimax/MiniMax-M2.5-highspeed'),
+  AGENT_MODEL: z.string().default('minimax/MiniMax-M2.7-highspeed'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   FEISHU_APP_ID: z.string().optional(),

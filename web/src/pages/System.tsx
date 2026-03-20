@@ -125,6 +125,7 @@ export function System() {
     es.addEventListener('error', handleEvent)
     es.addEventListener('processing', handleEvent)
     es.addEventListener('tool_use', handleEvent)
+    es.addEventListener('document_status', handleEvent)
     es.addEventListener('connected', handleEvent)
 
     es.onerror = () => {
@@ -219,6 +220,8 @@ export function System() {
                         ? 'text-green-400'
                         : log.eventType === 'processing'
                           ? 'text-yellow-400'
+                          : log.eventType === 'document_status'
+                            ? 'text-cyan-400'
                           : log.eventType === 'tool_use'
                             ? 'text-blue-400'
                             : 'text-zinc-400',
@@ -284,6 +287,12 @@ function summarizeEvent(data: Record<string, unknown>): string {
       return `${prefix} ${(data.isProcessing as boolean) ? 'started' : 'finished'} processing ${chatId ?? ''}`
     case 'tool_use':
       return `${prefix} using tool: ${(data.tool as string) ?? 'unknown'}`
+    case 'document_status': {
+      const filename = (data.filename as string) ?? 'unknown document'
+      const status = (data.status as string) ?? 'unknown'
+      const error = (data.error as string | undefined)
+      return `${prefix} document ${filename} -> ${status}${error ? ` (${error})` : ''}`
+    }
     case 'connected':
       return 'SSE connection established'
     default:

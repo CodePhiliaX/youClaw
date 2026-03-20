@@ -3,10 +3,10 @@ import { sendMessage, getMessages, abortChat } from '../api/client'
 import { useChatStore, onChatUpdate } from '../stores/chat'
 import { sseManager } from '../lib/sse-manager'
 import type { Attachment } from '../types/attachment'
-import type { ChatState, Message, ToolUseItem } from '../stores/chat'
+import type { ChatState, Message, TimelineItem, ToolUseItem } from '../stores/chat'
 
 // Re-export types for consumers (chatCtx.ts imports these)
-export type { Message, ToolUseItem }
+export type { Message, TimelineItem, ToolUseItem }
 
 /**
  * Read active chat's state. Returns null when no chat is active (new chat screen).
@@ -99,17 +99,22 @@ export function useChatActions(agentId: string) {
 
   const loadChat = useCallback(async (chatId: string) => {
     const store = useChatStore.getState()
+    store.initChat(chatId)
     store.setActiveChatId(chatId)
 
-    // If chat already in store with messages, instant switch
     const existing = store.chats[chatId]
-    if (existing && existing.messages.length > 0) return
+    if (existing?.isProcessing && !sseManager.isConnected(chatId)) {
+      sseManager.connect(chatId)
+    }
 
-    // Otherwise fetch from backend
     const msgs = await getMessages(chatId)
-    if (msgs.length === 0) throw new Error('Chat not found or empty')
+    if (msgs.length === 0) {
+      if (!existing || existing.messages.length === 0) {
+        throw new Error('Chat not found or empty')
+      }
+      return
+    }
 
-    store.initChat(chatId)
     store.setMessages(
       chatId,
       msgs.map((m) => ({

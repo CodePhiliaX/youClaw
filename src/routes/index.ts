@@ -67,7 +67,7 @@ export function createApp(deps: AppDeps) {
   app.route('/api', createTasksRoutes(scheduler, agentManager, agentQueue))
   app.route('/api', createSystemRoutes(agentManager, eventBus, router))
   app.route('/api', createChannelsRoutes(channelManager))
-  app.route('/api', createBrowserProfilesRoutes())
+  app.route('/api', createBrowserProfilesRoutes(agentManager))
   app.route('/api', createRegistryRoutes(registryManager))
   app.route('/api', createLogsRoutes())
   app.route('/api', createWebhooksRoutes(channelManager))

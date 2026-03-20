@@ -148,10 +148,10 @@ function InputGroupInput({
   )
 }
 
-function InputGroupTextarea({
-  className,
-  ...props
-}: React.ComponentProps<"textarea">) {
+const InputGroupTextarea = React.forwardRef<
+  HTMLTextAreaElement,
+  React.ComponentProps<"textarea">
+>(({ className, ...props }, ref) => {
   return (
     <Textarea
       data-slot="input-group-control"
@@ -159,10 +159,13 @@ function InputGroupTextarea({
         "flex-1 resize-none rounded-none border-0 bg-transparent py-3 shadow-none focus-visible:ring-0 dark:bg-transparent",
         className
       )}
+      ref={ref}
       {...props}
     />
   )
-}
+})
+
+InputGroupTextarea.displayName = "InputGroupTextarea"
 
 export {
   InputGroup,

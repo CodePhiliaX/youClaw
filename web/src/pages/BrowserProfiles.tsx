@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
-  getBrowserProfiles,
   createBrowserProfile,
   deleteBrowserProfile,
   launchBrowserProfile,
@@ -9,6 +8,7 @@ import {
 import type { BrowserProfileDTO } from '../api/client'
 import { cn } from '../lib/utils'
 import { useI18n } from '../i18n'
+import { useChatContext } from '../hooks/chatCtx'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
 import { Globe, Plus, Trash2, Play, FolderOpen } from 'lucide-react'
@@ -16,8 +16,13 @@ import { useDragRegion } from "@/hooks/useDragRegion"
 
 export function BrowserProfiles() {
   const { t } = useI18n()
+  const {
+    browserProfiles: profiles,
+    refreshBrowserProfiles,
+    selectedProfileId,
+    setSelectedProfileId,
+  } = useChatContext()
   const drag = useDragRegion()
-  const [profiles, setProfiles] = useState<BrowserProfileDTO[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -25,8 +30,8 @@ export function BrowserProfiles() {
   const selectedProfile = profiles.find((p) => p.id === selectedId) ?? null
 
   const loadProfiles = useCallback(() => {
-    getBrowserProfiles().then(setProfiles).catch(() => {})
-  }, [])
+    refreshBrowserProfiles()
+  }, [refreshBrowserProfiles])
 
   useEffect(() => {
     loadProfiles()
@@ -35,6 +40,7 @@ export function BrowserProfiles() {
   const handleDelete = async (id: string) => {
     await deleteBrowserProfile(id).catch(() => {})
     if (selectedId === id) setSelectedId(null)
+    if (selectedProfileId === id) setSelectedProfileId(null)
     loadProfiles()
   }
 
@@ -64,7 +70,7 @@ export function BrowserProfiles() {
     <div className="flex h-full">
       {/* Left panel — Profile list */}
       <SidePanel>
-        <div className="h-12 shrink-0 px-3 border-b border-[var(--subtle-border)] flex items-center justify-between" {...drag}>
+        <div className="h-9 shrink-0 px-3 border-b border-[var(--subtle-border)] flex items-center justify-between" {...drag}>
           <h2 className="font-semibold text-sm">{t.browser.title}</h2>
           <button
             data-testid="browser-create-btn"

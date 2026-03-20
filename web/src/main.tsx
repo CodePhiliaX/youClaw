@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { StartupError } from './pages/StartupError'
 import { I18nProvider } from './i18n'
 import { initBaseUrl } from './api/transport'
 import { useAppStore } from './stores/app'
@@ -12,15 +13,36 @@ if (navigator.platform && !navigator.platform.startsWith('Mac')) {
   document.documentElement.classList.add('custom-scrollbar')
 }
 
-// Preload backend port config (read from store in Tauri mode), wait before rendering
-initBaseUrl()
-  .then(() => useAppStore.getState().hydrate())
-  .then(() => {
-    createRoot(document.getElementById('root')!).render(
-      <StrictMode>
-        <I18nProvider>
-          <App />
-        </I18nProvider>
-      </StrictMode>,
-    )
-  })
+const root = createRoot(document.getElementById('root')!)
+
+function renderApp() {
+  root.render(
+    <StrictMode>
+      <I18nProvider>
+        <App />
+      </I18nProvider>
+    </StrictMode>,
+  )
+}
+
+function renderError() {
+  root.render(
+    <StrictMode>
+      <I18nProvider>
+        <StartupError onRetry={startup} />
+      </I18nProvider>
+    </StrictMode>,
+  )
+}
+
+async function startup() {
+  const ok = await initBaseUrl()
+  if (!ok) {
+    renderError()
+    return
+  }
+  await useAppStore.getState().hydrate()
+  renderApp()
+}
+
+startup()

@@ -6,12 +6,15 @@ import { Agents } from './pages/Agents'
 import { Memory } from './pages/Memory'
 import { Tasks } from './pages/Tasks'
 import { Logs } from './pages/Logs'
+import { Skills } from './pages/Skills'
 import { Login } from './pages/Login'
 import { GitSetup } from './pages/GitSetup'
 import { PortConflictDialog } from './components/PortConflictDialog'
+import { CloseConfirmDialog } from './components/CloseConfirmDialog'
 import { useTheme } from './hooks/useTheme'
 import { useAppStore } from './stores/app'
-import { isTauri, updateCachedBaseUrl } from './api/transport'
+import { getTauriInvoke, isTauri, updateCachedBaseUrl } from './api/transport'
+import { saveAuthToken } from './api/client'
 
 function AuthGuard() {
   const isLoggedIn = useAppStore((s) => s.isLoggedIn)
@@ -27,8 +30,11 @@ export default function App() {
   const isLoggedIn = useAppStore((s) => s.isLoggedIn)
   const cloudEnabled = useAppStore((s) => s.cloudEnabled)
   const gitAvailable = useAppStore((s) => s.gitAvailable)
+  const fetchUser = useAppStore((s) => s.fetchUser)
+  const fetchCreditBalance = useAppStore((s) => s.fetchCreditBalance)
   const canPass = !cloudEnabled || isLoggedIn
   const [portConflict, setPortConflict] = useState(false)
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false)
 
   // Persistently listen for sidecar-event (Tauri mode)
   useEffect(() => {
@@ -42,6 +48,11 @@ export default function App() {
           if (match) {
             updateCachedBaseUrl(`http://localhost:${match[1]}`)
           }
+          // Re-hydrate if initial hydrate failed (e.g. backend wasn't ready yet)
+          const { modelReady, hydrate } = useAppStore.getState()
+          if (!modelReady) {
+            hydrate()
+          }
         } else if (event.payload.status === 'port-conflict') {
           setPortConflict(true)
         }
@@ -50,6 +61,157 @@ export default function App() {
 
     return () => { cleanup?.() }
   }, [])
+
+  useEffect(() => {
+    if (!isTauri) return
+    let cleanup: (() => void) | null = null
+
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen('close-requested', () => {
+        setCloseDialogOpen(true)
+      }).then((fn) => {
+        cleanup = fn
+      })
+    })
+
+    return () => {
+      cleanup?.()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isTauri) return
+
+    let unlisten: (() => void) | null = null
+    const inFlightUrls = new Set<string>()
+
+    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+    const normalizeDeepLink = (rawUrl: string) => {
+      const start = rawUrl.indexOf('youclaw://')
+      if (start === -1) return null
+      const normalized = rawUrl
+        .slice(start)
+        .trim()
+        .replace(/^['"]+/, '')
+        .replace(/['"]+$/, '')
+      return normalized.startsWith('youclaw://') ? normalized : null
+    }
+
+    const persistAuthTokenWithRetry = async (token: string) => {
+      let lastError: unknown = null
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        try {
+          await saveAuthToken(token)
+          return
+        } catch (err) {
+          lastError = err
+          await delay(500)
+        }
+      }
+      throw lastError ?? new Error('Failed to persist auth token from deep link')
+    }
+
+    const handleDeepLink = async (rawUrl: string) => {
+      const normalizedUrl = normalizeDeepLink(rawUrl)
+      if (!normalizedUrl || inFlightUrls.has(normalizedUrl)) return
+      inFlightUrls.add(normalizedUrl)
+
+      let url: URL
+      try {
+        url = new URL(normalizedUrl)
+      } catch {
+        inFlightUrls.delete(normalizedUrl)
+        return
+      }
+
+      if (url.protocol !== 'youclaw:') {
+        inFlightUrls.delete(normalizedUrl)
+        return
+      }
+
+      const rawRoute = `${url.hostname}${url.pathname}`
+      const route = rawRoute.replace(/^\/+/, '')
+      const token = url.searchParams.get('token')
+
+      if (route === 'auth/callback') {
+        if (!token) {
+          inFlightUrls.delete(normalizedUrl)
+          return
+        }
+        try {
+          await persistAuthTokenWithRetry(token)
+          await fetchUser()
+          await fetchCreditBalance()
+        } catch (err) {
+          console.error('Failed to persist auth token from deep link:', err)
+        } finally {
+          inFlightUrls.delete(normalizedUrl)
+        }
+        return
+      }
+
+      if (route === 'pay/callback' && url.searchParams.get('status') === 'success') {
+        void fetchCreditBalance()
+      }
+
+      inFlightUrls.delete(normalizedUrl)
+    }
+
+    const invoke = getTauriInvoke()
+
+    const setDeepLinkFrontendReady = async (ready: boolean) => {
+      try {
+        await invoke('set_deep_link_frontend_ready', { ready })
+      } catch (err) {
+        console.error(`Failed to set deep-link frontend readiness to ${ready}:`, err)
+      }
+    }
+
+    const loadPendingDeepLinks = async () => {
+      try {
+        const urls = await invoke('take_pending_deep_links') as string[]
+        for (const url of urls ?? []) {
+          await handleDeepLink(url)
+        }
+      } catch (err) {
+        console.error('Failed to load pending deep links:', err)
+      }
+    }
+
+    let disposed = false
+
+    const initializeDeepLinks = async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event')
+        const stopListening = await listen<string>('deep-link-received', (event) => {
+          void handleDeepLink(event.payload)
+        })
+
+        if (disposed) {
+          stopListening()
+          return
+        }
+
+        unlisten = stopListening
+        await setDeepLinkFrontendReady(true)
+        await loadPendingDeepLinks()
+      } catch (err) {
+        console.error('Failed to initialize deep-link bridge:', err)
+      }
+    }
+
+    void initializeDeepLinks()
+    // Intentionally avoid replaying plugin `getCurrent()` URLs here.
+    // In Tauri, that value can survive a webview refresh and re-deliver the
+    // last `youclaw://auth/callback?...` URL, which would silently restore a
+    // logged-out session after the user reloads the page.
+
+    return () => {
+      disposed = true
+      void setDeepLinkFrontendReady(false)
+      unlisten?.()
+    }
+  }, [fetchCreditBalance, fetchUser])
 
   // Block all pages until Git is available (Windows only)
   if (!gitAvailable) {
@@ -64,12 +226,14 @@ export default function App() {
           <Route path="/" element={<Chat />} />
           <Route path="/agents" element={<Agents />} />
           <Route path="/cron" element={<Tasks />} />
+          <Route path="/skills" element={<Skills />} />
           <Route path="/memory" element={<Memory />} />
           <Route path="/logs" element={<Logs />} />
         </Route>
         <Route path="*" element={<Navigate to={canPass ? "/" : "/login"} replace />} />
       </Routes>
       {isTauri && <PortConflictDialog open={portConflict} onResolved={() => setPortConflict(false)} />}
+      {isTauri && <CloseConfirmDialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen} />}
     </BrowserRouter>
   )
 }

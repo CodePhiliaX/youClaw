@@ -1,6 +1,10 @@
 import { z } from 'zod/v4'
+import { BUILD_CONSTANTS } from '../config/build-constants.ts'
 
 // ===== Config schema for each channel type =====
+
+const WEBSITE_URL = (BUILD_CONSTANTS['YOUCLAW_WEBSITE_URL'] || 'https://youclaw.dev').replace(/\/+$/, '')
+const DOCS_BASE_URL = `${WEBSITE_URL}/docs/channels`
 
 export const TelegramConfigSchema = z.object({
   botToken: z.string().min(1),
@@ -28,6 +32,8 @@ export const DingTalkConfigSchema = z.object({
   appKey: z.string().min(1),
   appSecret: z.string().min(1),
 })
+
+export const WechatOAConfigSchema = z.object({})
 
 // ===== Config field descriptors =====
 
@@ -60,7 +66,7 @@ export const CHANNEL_TYPE_REGISTRY: Record<string, ChannelTypeInfo> = {
     configFields: [
       { key: 'botToken', label: 'Bot Token', placeholder: '123456:ABC-DEF...', secret: true },
     ],
-    docsUrl: 'https://core.telegram.org/bots',
+    docsUrl: `${DOCS_BASE_URL}/telegram`,
     configSchema: TelegramConfigSchema,
   },
   feishu: {
@@ -72,7 +78,7 @@ export const CHANNEL_TYPE_REGISTRY: Record<string, ChannelTypeInfo> = {
       { key: 'appId', label: 'App ID', placeholder: 'cli_xxxxx', secret: false },
       { key: 'appSecret', label: 'App Secret', placeholder: '', secret: true },
     ],
-    docsUrl: 'https://open.feishu.cn',
+    docsUrl: `${DOCS_BASE_URL}/feishu`,
     configSchema: FeishuConfigSchema,
   },
   qq: {
@@ -84,7 +90,7 @@ export const CHANNEL_TYPE_REGISTRY: Record<string, ChannelTypeInfo> = {
       { key: 'botAppId', label: 'Bot App ID', placeholder: '', secret: false },
       { key: 'botSecret', label: 'Bot Secret', placeholder: '', secret: true },
     ],
-    docsUrl: 'https://q.qq.com',
+    docsUrl: `${DOCS_BASE_URL}/qq`,
     configSchema: QQConfigSchema,
   },
   wecom: {
@@ -112,8 +118,17 @@ export const CHANNEL_TYPE_REGISTRY: Record<string, ChannelTypeInfo> = {
       { key: 'appKey', label: 'App Key', placeholder: '', secret: false },
       { key: 'appSecret', label: 'App Secret', placeholder: '', secret: true },
     ],
-    docsUrl: 'https://open.dingtalk.com',
+    docsUrl: `${DOCS_BASE_URL}/dingtalk`,
     configSchema: DingTalkConfigSchema,
+  },
+  'wechat-oa': {
+    type: 'wechat-oa',
+    label: 'WeChat Official Account',
+    description: 'WeChat Official Account via ReadmeX Bridge (Long Polling)',
+    chatIdPrefix: 'wxoa:',
+    configFields: [],
+    docsUrl: 'https://readmex.com',
+    configSchema: WechatOAConfigSchema,
   },
 }
 

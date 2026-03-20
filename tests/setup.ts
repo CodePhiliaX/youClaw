@@ -26,6 +26,8 @@ export function cleanAllTables() {
   const db = getDatabase()
   db.run('DELETE FROM messages')
   db.run('DELETE FROM chats')
+  db.run('DELETE FROM documents')
+  db.run('DELETE FROM document_chunks')
   db.run('DELETE FROM scheduled_tasks')
   db.run('DELETE FROM task_run_logs')
   db.run('DELETE FROM sessions')

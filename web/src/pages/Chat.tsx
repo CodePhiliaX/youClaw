@@ -63,7 +63,7 @@ export function Chat() {
     <div className="flex h-full">
       {/* Left side: Chat list */}
       <SidePanel>
-        <div className="h-12 shrink-0 px-3 border-b border-[var(--subtle-border)] flex items-center justify-between" {...drag}>
+        <div className="h-9 shrink-0 px-3 border-b border-[var(--subtle-border)] flex items-center justify-between" {...drag}>
           <h2 className="font-semibold text-sm">{t.nav.chat}</h2>
           <div className="flex items-center gap-0.5">
             <button
@@ -153,6 +153,23 @@ export function Chat() {
 
       {/* Right: Chat content */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Title bar with drag region */}
+        {!isNewChat && (() => {
+          const currentChat = chatCtx.chatList.find(c => c.chat_id === chatId);
+          return currentChat ? (
+            <div
+              className="h-9 shrink-0 px-4 border-b border-[var(--subtle-border)] flex items-center"
+              {...drag}
+            >
+              <span className="text-sm font-medium truncate text-foreground/80">
+                {currentChat.name}
+              </span>
+            </div>
+          ) : (
+            <div className="h-9 shrink-0" {...drag} />
+          );
+        })()}
+        {isNewChat && <div className="h-9 shrink-0" {...drag} />}
         {isNewChat ? <ChatWelcome /> : <ChatMessages />}
 
         {/* ChatInput always rendered, animated from center to bottom */}

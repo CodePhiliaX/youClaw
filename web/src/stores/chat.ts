@@ -8,6 +8,41 @@ export type ToolUseItem = {
   status: 'running' | 'done'
 }
 
+export type TimelineItem =
+  | {
+    id: string
+    kind: 'message'
+    role: 'user' | 'assistant'
+    content: string
+    timestamp: string
+    toolUse?: ToolUseItem[]
+    attachments?: Attachment[]
+    errorCode?: string
+  }
+  | {
+    id: string
+    kind: 'assistant_stream'
+    content: string
+    timestamp: string
+  }
+  | {
+    id: string
+    kind: 'tool_use'
+    name: string
+    input?: string
+    status: 'running' | 'done'
+    timestamp: string
+  }
+  | {
+    id: string
+    kind: 'document_status'
+    documentKey: string
+    filename: string
+    status: 'parsing' | 'parsed' | 'failed'
+    error?: string
+    timestamp: string
+  }
+
 export type Message = {
   id: string
   role: 'user' | 'assistant'
@@ -21,9 +56,11 @@ export type Message = {
 export interface ChatState {
   chatId: string
   messages: Message[]
+  timelineItems: TimelineItem[]
   streamingText: string
   isProcessing: boolean
   pendingToolUse: ToolUseItem[]
+  documentStatuses: Record<string, { filename: string; status: 'parsing' | 'parsed' | 'failed'; error?: string }>
   chatStatus: 'submitted' | 'streaming' | 'ready' | 'error'
   showInsufficientCredits: boolean
   sseErrorHandled: boolean
@@ -44,13 +81,32 @@ function notifyChatUpdate() {
   }
 }
 
+function messageToTimelineItem(message: Message): TimelineItem {
+  return {
+    id: `message:${message.id}`,
+    kind: 'message',
+    role: message.role,
+    content: message.content,
+    timestamp: message.timestamp,
+    toolUse: message.toolUse,
+    attachments: message.attachments,
+    errorCode: message.errorCode,
+  }
+}
+
+function buildTimelineFromMessages(messages: Message[]): TimelineItem[] {
+  return messages.map(messageToTimelineItem)
+}
+
 function defaultChatState(chatId: string): ChatState {
   return {
     chatId,
     messages: [],
+    timelineItems: [],
     streamingText: '',
     isProcessing: false,
     pendingToolUse: [],
+    documentStatuses: {},
     chatStatus: 'ready',
     showInsufficientCredits: false,
     sseErrorHandled: false,
@@ -76,6 +132,7 @@ interface ChatStore {
   appendStreamText(chatId: string, text: string): void
   setProcessing(chatId: string, isProcessing: boolean): void
   addToolUse(chatId: string, tool: ToolUseItem): void
+  setDocumentStatus(chatId: string, documentId: string, filename: string, status: 'parsing' | 'parsed' | 'failed', error?: string): void
   completeMessage(chatId: string, fullText: string, toolUse: ToolUseItem[]): void
   addUserMessage(chatId: string, message: Message): void
   setMessages(chatId: string, messages: Message[]): void
@@ -101,6 +158,35 @@ export const useChatStore = create<ChatStore>((set) => ({
     set((state) => ({
       chats: updateChat(state.chats, chatId, (chat) => ({
         streamingText: chat.streamingText + text,
+        timelineItems: (() => {
+          const timestamp = new Date().toISOString()
+          const normalizedItems = chat.timelineItems.map((item) =>
+            item.kind === 'tool_use' && item.status === 'running'
+              ? { ...item, status: 'done' as const }
+              : item,
+          )
+          const lastItem = normalizedItems[normalizedItems.length - 1]
+
+          if (lastItem?.kind === 'assistant_stream') {
+            return [
+              ...normalizedItems.slice(0, -1),
+              {
+                ...lastItem,
+                content: lastItem.content + text,
+              },
+            ]
+          }
+
+          return [
+            ...normalizedItems,
+            {
+              id: `assistant_stream:${timestamp}:${crypto.randomUUID()}`,
+              kind: 'assistant_stream',
+              content: text,
+              timestamp,
+            },
+          ]
+        })(),
         chatStatus: chat.isProcessing ? 'streaming' : chat.chatStatus,
       })),
     })),
@@ -123,31 +209,118 @@ export const useChatStore = create<ChatStore>((set) => ({
   addToolUse: (chatId, tool) =>
     set((state) => ({
       chats: updateChat(state.chats, chatId, (chat) => {
+        const timelineItems = chat.timelineItems.map((item) =>
+          item.kind === 'tool_use' && item.status === 'running'
+            ? { ...item, status: 'done' as const }
+            : item,
+        )
         const updated = chat.pendingToolUse.map((t) =>
           t.status === 'running' ? { ...t, status: 'done' as const } : t,
         )
-        return { pendingToolUse: [...updated, tool] }
+        return {
+          pendingToolUse: [...updated, tool],
+          timelineItems: [
+            ...timelineItems,
+            {
+              id: `tool:${tool.id}`,
+              kind: 'tool_use',
+              name: tool.name,
+              input: tool.input,
+              status: tool.status,
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        }
+      }),
+    })),
+
+  setDocumentStatus: (chatId, documentId, filename, status, error) =>
+    set((state) => ({
+      chats: updateChat(state.chats, chatId, (chat) => {
+        const nextStatuses = { ...chat.documentStatuses }
+        if (status !== 'parsing') {
+          for (const [key, value] of Object.entries(nextStatuses)) {
+            if (key.endsWith(':pending') && value.filename === filename) {
+              delete nextStatuses[key]
+            }
+          }
+        }
+        nextStatuses[documentId === 'pending' ? `${filename}:pending` : documentId] = {
+          filename,
+          status,
+          error,
+        }
+        const documentKey = documentId === 'pending' ? `${filename}:pending` : documentId
+        const timelineItems = [...chat.timelineItems]
+        const existingIndex = timelineItems.findIndex((item) =>
+          item.kind === 'document_status'
+          && (
+            item.documentKey === documentKey
+            || (item.documentKey === `${filename}:pending` && item.filename === filename)
+          )
+        )
+
+        const nextItem: TimelineItem = {
+          id: existingIndex >= 0
+            ? timelineItems[existingIndex]!.id
+            : `document:${documentKey}:${Date.now()}`,
+          kind: 'document_status',
+          documentKey,
+          filename,
+          status,
+          error,
+          timestamp: existingIndex >= 0
+            ? timelineItems[existingIndex]!.timestamp
+            : new Date().toISOString(),
+        }
+
+        if (existingIndex >= 0) {
+          timelineItems[existingIndex] = nextItem
+        } else {
+          timelineItems.push(nextItem)
+        }
+
+        return {
+          documentStatuses: nextStatuses,
+          timelineItems,
+        }
       }),
     })),
 
   completeMessage: (chatId, fullText, toolUse) => {
     set((state) => ({
-      chats: updateChat(state.chats, chatId, () => ({
-        messages: [
-          ...(state.chats[chatId]?.messages ?? []),
-          {
-            id: Date.now().toString(),
-            role: 'assistant' as const,
+      chats: updateChat(state.chats, chatId, (chat) => {
+        const timestamp = new Date().toISOString()
+        const nextMessage: Message = {
+          id: Date.now().toString(),
+          role: 'assistant' as const,
+          content: fullText,
+          timestamp,
+          toolUse: toolUse.length > 0 ? toolUse : undefined,
+        }
+        const hasLiveAssistantText = chat.streamingText.trim().length > 0
+        const timelineItems = chat.timelineItems.map((item) =>
+          item.kind === 'tool_use' && item.status === 'running'
+            ? { ...item, status: 'done' as const }
+            : item,
+        )
+
+        if (!hasLiveAssistantText && fullText.trim()) {
+          timelineItems.push({
+            id: `assistant_stream:${timestamp}:${crypto.randomUUID()}`,
+            kind: 'assistant_stream',
             content: fullText,
-            timestamp: new Date().toISOString(),
-            toolUse: toolUse.length > 0 ? toolUse : undefined,
-          },
-        ],
-        streamingText: '',
-        pendingToolUse: [],
-        isProcessing: false,
-        chatStatus: 'ready' as const,
-      })),
+            timestamp,
+          })
+        }
+
+        return {
+          messages: [...chat.messages, nextMessage],
+          timelineItems,
+          streamingText: '',
+          pendingToolUse: [],
+        }
+      }),
     }))
     // Notify after state is committed
     queueMicrotask(notifyChatUpdate)
@@ -157,6 +330,7 @@ export const useChatStore = create<ChatStore>((set) => ({
     set((state) => ({
       chats: updateChat(state.chats, chatId, (chat) => ({
         messages: [...chat.messages, message],
+        timelineItems: [...chat.timelineItems, messageToTimelineItem(message)],
       })),
     }))
     // Notify after state is committed
@@ -165,7 +339,10 @@ export const useChatStore = create<ChatStore>((set) => ({
 
   setMessages: (chatId, messages) =>
     set((state) => ({
-      chats: updateChat(state.chats, chatId, () => ({ messages })),
+      chats: updateChat(state.chats, chatId, () => ({
+        messages,
+        timelineItems: buildTimelineFromMessages(messages),
+      })),
     })),
 
   handleError: (chatId, error, errorCode) =>
@@ -204,6 +381,8 @@ export const useChatStore = create<ChatStore>((set) => ({
         ]
       }
 
+      const errorTimelineItems = buildTimelineFromMessages(messages)
+
       // Reset error status after 2 seconds
       setTimeout(() => {
         set((s) => ({
@@ -219,6 +398,7 @@ export const useChatStore = create<ChatStore>((set) => ({
           [chatId]: {
             ...chat,
             messages,
+            timelineItems: errorTimelineItems,
             streamingText: '',
             isProcessing: false,
             pendingToolUse: [],
@@ -232,7 +412,8 @@ export const useChatStore = create<ChatStore>((set) => ({
 
   removeChat: (chatId) =>
     set((state) => {
-      const { [chatId]: _, ...rest } = state.chats
+      const rest = { ...state.chats }
+      delete rest[chatId]
       return {
         chats: rest,
         activeChatId: state.activeChatId === chatId ? null : state.activeChatId,

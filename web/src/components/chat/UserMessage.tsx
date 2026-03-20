@@ -2,7 +2,6 @@ import { User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Message as AIMessage,
-  MessageContent,
 } from "@/components/ai-elements/message";
 import {
   Attachments,
@@ -11,7 +10,6 @@ import {
   AttachmentInfo,
 } from "@/components/ai-elements/attachments";
 import { localAssetUrl } from "@/api/transport";
-import { useI18n } from "@/i18n";
 import { useAppStore } from "@/stores/app";
 import type { Message } from "@/hooks/useChat";
 
@@ -95,6 +93,7 @@ export function UserMessage({ message }: { message: Message }) {
                       filename: a.filename,
                       mediaType: a.mediaType,
                       url,
+                      filePath: "filePath" in a ? a.filePath : undefined,
                     }}
                   >
                     <AttachmentPreview />

@@ -2,6 +2,8 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSy
 import { resolve, basename, extname } from 'node:path'
 import { createHash } from 'node:crypto'
 import { getPaths } from '../config/paths.ts'
+import { extractDocxText, extractPptxText, extractXlsxText } from '../document/parsers/office.ts'
+import { extractPdfText } from '../document/parsers/pdf.ts'
 import { getLogger } from '../logger/index.ts'
 import type { Attachment } from '../types/attachment.ts'
 
@@ -162,120 +164,23 @@ const IMAGE_EXT_MAP: Record<string, string> = {
   '.wmf': 'image/wmf',
 }
 
-async function convertDocx(filePath: string, cacheDir: string): Promise<ConvertResult> {
-  const mammoth = await import('mammoth')
-  const content = readFileSync(filePath)
-  const hash = computeHash(content)
-  const name = basename(filePath, extname(filePath))
-
-  const images: Array<{ filename: string; mediaType: string; filePath: string }> = []
-  let imageIndex = 0
-
-  const result = await mammoth.convertToHtml(
-    { path: filePath },
-    {
-      convertImage: mammoth.images.imgElement((image: { contentType: string; read: () => Promise<Buffer> }) => {
-        // Save each image to cache dir
-        const ext = image.contentType.split('/')[1] || 'png'
-        const imgFilename = `${name}-${hash}-img${imageIndex}.${ext}`
-        const imgPath = resolve(cacheDir, imgFilename)
-        imageIndex++
-
-        return image.read().then((buffer: Buffer) => {
-          writeFileSync(imgPath, buffer)
-          images.push({
-            filename: imgFilename,
-            mediaType: image.contentType,
-            filePath: imgPath,
-          })
-          // Use a placeholder that we'll convert to [image: path] later
-          return { src: `__IMAGE__${imgPath}__IMAGE__` }
-        })
-      }),
-    },
-  )
-
-  // Convert HTML to plain text, replacing image placeholders
-  let text = result.value
-    // Replace image placeholders
-    .replace(/<img[^>]*src="__IMAGE__([^"]+)__IMAGE__"[^>]*\/?>/g, '\n[image: $1]\n')
-    // Strip remaining HTML tags
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n\n')
-    .replace(/<\/h[1-6]>/gi, '\n\n')
-    .replace(/<\/li>/gi, '\n')
-    .replace(/<\/tr>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    // Decode HTML entities
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    // Clean up excessive whitespace
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-
-  return { text, images }
+async function convertDocx(filePath: string, _cacheDir: string): Promise<ConvertResult> {
+  const parsed = await extractDocxText(filePath)
+  return { text: parsed.text }
 }
 
 async function convertXlsx(filePath: string, _cacheDir: string): Promise<ConvertResult> {
-  const XLSX = await import('xlsx')
-  const workbook = XLSX.readFile(filePath)
-  const parts: string[] = []
-
-  for (const sheetName of workbook.SheetNames) {
-    const sheet = workbook.Sheets[sheetName]
-    if (!sheet) continue
-    const csv = XLSX.utils.sheet_to_csv(sheet)
-    if (workbook.SheetNames.length > 1) {
-      parts.push(`--- Sheet: ${sheetName} ---\n${csv}`)
-    } else {
-      parts.push(csv)
-    }
-  }
-
-  return { text: parts.join('\n\n') }
+  const parsed = await extractXlsxText(filePath)
+  return { text: parsed.text }
 }
 
 async function convertPptx(filePath: string, _cacheDir: string): Promise<ConvertResult> {
-  const { unzipSync } = await import('fflate')
-  const buffer = readFileSync(filePath)
-  const zip = unzipSync(new Uint8Array(buffer))
-
-  // Extract slide XML files sorted by slide number
-  const slideEntries = Object.keys(zip)
-    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
-    .sort((a, b) => {
-      const numA = parseInt(a.match(/slide(\d+)/)?.[1] ?? '0')
-      const numB = parseInt(b.match(/slide(\d+)/)?.[1] ?? '0')
-      return numA - numB
-    })
-
-  const parts: string[] = []
-  for (const entry of slideEntries) {
-    const xml = new TextDecoder().decode(zip[entry])
-    // Extract text from <a:t> tags
-    const texts: string[] = []
-    const regex = /<a:t[^>]*>([\s\S]*?)<\/a:t>/g
-    let match: RegExpExecArray | null
-    while ((match = regex.exec(xml)) !== null) {
-      const text = match[1]?.trim() ?? ''
-      if (text) texts.push(text)
-    }
-    if (texts.length > 0) {
-      const slideNum = entry.match(/slide(\d+)/)?.[1] ?? '?'
-      parts.push(`--- Slide ${slideNum} ---\n${texts.join('\n')}`)
-    }
-  }
-
-  return { text: parts.join('\n\n') }
+  const parsed = await extractPptxText(filePath)
+  return { text: parsed.text }
 }
 
 async function convertPdf(filePath: string, _cacheDir: string): Promise<ConvertResult> {
-  const pdfParse = (await import('@cedrugs/pdf-parse')).default
   const buffer = readFileSync(filePath)
-  const data = await pdfParse(buffer)
+  const data = await extractPdfText(buffer)
   return { text: data.text }
 }

@@ -26,8 +26,7 @@ import { LogIn, LogOut, Coins, ExternalLink, ChevronRight, Pencil, Camera, Check
 export function AccountPanel() {
   const { t } = useI18n()
   const { user, isLoggedIn, authLoading, login, logout, updateProfile, creditBalance, fetchCreditBalance, openPayPage, cloudEnabled } = useAppStore()
-  const [transactions, setTransactions] = useState<CreditTransaction[]>([])
-  const [loadingTx, setLoadingTx] = useState(false)
+  const [transactions, setTransactions] = useState<CreditTransaction[] | null>(null)
   const [logoutOpen, setLogoutOpen] = useState(false)
 
   // Edit username state
@@ -46,22 +45,18 @@ export function AccountPanel() {
   const [redeemResult, setRedeemResult] = useState<{ success: boolean; message: string } | null>(null)
 
   useEffect(() => {
-    if (isLoggedIn) {
-      fetchCreditBalance()
-      loadTransactions()
-    }
-  }, [isLoggedIn])
-
-  const loadTransactions = async () => {
-    setLoadingTx(true)
-    try {
-      const data = await getCreditTransactions(20)
-      setTransactions(Array.isArray(data) ? data : [])
-    } catch {
-      setTransactions([])
-    }
-    setLoadingTx(false)
-  }
+    if (!isLoggedIn) return
+    fetchCreditBalance()
+    let cancelled = false
+    getCreditTransactions(20)
+      .then((data) => {
+        if (!cancelled) setTransactions(Array.isArray(data) ? data : [])
+      })
+      .catch(() => {
+        if (!cancelled) setTransactions([])
+      })
+    return () => { cancelled = true }
+  }, [isLoggedIn, fetchCreditBalance])
 
   const handleTopUp = async () => {
     await openPayPage()
@@ -103,8 +98,8 @@ export function AccountPanel() {
       setInvitationCode("")
       // Refresh credit balance
       fetchCreditBalance()
-    } catch (err: any) {
-      const msg = err?.message || ''
+    } catch (err: unknown) {
+      const msg = (err instanceof Error ? err.message : '') || ''
       const errorMap: Record<string, string> = {
         CODE_NOT_FOUND: t.account.redeemErrorCodeNotFound,
         REFERRAL_ALREADY_USED: t.account.redeemErrorAlreadyUsed,
@@ -280,7 +275,7 @@ export function AccountPanel() {
         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
           {t.account.transactions}
         </h4>
-        {loadingTx ? (
+        {transactions === null ? (
           <div className="text-sm text-muted-foreground text-center py-4">{t.common.loading}</div>
         ) : transactions.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-6 border-2 border-dashed rounded-2xl">

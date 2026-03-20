@@ -1,23 +1,29 @@
-import { useState, useEffect, useCallback } from "react"
-import { useI18n } from "@/i18n"
-import { useAppStore } from "@/stores/app"
-import type { Theme } from "@/hooks/useTheme"
-import { Sun, Moon, Monitor } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { isTauri, getTauriInvoke, updateCachedBaseUrl } from "@/api/transport"
+import { useState, useEffect, useCallback } from 'react'
+import { useI18n } from '@/i18n'
+import { useAppStore, type CloseAction } from '@/stores/app'
+import type { Theme } from '@/hooks/useTheme'
+import { Sun, Moon, Monitor } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { getTauriInvoke, isTauri, updateCachedBaseUrl, savePreferredPort } from '@/api/transport'
 
-const themeOptions: { value: Theme; labelKey: "dark" | "light" | "system"; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
-  { value: "light", labelKey: "light", icon: Sun },
-  { value: "dark", labelKey: "dark", icon: Moon },
-  { value: "system", labelKey: "system", icon: Monitor },
+const themeOptions: { value: Theme; labelKey: 'dark' | 'light' | 'system'; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+  { value: 'light', labelKey: 'light', icon: Sun },
+  { value: 'dark', labelKey: 'dark', icon: Moon },
+  { value: 'system', labelKey: 'system', icon: Monitor },
 ]
 
 const languageOptions = [
-  { value: "en", label: "English (US)" },
-  { value: "zh", label: "简体中文" },
+  { value: 'en', label: 'English (US)' },
+  { value: 'zh', label: '简体中文' },
 ] as const
+
+const closeBehaviorOptions: { value: CloseAction; titleKey: 'closeBehaviorAsk' | 'closeBehaviorMinimize' | 'closeBehaviorQuit'; descriptionKey: 'closeBehaviorAskDesc' | 'closeBehaviorMinimizeDesc' | 'closeBehaviorQuitDesc' }[] = [
+  { value: '', titleKey: 'closeBehaviorAsk', descriptionKey: 'closeBehaviorAskDesc' },
+  { value: 'minimize', titleKey: 'closeBehaviorMinimize', descriptionKey: 'closeBehaviorMinimizeDesc' },
+  { value: 'quit', titleKey: 'closeBehaviorQuit', descriptionKey: 'closeBehaviorQuitDesc' },
+]
 
 export function GeneralPanel() {
   const { t } = useI18n()
@@ -25,12 +31,14 @@ export function GeneralPanel() {
   const setTheme = useAppStore((s) => s.setTheme)
   const locale = useAppStore((s) => s.locale)
   const setLocale = useAppStore((s) => s.setLocale)
+  const closeAction = useAppStore((s) => s.closeAction)
+  const setCloseAction = useAppStore((s) => s.setCloseAction)
 
   // Port config state (Tauri only)
-  const [portValue, setPortValue] = useState("62601")
+  const [portValue, setPortValue] = useState('62601')
   const [portSaved, setPortSaved] = useState(false)
   const [portRestarting, setPortRestarting] = useState(false)
-  const [portMessage, setPortMessage] = useState("")
+  const [portMessage, setPortMessage] = useState('')
 
   // Load preferred_port from Tauri Store on mount
   useEffect(() => {
@@ -44,8 +52,7 @@ export function GeneralPanel() {
   }, [])
 
   const savePortToStore = useCallback(async (port: number) => {
-    const invoke = getTauriInvoke()
-    await invoke('set_preferred_port', { port })
+    await savePreferredPort(port)
   }, [])
 
   const handleSavePort = useCallback(async () => {
@@ -54,7 +61,7 @@ export function GeneralPanel() {
     try {
       await savePortToStore(port)
       setPortSaved(true)
-      setPortMessage("")
+      setPortMessage('')
       setTimeout(() => setPortSaved(false), 3000)
     } catch (err) {
       console.error('Failed to save port:', err)
@@ -65,7 +72,7 @@ export function GeneralPanel() {
     const port = parseInt(portValue, 10)
     if (isNaN(port) || port < 1024 || port > 65535) return
     setPortRestarting(true)
-    setPortMessage("")
+    setPortMessage('')
     try {
       // Save port first, then restart
       await savePortToStore(port)
@@ -181,6 +188,36 @@ export function GeneralPanel() {
           {portMessage && (
             <p className="text-xs text-amber-500 mt-2">{portMessage}</p>
           )}
+        </div>
+      )}
+
+      {isTauri && (
+        <div>
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
+            {t.settings.closeBehavior}
+          </h4>
+          <p className="text-xs text-muted-foreground mb-4">{t.settings.closeBehaviorHint}</p>
+          <div className="grid gap-3 md:grid-cols-3">
+            {closeBehaviorOptions.map((option) => (
+              <button
+                key={option.titleKey}
+                onClick={() => void setCloseAction(option.value)}
+                className={cn(
+                  'rounded-2xl border-2 p-4 text-left transition-all',
+                  closeAction === option.value
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border hover:border-muted-foreground/30'
+                )}
+              >
+                <div className="text-sm font-medium text-foreground">
+                  {t.settings[option.titleKey]}
+                </div>
+                <div className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {t.settings[option.descriptionKey]}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

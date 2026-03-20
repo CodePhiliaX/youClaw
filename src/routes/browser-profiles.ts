@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { getPaths } from '../config/index.ts'
 import { ensureBunRuntime } from '../agent/runtime.ts'
 import {
@@ -13,8 +14,9 @@ import {
 import { getLogger } from '../logger/index.ts'
 import { which } from '../utils/shell-env.ts'
 import { detectChromePath } from '../utils/chrome.ts'
+import type { AgentManager } from '../agent/index.ts'
 
-export function createBrowserProfilesRoutes() {
+export function createBrowserProfilesRoutes(agentManager?: AgentManager) {
   const app = new Hono()
 
   // List all profiles
@@ -38,18 +40,27 @@ export function createBrowserProfilesRoutes() {
   })
 
   // Delete a profile
-  app.delete('/browser-profiles/:id', (c) => {
+  app.delete('/browser-profiles/:id', async (c) => {
+    const log = getLogger()
     const id = c.req.param('id')
     const profile = getBrowserProfile(id)
     if (!profile) {
       return c.json({ error: 'not found' }, 404)
     }
     deleteBrowserProfile(id)
+    const updatedAgents = clearAgentBrowserProfileBindings(id)
     // Delete userDataDir
     const profileDir = resolve(getPaths().browserProfiles, id)
     try {
       rmSync(profileDir, { recursive: true, force: true })
     } catch {}
+    if (updatedAgents.length > 0 && agentManager) {
+      try {
+        await agentManager.reloadAgents()
+      } catch (err) {
+        log.error({ err, profileId: id, updatedAgents }, 'failed to reload agents after browser profile deletion')
+      }
+    }
     return c.json({ ok: true })
   })
 
@@ -90,6 +101,32 @@ export function createBrowserProfilesRoutes() {
   })
 
   return app
+}
+
+function clearAgentBrowserProfileBindings(profileId: string): string[] {
+  const agentsDir = getPaths().agents
+  if (!existsSync(agentsDir)) return []
+
+  const updatedAgents: string[] = []
+
+  for (const entry of readdirSync(agentsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+
+    const configPath = resolve(agentsDir, entry.name, 'agent.yaml')
+    if (!existsSync(configPath)) continue
+
+    try {
+      const raw = readFileSync(configPath, 'utf-8')
+      const config = parseYaml(raw) as Record<string, unknown> | null
+      if (!config || config.browserProfile !== profileId) continue
+
+      delete config.browserProfile
+      writeFileSync(configPath, stringifyYaml(config))
+      updatedAgents.push(entry.name)
+    } catch {}
+  }
+
+  return updatedAgents
 }
 
 /**

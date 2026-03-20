@@ -192,7 +192,7 @@ export function Memory() {
     <div className="flex h-full">
       {/* Left: Memory list */}
       <SidePanel>
-        <div className="h-12 shrink-0 px-3 border-b border-[var(--subtle-border)] flex items-center justify-between" {...drag}>
+        <div className="h-9 shrink-0 px-3 border-b border-[var(--subtle-border)] flex items-center justify-between" {...drag}>
           <h2 className="font-semibold text-sm">{t.memory.title}</h2>
         </div>
 
@@ -225,7 +225,7 @@ export function Memory() {
       {/* Center: Memory content */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Top toolbar */}
-        <div className="h-12 shrink-0 flex items-center justify-between px-3 border-b border-[var(--subtle-border)]">
+        <div className="h-9 shrink-0 flex items-center justify-between px-3 border-b border-[var(--subtle-border)]">
           <div className="flex items-center gap-2">
             {selectedItem?.isGlobal ? (
               <Globe className="h-4 w-4 text-muted-foreground" />
@@ -315,7 +315,7 @@ export function Memory() {
       {panelOpen && (
         <div className="w-[340px] shrink-0 border-l border-[var(--subtle-border)] flex flex-col">
           {/* Tab switcher */}
-          <div className="h-12 shrink-0 flex items-center gap-1 px-3 border-b border-[var(--subtle-border)]">
+          <div className="h-9 shrink-0 flex items-center gap-1 px-3 border-b border-[var(--subtle-border)]">
             {!isGlobal && (
               <>
                 <button

@@ -15,6 +15,14 @@ export type AgentEvent =
   | { type: 'complete'; agentId: string; chatId: string; fullText: string; sessionId: string }
   | { type: 'error'; agentId: string; chatId: string; error: string; errorCode?: ErrorCode }
   | { type: 'processing'; agentId: string; chatId: string; isProcessing: boolean }
+  | { type: 'document_status'; agentId: string; chatId: string; documentId: string; filename: string; status: 'parsing' | 'parsed' | 'failed'; error?: string }
+  // Phase 3: Sub-agent events
+  | { type: 'subagent_started'; agentId: string; chatId: string; taskId: string; description: string }
+  | { type: 'subagent_progress'; agentId: string; chatId: string; taskId: string; summary?: string }
+  | { type: 'subagent_completed'; agentId: string; chatId: string; taskId: string; status: string; summary: string }
+  // Channel inbound events
+  | { type: 'new_chat'; agentId: string; chatId: string; name: string; channel: string }
+  | { type: 'inbound_message'; agentId: string; chatId: string; messageId: string; content: string; senderName: string; timestamp: string }
   // Memory events
   | { type: 'memory_updated'; agentId: string; filePath: string }
   | { type: 'conversation_archived'; agentId: string; filename: string }

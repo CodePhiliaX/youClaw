@@ -23,12 +23,35 @@ class DailyRotatingStream extends Writable {
 
   override _write(chunk: Buffer, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
     const today = new Date().toISOString().split('T')[0]!
-    if (today !== this.currentDate) {
+    if (today !== this.currentDate || !this.fileStream) {
       this.fileStream?.end()
       this.currentDate = today
-      this.fileStream = createWriteStream(resolve(this.logsDir, `${today}.log`), { flags: 'a' })
+      try {
+        this.fileStream = createWriteStream(resolve(this.logsDir, `${today}.log`), { flags: 'a' })
+        this.fileStream.on('error', (err) => {
+          // eslint-disable-next-line no-console
+          console.error('[LOGGER] File stream error:', err instanceof Error ? err.message : String(err))
+          this.fileStream = null
+        })
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[LOGGER] Failed to open log file stream:', err instanceof Error ? err.message : String(err))
+        this.fileStream = null
+      }
     }
-    this.fileStream!.write(chunk, encoding, callback)
+    if (!this.fileStream) {
+      callback()
+      return
+    }
+
+    try {
+      this.fileStream.write(chunk, encoding, () => callback())
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[LOGGER] Failed to write log chunk:', err instanceof Error ? err.message : String(err))
+      this.fileStream = null
+      callback()
+    }
 
     // Broadcast log entry for SSE subscribers
     try {
@@ -55,10 +78,31 @@ export function initLogger(): pino.Logger {
 
   const streams: pino.StreamEntry[] = [
     { level: env.LOG_LEVEL as pino.Level, stream: process.stdout },
-    { level: env.LOG_LEVEL as pino.Level, stream: new DailyRotatingStream(logsDir) },
   ]
 
-  _logger = pino({ level: env.LOG_LEVEL }, pino.multistream(streams))
+  let fileLogInitError: string | null = null
+  try {
+    streams.push({ level: env.LOG_LEVEL as pino.Level, stream: new DailyRotatingStream(logsDir) })
+  } catch (err) {
+    fileLogInitError = err instanceof Error ? err.message : String(err)
+    // eslint-disable-next-line no-console
+    console.error('[LOGGER] Failed to initialize file logging stream:', fileLogInitError)
+  }
+
+  try {
+    _logger = streams.length > 1
+      ? pino({ level: env.LOG_LEVEL }, pino.multistream(streams))
+      : pino({ level: env.LOG_LEVEL }, process.stdout)
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[LOGGER] Failed to initialize logger, falling back to stdout only:', err instanceof Error ? err.message : String(err))
+    _logger = pino({ level: env.LOG_LEVEL }, process.stdout)
+  }
+
+  if (fileLogInitError) {
+    _logger.warn({ logsDir, error: fileLogInitError, category: 'system' }, 'File logging disabled, running with stdout only')
+  }
+
   return _logger
 }
 

@@ -10,6 +10,7 @@ import type { EventBus } from '../events/index.ts'
 import { ErrorCode } from '../events/types.ts'
 import type { PromptBuilder } from './prompt-builder.ts'
 import type { HooksManager } from './hooks.ts'
+import { preprocessAttachments } from './document-converter.ts'
 import { abortRegistry } from './abort-registry.ts'
 import { getActiveModelConfig } from '../settings/manager.ts'
 import { getAuthToken } from '../routes/auth.ts'
@@ -268,7 +269,6 @@ export class AgentRuntime {
     }, 'Creating agent session')
 
     const queryStartTime = Date.now()
-
     try {
       const { session } = await createAgentSession({
         cwd,
@@ -293,6 +293,17 @@ export class AgentRuntime {
       const promptWithFallback = (!existingSessionFile || !existsSync(existingSessionFile))
         ? this.buildRecoveredPrompt(chatId, prompt)
         : prompt
+      const fileAttachments = attachments
+        ?.filter((attachment) => typeof attachment.filePath === 'string' && attachment.filePath.length > 0)
+        .map((attachment) => ({
+          filename: attachment.filename,
+          mediaType: attachment.mediaType,
+          filePath: attachment.filePath!,
+        })) ?? []
+      const processedAttachments = fileAttachments.length > 0
+        ? await preprocessAttachments(fileAttachments)
+        : []
+      const promptWithAttachments = this.appendAttachmentInstructions(promptWithFallback, processedAttachments)
 
       abortController.signal.addEventListener('abort', () => {
         session.abort().catch(() => {})
@@ -309,9 +320,9 @@ export class AgentRuntime {
                 mimeType: attachment.mediaType,
               }))
 
-            await session.prompt(promptWithFallback, { images: images.length > 0 ? images : undefined })
+            await session.prompt(promptWithAttachments, { images: images.length > 0 ? images : undefined })
           } else {
-            await session.prompt(promptWithFallback)
+            await session.prompt(promptWithAttachments)
           }
         } catch (err) {
           if (abortController.signal.aborted) {
@@ -537,6 +548,25 @@ export class AgentRuntime {
       chatId,
       tool,
       input: JSON.stringify(input).slice(0, 200),
+    })
+  }
+
+  private emitDocumentStatus(
+    agentId: string,
+    chatId: string,
+    documentId: string,
+    filename: string,
+    status: 'parsing' | 'parsed' | 'failed',
+    error?: string,
+  ): void {
+    this.eventBus.emit({
+      type: 'document_status',
+      agentId,
+      chatId,
+      documentId,
+      filename,
+      status,
+      error,
     })
   }
 }
