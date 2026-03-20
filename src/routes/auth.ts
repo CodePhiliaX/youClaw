@@ -6,6 +6,11 @@ import { getLogger } from '../logger/index.ts'
 
 const AUTH_TOKEN_KEY = 'auth_token'
 
+function maskToken(token: string): string {
+  if (!token) return '(empty)'
+  return `${token.slice(0, 6)}... (len=${token.length})`
+}
+
 // Read token from kv_state
 export function getAuthToken(): string | null {
   const db = getDatabase()
@@ -56,6 +61,7 @@ export function createAuthRoutes() {
     const logger = getLogger()
 
     if (!token) {
+      logger.warn({ category: 'auth', hasToken: false }, 'Auth callback received without token')
       return c.html(`
         <html><body style="font-family:system-ui;text-align:center;padding:60px">
           <h2>Login Failed</h2>
@@ -65,7 +71,7 @@ export function createAuthRoutes() {
     }
 
     saveAuthToken(token)
-    logger.info({ category: 'auth' }, 'Auth token saved from callback')
+    logger.info({ category: 'auth', hasToken: true, tokenPreview: maskToken(token) }, 'Auth token saved from callback')
 
     // Try to bring the Tauri app to foreground via deep link, then auto-close the tab
     return c.html(`
@@ -145,10 +151,11 @@ export function createAuthRoutes() {
     const body = await c.req.json() as { token?: string }
     const logger = getLogger()
     if (!body.token) {
+      logger.warn({ category: 'auth', hasToken: false }, 'Save-token called without token')
       return c.json({ error: 'Missing token' }, 400)
     }
     saveAuthToken(body.token)
-    logger.info({ category: 'auth' }, 'Auth token saved from deep link')
+    logger.info({ category: 'auth', hasToken: true, tokenPreview: maskToken(body.token) }, 'Auth token saved from deep link')
     return c.json({ ok: true })
   })
 

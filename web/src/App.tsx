@@ -24,6 +24,11 @@ function AuthGuard() {
   return <Navigate to="/login" replace />
 }
 
+function maskToken(token: string | null): string {
+  if (!token) return '(none)'
+  return `${token.slice(0, 6)}... (len=${token.length})`
+}
+
 // Tauri devUrl uses http protocol, so BrowserRouter works directly
 export default function App() {
   useTheme()
@@ -97,14 +102,25 @@ export default function App() {
       return normalized.startsWith('youclaw://') ? normalized : null
     }
 
+    const logDeepLink = (stage: string, details: Record<string, unknown>) => {
+      console.info('[auth deep-link]', stage, details)
+    }
+
     const persistAuthTokenWithRetry = async (token: string) => {
       let lastError: unknown = null
       for (let attempt = 0; attempt < 60; attempt += 1) {
         try {
+          logDeepLink('save-token:start', { attempt: attempt + 1, tokenPreview: maskToken(token) })
           await saveAuthToken(token)
+          logDeepLink('save-token:success', { attempt: attempt + 1, tokenPreview: maskToken(token) })
           return
         } catch (err) {
           lastError = err
+          logDeepLink('save-token:retry', {
+            attempt: attempt + 1,
+            tokenPreview: maskToken(token),
+            error: err instanceof Error ? err.message : String(err),
+          })
           await delay(500)
         }
       }
@@ -130,18 +146,31 @@ export default function App() {
       }
 
       const route = `${url.hostname}${url.pathname}`
+      const token = url.searchParams.get('token')
+      logDeepLink('received', {
+        route,
+        hasToken: !!token,
+        tokenPreview: maskToken(token),
+      })
+
       if (route === 'auth/callback') {
-        const token = url.searchParams.get('token')
         if (!token) {
+          logDeepLink('auth-callback:missing-token', { route })
           inFlightUrls.delete(normalizedUrl)
           return
         }
         try {
           await persistAuthTokenWithRetry(token)
+          logDeepLink('auth-callback:fetch-user', { route, tokenPreview: maskToken(token) })
           await fetchUser()
           await fetchCreditBalance()
         } catch (err) {
           console.error('Failed to persist auth token from deep link:', err)
+          logDeepLink('auth-callback:error', {
+            route,
+            tokenPreview: maskToken(token),
+            error: err instanceof Error ? err.message : String(err),
+          })
         } finally {
           inFlightUrls.delete(normalizedUrl)
         }
@@ -160,6 +189,7 @@ export default function App() {
     const setDeepLinkFrontendReady = async (ready: boolean) => {
       try {
         await invoke('set_deep_link_frontend_ready', { ready })
+        logDeepLink('frontend-ready', { ready })
       } catch (err) {
         console.error(`Failed to set deep-link frontend readiness to ${ready}:`, err)
       }
@@ -168,6 +198,7 @@ export default function App() {
     const loadPendingDeepLinks = async () => {
       try {
         const urls = await invoke('take_pending_deep_links') as string[]
+        logDeepLink('pending-links', { count: urls?.length ?? 0 })
         for (const url of urls ?? []) {
           await handleDeepLink(url)
         }

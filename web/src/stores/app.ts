@@ -21,6 +21,20 @@ function clearAuthPolling() {
   }
 }
 
+async function ensureWindowsDeepLinkRegistration(): Promise<void> {
+  if (!isTauri || !navigator.userAgent.includes('Windows')) return
+
+  try {
+    const { isRegistered, register } = await import('@tauri-apps/plugin-deep-link')
+    const registered = await isRegistered('youclaw')
+    if (!registered) {
+      await register('youclaw')
+    }
+  } catch (err) {
+    console.error('Failed to verify/register deep-link protocol:', err)
+  }
+}
+
 interface AppState {
   theme: Theme
   setTheme: (theme: Theme) => void
@@ -176,6 +190,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       if (isTauri) {
+        await ensureWindowsDeepLinkRegistration()
         // New desktop builds opt into the Tauri deep-link callback explicitly.
         // Older clients keep calling /api/auth/login without platform=tauri and continue
         // using the legacy localhost callback flow, so we preserve backwards compatibility.

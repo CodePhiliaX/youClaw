@@ -9,6 +9,7 @@ use tauri::{
     image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Url,
 };
 use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
 use tauri_plugin_shell::ShellExt;
@@ -55,11 +56,36 @@ struct SidecarEvent {
     message: String,
 }
 
+fn mask_token(token: &str) -> String {
+    if token.is_empty() {
+        return "(empty)".into();
+    }
+    let prefix: String = token.chars().take(6).collect();
+    format!("{}... (len={})", prefix, token.chars().count())
+}
+
+fn describe_deep_link(url: &str) -> String {
+    if let Ok(parsed) = Url::parse(url) {
+        let route = format!("{}{}", parsed.host_str().unwrap_or(""), parsed.path());
+        let token = parsed
+            .query_pairs()
+            .find(|(key, _)| key == "token")
+            .map(|(_, value)| value.to_string());
+        let has_token = token.is_some();
+        let token_preview = token
+            .as_deref()
+            .map(mask_token)
+            .unwrap_or_else(|| "(none)".into());
+        return format!("{route} token={token_preview} has_token={has_token}");
+    }
+    "(invalid deep link)".into()
+}
+
 fn enqueue_deep_link(app: &AppHandle, url: String) {
     let state = app.state::<DeepLinkState>();
     let mut guard = state.pending.lock().unwrap();
     if !guard.contains(&url) {
-        log::info!("Queueing deep link: {}", url);
+        log::info!("Queueing deep link: {}", describe_deep_link(&url));
         guard.push(url);
     }
 }
@@ -82,7 +108,7 @@ fn normalize_deep_link(raw: &str) -> Option<String> {
 fn forward_deep_link(app: &AppHandle, url: String) {
     let state = app.state::<DeepLinkState>();
     if state.frontend_ready.load(Ordering::SeqCst) {
-        log::info!("Emitting deep link to frontend: {}", url);
+        log::info!("Emitting deep link to frontend: {}", describe_deep_link(&url));
         let _ = app.emit("deep-link-received", url);
         return;
     }
@@ -671,7 +697,7 @@ pub fn run() {
             app.listen("deep-link://new-url", move |event: tauri::Event| {
                 if let Ok(urls) = serde_json::from_str::<Vec<String>>(event.payload()) {
                     for url in urls {
-                        log::info!("Deep link received: {}", url);
+                        log::info!("Deep link received: {}", describe_deep_link(&url));
                         forward_deep_link(&dl_handle, url);
                     }
                     // Bring window to foreground
