@@ -20,6 +20,9 @@ export type AgentEvent =
   | { type: 'subagent_started'; agentId: string; chatId: string; taskId: string; description: string }
   | { type: 'subagent_progress'; agentId: string; chatId: string; taskId: string; summary?: string }
   | { type: 'subagent_completed'; agentId: string; chatId: string; taskId: string; status: string; summary: string }
+  // Channel inbound events
+  | { type: 'new_chat'; agentId: string; chatId: string; name: string; channel: string }
+  | { type: 'inbound_message'; agentId: string; chatId: string; messageId: string; content: string; senderName: string; timestamp: string }
   // Memory events
   | { type: 'memory_updated'; agentId: string; filePath: string }
   | { type: 'conversation_archived'; agentId: string; filename: string }
