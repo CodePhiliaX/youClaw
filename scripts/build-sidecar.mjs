@@ -1,11 +1,13 @@
 #!/usr/bin/env bun
 
 /**
- * Build a Node 22 SEA sidecar executable for the current platform.
+ * Build a runtime-check sidecar executable for the current platform.
  *
- * This branch is dedicated to runtime verification. The generated binary keeps
- * the same Tauri sidecar name (`youclaw-server-*`) so Rust/Tauri code does not
- * need to change while we swap Bun out for Node 22.
+ * Supported runtimes:
+ * - bun    : Bun compiled executable
+ * - node22 : Node 22 SEA executable
+ *
+ * Set YOUCLAW_SIDECAR_RUNTIME=bun|node22 to switch implementation.
  */
 
 import { spawnSync } from 'node:child_process'
@@ -27,6 +29,7 @@ const root = resolve(__dirname, '..')
 const binDir = resolve(root, 'src-tauri', 'bin')
 const buildDir = resolve(root, '.sidecar-build')
 const nodeBin = process.env.YOUCLAW_NODE_BIN || 'node'
+const sidecarRuntime = process.env.YOUCLAW_SIDECAR_RUNTIME || 'node22'
 const seaFuse = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2'
 
 const outputNames = {
@@ -134,6 +137,26 @@ function maybeRemoveMacSignature(binaryPath) {
   })
 }
 
+function buildBunCompile() {
+  const outName = getOutputName()
+  if (!outName) {
+    throw new Error(`Unsupported platform/arch: ${process.platform}/${process.arch}`)
+  }
+
+  if (process.argv.includes('--all')) {
+    throw new Error('Runtime-check Bun sidecar build only supports the current platform.')
+  }
+
+  const outPath = resolve(binDir, outName)
+
+  console.log(`Building Bun sidecar for ${process.platform}/${process.arch}...\n`)
+
+  mkdirSync(binDir, { recursive: true })
+  run('bun', ['build', '--compile', 'src/index.ts', '--outfile', outPath])
+
+  console.log(`\nDone: ${outPath}`)
+}
+
 function buildNodeSea() {
   const outName = getOutputName()
   if (!outName) {
@@ -190,7 +213,14 @@ function buildNodeSea() {
 }
 
 generateBuildConstants()
-buildNodeSea()
+
+if (sidecarRuntime === 'bun') {
+  buildBunCompile()
+} else if (sidecarRuntime === 'node22') {
+  buildNodeSea()
+} else {
+  throw new Error(`Unsupported YOUCLAW_SIDECAR_RUNTIME: ${sidecarRuntime}`)
+}
 
 for (const f of readdirSync(root)) {
   if (f.endsWith('.bun-build')) {

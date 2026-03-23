@@ -6,6 +6,23 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      build_scope:
+        description: Build scope
+        type: choice
+        required: true
+        default: windows-runtime-check
+        options:
+          - full-release
+          - windows-runtime-check
+      sidecar_runtime:
+        description: Sidecar runtime for windows runtime checks
+        type: choice
+        required: true
+        default: bun
+        options:
+          - bun
+          - node22
 
 permissions:
   contents: write
@@ -17,10 +34,13 @@ concurrency:
 env:
   CARGO_HOME: ${{ github.workspace }}/.cargo
   IS_BETA: ${{ contains(github.ref_name, 'beta') }}
+  BUILD_SCOPE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_scope || 'full-release' }}
+  SIDECAR_RUNTIME: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sidecar_runtime || 'bun' }}
 
 jobs:
   # ── Stable releases are created first to avoid race condition ──
   create-release:
+    if: ${{ env.BUILD_SCOPE == 'full-release' }}
     runs-on: ubuntu-latest
     name: Create Release
     steps:
@@ -45,6 +65,7 @@ jobs:
 
   # ── macOS builds ──
   build-mac:
+    if: ${{ env.BUILD_SCOPE == 'full-release' }}
     needs: create-release
     strategy:
       fail-fast: false
@@ -184,6 +205,7 @@ jobs:
 
   # ── Windows build ──
   build-windows:
+    if: ${{ env.BUILD_SCOPE == 'full-release' }}
     needs: create-release
     runs-on: windows-latest
     name: Build Windows x64
@@ -286,9 +308,93 @@ jobs:
           run-url: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           status: ${{ job.status }}
 
+  build-windows-runtime-check:
+    if: ${{ github.event_name == 'workflow_dispatch' && env.BUILD_SCOPE == 'windows-runtime-check' }}
+    runs-on: windows-latest
+    name: Runtime Check Windows x64 (${{ env.SIDECAR_RUNTIME }})
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Node.js 22
+        if: env.SIDECAR_RUNTIME == 'node22'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install root dependencies
+        shell: bash
+        run: bun install
+
+      - name: Install web dependencies
+        shell: bash
+        working-directory: web
+        run: bun install
+
+      - name: Build sidecar
+        shell: bash
+        env:
+          YOUCLAW_SIDECAR_RUNTIME: ${{ env.SIDECAR_RUNTIME }}
+          YOUCLAW_WEBSITE_URL: ${{ secrets.YOUCLAW_WEBSITE_URL }}
+          YOUCLAW_API_URL: ${{ secrets.YOUCLAW_API_URL }}
+          YOUCLAW_BUILTIN_API_URL: ${{ secrets.YOUCLAW_BUILTIN_API_URL }}
+          YOUCLAW_BUILTIN_AUTH_TOKEN: ${{ secrets.YOUCLAW_BUILTIN_AUTH_TOKEN }}
+        run: bun run build:sidecar
+
+      - name: Embed Bun runtime for Bun builds
+        if: env.SIDECAR_RUNTIME == 'bun'
+        shell: bash
+        run: |
+          mkdir -p src-tauri/resources/bun-runtime
+          BUN_VERSION=$(bun --version)
+          BUN_URL="https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-windows-x64.zip"
+          echo "Downloading Bun ${BUN_VERSION} for windows-x64: ${BUN_URL}"
+          curl -fsSL -o /tmp/bun.zip "${BUN_URL}"
+          unzip -o /tmp/bun.zip -d /tmp/bun-extract
+          cp /tmp/bun-extract/bun-windows-x64/bun.exe src-tauri/resources/bun-runtime/bun.exe
+          echo "Embedded Bun runtime: $(ls -la src-tauri/resources/bun-runtime/bun.exe)"
+
+      - name: Ensure Bun runtime directory exists
+        if: env.SIDECAR_RUNTIME == 'node22'
+        shell: bash
+        run: mkdir -p src-tauri/resources/bun-runtime
+
+      - name: Download Git installer for bundling
+        shell: bash
+        run: |
+          GIT_INSTALLER_NAME="Git-2.53.0.2-64-bit.exe"
+          GIT_INSTALLER_URL="https://cdn.chat2db-ai.com/youclaw/website/${GIT_INSTALLER_NAME}"
+          echo "Downloading bundled Git installer: ${GIT_INSTALLER_URL}"
+          mkdir -p src-tauri/resources/git-installer
+          curl -fsSL -o "src-tauri/resources/git-installer/${GIT_INSTALLER_NAME}" "${GIT_INSTALLER_URL}"
+          echo "Git installer size: $(stat --format=%s src-tauri/resources/git-installer/${GIT_INSTALLER_NAME}) bytes"
+
+      - name: Build Tauri app
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: bun tauri build --bundles nsis
+
+      - name: Upload runtime-check artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-check-${{ github.ref_name }}-${{ env.SIDECAR_RUNTIME }}-windows-x64
+          if-no-files-found: error
+          path: |
+            src-tauri/bin/youclaw-server-x86_64-pc-windows-msvc.exe
+            src-tauri/target/release/bundle/**
+
   # ── Windows code signing (self-hosted runner with USB token) ──
   sign-windows:
-    if: ${{ !contains(github.ref_name, 'beta') }}
+    if: ${{ env.BUILD_SCOPE == 'full-release' && !contains(github.ref_name, 'beta') }}
     needs: build-windows
     runs-on: self-hosted
     name: Sign Windows exe
@@ -462,7 +568,7 @@ jobs:
 
   # ── Upload to OSS & generate updater manifest ──
   updater:
-    if: ${{ !contains(github.ref_name, 'beta') && always() && (needs.build-mac.result == 'success' && needs.sign-windows.result == 'success') }}
+    if: ${{ env.BUILD_SCOPE == 'full-release' && !contains(github.ref_name, 'beta') && always() && (needs.build-mac.result == 'success' && needs.sign-windows.result == 'success') }}
     needs: [build-mac, sign-windows]
     runs-on: ubuntu-latest
     name: Upload to OSS & generate latest.json
