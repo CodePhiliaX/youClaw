@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { Diagnostic } from './pages/Diagnostic'
 import { StartupError } from './pages/StartupError'
 import { I18nProvider } from './i18n'
 import { initBaseUrl } from './api/transport'
@@ -35,7 +36,22 @@ function renderError() {
   )
 }
 
+function renderDiagnostic() {
+  root.render(
+    <StrictMode>
+      <I18nProvider>
+        <Diagnostic />
+      </I18nProvider>
+    </StrictMode>,
+  )
+}
+
 async function startup() {
+  if (import.meta.env.VITE_YOUCLAW_DIAGNOSTIC === '1') {
+    renderDiagnostic()
+    return
+  }
+
   const ok = await initBaseUrl()
   if (!ok) {
     renderError()

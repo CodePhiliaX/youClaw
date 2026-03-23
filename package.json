@@ -23,6 +23,7 @@
     "build:sidecar": "bun scripts/build-sidecar.mjs",
     "build:tauri": "bun run build:sidecar && bun tauri build",
     "build:tauri:fast": "bun run build:sidecar && bun tauri build --no-bundle",
+    "build:tauri:diagnostic": "bun scripts/build-tauri-diagnostic.mjs",
     "test": "bun test '.test.'",
     "test:e2e": "bunx playwright test --config e2e/playwright.config.ts",
     "test:e2e:ui": "bunx playwright test --config e2e/playwright.config.ts --ui"

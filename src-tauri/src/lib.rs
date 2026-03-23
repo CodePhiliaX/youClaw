@@ -1,7 +1,8 @@
 use serde::Serialize;
+use std::path::{Path, PathBuf};
 use std::sync::{
     Mutex,
-    atomic::{AtomicBool, AtomicU8, Ordering},
+    atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering},
 };
 use std::time::Duration;
 use tauri::{
@@ -11,17 +12,46 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
 use tauri_plugin_log::{Target, TargetKind, TimezoneStrategy};
-use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::{ShellExt, process::CommandEvent};
 use tauri_plugin_store::StoreExt;
+
+const DIAGNOSTIC_BUILD: bool = option_env!("YOUCLAW_DIAGNOSTIC_BUILD").is_some();
 
 /// Sidecar child process handle
 struct SidecarState(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 
-/// Sidecar readiness state: 0 = pending, 1 = ready, 2 = error, 3 = port-conflict
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RuntimeKind {
+    Bun,
+    Node22,
+}
+
+impl RuntimeKind {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Bun => "bun",
+            Self::Node22 => "node22",
+        }
+    }
+
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "bun" => Some(Self::Bun),
+            "node22" => Some(Self::Node22),
+            _ => None,
+        }
+    }
+}
+
+/// Sidecar readiness state: 0 = pending, 1 = ready, 2 = error, 3 = port-conflict, 4 = terminated
 struct SidecarReadyState {
     state: AtomicU8,
     port: Mutex<u16>,
     message: Mutex<String>,
+    runtime: Mutex<String>,
+    log_dir: Mutex<String>,
+    mode: Mutex<String>,
+    launch_id: AtomicU64,
 }
 
 /// Deep-link delivery state shared between startup and the running frontend.
@@ -45,6 +75,10 @@ impl SidecarReadyState {
             state: AtomicU8::new(0),
             port: Mutex::new(62601),
             message: Mutex::new(String::new()),
+            runtime: Mutex::new(String::new()),
+            log_dir: Mutex::new(String::new()),
+            mode: Mutex::new(if DIAGNOSTIC_BUILD { "diagnostic" } else { "standard" }.into()),
+            launch_id: AtomicU64::new(0),
         }
     }
 }
@@ -53,6 +87,145 @@ impl SidecarReadyState {
 struct SidecarEvent {
     status: String,
     message: String,
+    port: Option<u16>,
+    runtime: Option<String>,
+    log_dir: Option<String>,
+    mode: String,
+}
+
+fn normalize_path_string(path: &Path) -> String {
+    let mut value = path.to_string_lossy().to_string();
+    if value.starts_with("\\\\?\\") {
+        value = value[4..].to_string();
+    }
+    value
+}
+
+fn get_log_dir(app: &AppHandle) -> Option<String> {
+    app.path()
+        .app_log_dir()
+        .ok()
+        .map(|path| normalize_path_string(&path))
+}
+
+fn get_preferred_port(app: &AppHandle) -> u16 {
+    app.store("settings.json").ok()
+        .and_then(|store| store.get("preferred_port"))
+        .and_then(|v| v.as_str().and_then(|s| s.parse::<u16>().ok()))
+        .unwrap_or(62601)
+}
+
+fn update_sidecar_state(
+    app: &AppHandle,
+    status_code: u8,
+    port: u16,
+    message: String,
+    runtime: Option<String>,
+) {
+    let ready_state = app.state::<SidecarReadyState>();
+    ready_state.state.store(status_code, Ordering::SeqCst);
+    *ready_state.port.lock().unwrap() = port;
+    *ready_state.message.lock().unwrap() = message;
+    if let Some(runtime) = runtime {
+        *ready_state.runtime.lock().unwrap() = runtime;
+    }
+    if let Some(log_dir) = get_log_dir(app) {
+        *ready_state.log_dir.lock().unwrap() = log_dir;
+    }
+    *ready_state.mode.lock().unwrap() = if DIAGNOSTIC_BUILD { "diagnostic" } else { "standard" }.into();
+}
+
+fn build_sidecar_event(app: &AppHandle, status: &str, message: String) -> SidecarEvent {
+    let ready_state = app.state::<SidecarReadyState>();
+    let port = *ready_state.port.lock().unwrap();
+    let runtime = ready_state.runtime.lock().unwrap().clone();
+    let log_dir = ready_state.log_dir.lock().unwrap().clone();
+    let mode = ready_state.mode.lock().unwrap().clone();
+
+    SidecarEvent {
+        status: status.into(),
+        message,
+        port: Some(port),
+        runtime: if runtime.is_empty() { None } else { Some(runtime) },
+        log_dir: if log_dir.is_empty() { None } else { Some(log_dir) },
+        mode,
+    }
+}
+
+fn emit_sidecar_event(app: &AppHandle, status: &str, message: String) {
+    let _ = app.emit("sidecar-event", build_sidecar_event(app, status, message));
+}
+
+fn diagnostic_resource_candidates(resource_dir: &Path, relative_path: &str) -> [PathBuf; 3] {
+    [
+        resource_dir.join(relative_path),
+        resource_dir.join("resources").join(relative_path),
+        resource_dir.join("_up_").join("src-tauri").join("resources").join(relative_path),
+    ]
+}
+
+fn resolve_diagnostic_resource(app: &AppHandle, relative_path: &str) -> Result<PathBuf, String> {
+    let resource_dir = app.path().resource_dir().map_err(|e| e.to_string())?;
+    for candidate in diagnostic_resource_candidates(&resource_dir, relative_path) {
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+
+    Err(format!(
+        "Diagnostic resource not found: {} (resource dir: {})",
+        relative_path,
+        normalize_path_string(&resource_dir),
+    ))
+}
+
+fn attach_sidecar_output_listener(
+    app: AppHandle,
+    runtime_label: String,
+    launch_id: u64,
+    mut rx: tauri::async_runtime::Receiver<CommandEvent>,
+) {
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            if app.state::<SidecarReadyState>().launch_id.load(Ordering::SeqCst) != launch_id {
+                continue;
+            }
+
+            match event {
+                CommandEvent::Stdout(line) => {
+                    log::info!("[sidecar:{}] {}", runtime_label, String::from_utf8_lossy(&line).trim_end());
+                }
+                CommandEvent::Stderr(line) => {
+                    let line_str = String::from_utf8_lossy(&line).trim_end().to_string();
+                    log::warn!("[sidecar:{}] {}", runtime_label, line_str);
+                    if line_str.contains("[PORT_CONFLICT]") {
+                        update_sidecar_state(&app, 3, get_preferred_port(&app), line_str.clone(), None);
+                        emit_sidecar_event(&app, "port-conflict", line_str);
+                    }
+                }
+                CommandEvent::Error(err) => {
+                    let message = format!("Sidecar stream error: {}", err);
+                    log::error!("[sidecar:{}] {}", runtime_label, message);
+                    update_sidecar_state(&app, 2, get_preferred_port(&app), message.clone(), None);
+                    emit_sidecar_event(&app, "error", message);
+                }
+                CommandEvent::Terminated(payload) => {
+                    let message = format!("Sidecar exited with code {:?}, signal {:?}", payload.code, payload.signal);
+                    log::error!("[sidecar:{}] {}", runtime_label, message);
+                    update_sidecar_state(&app, 4, get_preferred_port(&app), message.clone(), None);
+                    emit_sidecar_event(&app, "terminated", message);
+                }
+                _ => {}
+            }
+        }
+    });
+}
+
+fn prepare_new_launch(app: &AppHandle) -> u64 {
+    app.state::<SidecarReadyState>()
+        .launch_id
+        .fetch_add(1, Ordering::SeqCst)
+        + 1
 }
 
 fn enqueue_deep_link(app: &AppHandle, url: String) {
@@ -213,14 +386,10 @@ fn add_windows_git_paths(extra_paths: &mut Vec<String>, bash_path: &str) {
 
 /// Spawn the sidecar backend
 #[allow(dead_code)]
-fn spawn_sidecar(app: &AppHandle) -> Result<u16, String> {
+fn spawn_sidecar(app: &AppHandle, launch_id: u64) -> Result<u16, String> {
     let state = app.state::<SidecarState>();
 
-    // Read preferred port from Tauri Store, default 62601
-    let port: u16 = app.store("settings.json").ok()
-        .and_then(|store| store.get("preferred_port"))
-        .and_then(|v| v.as_str().and_then(|s| s.parse::<u16>().ok()))
-        .unwrap_or(62601);
+    let port = get_preferred_port(app);
     log::info!("Using port {} (from store or default)", port);
 
     // Model config (API Key, Base URL, Model ID) is now managed by the backend
@@ -230,7 +399,11 @@ fn spawn_sidecar(app: &AppHandle) -> Result<u16, String> {
 
     // Set data directory
     if let Some(app_data) = app.path().app_data_dir().ok() {
-        env_vars.push(("DATA_DIR".into(), app_data.to_string_lossy().to_string()));
+        env_vars.push(("DATA_DIR".into(), normalize_path_string(&app_data)));
+    }
+
+    if let Some(log_dir) = get_log_dir(app) {
+        env_vars.push(("YOUCLAW_LOG_DIR".into(), log_dir));
     }
 
     // Ensure PATH includes common bun/node install paths (PATH is minimal when launched from Finder/Explorer)
@@ -337,11 +510,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<u16, String> {
     // Set resource directory (read-only templates for agents/skills/prompts)
     match app.path().resource_dir() {
         Ok(resource_dir) => {
-            let mut resource_str = resource_dir.to_string_lossy().to_string();
-            // Strip Windows extended-length path prefix (\\?\)
-            if resource_str.starts_with("\\\\?\\") {
-                resource_str = resource_str[4..].to_string();
-            }
+            let resource_str = normalize_path_string(&resource_dir);
             log::info!("Resource dir: {}", resource_str);
             env_vars.push(("RESOURCES_DIR".into(), resource_str));
         }
@@ -358,12 +527,20 @@ fn spawn_sidecar(app: &AppHandle) -> Result<u16, String> {
                         exe_dir.parent().unwrap_or(exe_dir).join("Resources")
                     };
                     if resources.exists() {
-                        env_vars.push(("RESOURCES_DIR".into(), resources.to_string_lossy().to_string()));
+                        env_vars.push(("RESOURCES_DIR".into(), normalize_path_string(&resources)));
                     }
                 }
             }
         }
     }
+
+    update_sidecar_state(
+        app,
+        0,
+        port,
+        format!("Starting bundled sidecar on port {}", port),
+        Some("bun-compiled-sidecar".into()),
+    );
 
     let shell = app.shell();
     let mut cmd = shell.sidecar("youclaw-server").map_err(|e| e.to_string())?;
@@ -373,41 +550,103 @@ fn spawn_sidecar(app: &AppHandle) -> Result<u16, String> {
     }
 
     let app_handle = app.clone();
-    let (mut rx, child) = cmd.spawn().map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
+    let (rx, child) = cmd.spawn().map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
 
     // Store child process handle
     let mut guard = state.0.lock().unwrap();
     *guard = Some(child);
 
-    // Listen to sidecar output
-    let app_for_events = app_handle.clone();
-    tauri::async_runtime::spawn(async move {
-        while let Some(event) = rx.recv().await {
-            match event {
-                tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
-                    log::info!("[sidecar] {}", String::from_utf8_lossy(&line));
-                }
-                tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
-                    let line_str = String::from_utf8_lossy(&line);
-                    log::warn!("[sidecar] {}", line_str);
-                    if line_str.contains("[PORT_CONFLICT]") {
-                        let _ = app_for_events.emit("sidecar-event", SidecarEvent {
-                            status: "port-conflict".into(),
-                            message: line_str.to_string(),
-                        });
-                    }
-                }
-                tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
-                    log::error!("[sidecar] terminated with code: {:?}", payload.code);
-                    let _ = app_for_events.emit("sidecar-event", SidecarEvent {
-                        status: "terminated".into(),
-                        message: format!("Sidecar exited with code: {:?}", payload.code),
-                    });
-                }
-                _ => {}
+    attach_sidecar_output_listener(app_handle, "bun-compiled-sidecar".into(), launch_id, rx);
+
+    Ok(port)
+}
+
+fn spawn_diagnostic_runtime(app: &AppHandle, runtime: RuntimeKind, launch_id: u64) -> Result<u16, String> {
+    let state = app.state::<SidecarState>();
+    let port = get_preferred_port(app);
+    let ext = if cfg!(target_os = "windows") { ".exe" } else { "" };
+    let runtime_relative = match runtime {
+        RuntimeKind::Bun => format!("bun-runtime/bun{}", ext),
+        RuntimeKind::Node22 => format!("node-runtime/node{}", ext),
+    };
+
+    let runtime_path = resolve_diagnostic_resource(app, &runtime_relative)?;
+    let script_path = resolve_diagnostic_resource(app, "diagnostic/health-server.mjs")?;
+    let log_dir = get_log_dir(app).unwrap_or_default();
+    let app_data_dir = app.path().app_data_dir().ok();
+    if let Some(dir) = &app_data_dir {
+        let _ = std::fs::create_dir_all(dir);
+    }
+
+    log::info!(
+        "Starting diagnostic runtime '{}' with executable '{}' and script '{}'",
+        runtime.as_str(),
+        normalize_path_string(&runtime_path),
+        normalize_path_string(&script_path),
+    );
+
+    update_sidecar_state(
+        app,
+        0,
+        port,
+        format!("Starting diagnostic backend with {}", runtime.as_str()),
+        Some(runtime.as_str().into()),
+    );
+
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    let path_sep = if cfg!(target_os = "windows") { ";" } else { ":" };
+    let runtime_parent = runtime_path.parent()
+        .map(normalize_path_string)
+        .unwrap_or_default();
+    let composed_path = if runtime_parent.is_empty() || current_path.split(path_sep).any(|item| item == runtime_parent.as_str()) {
+        current_path
+    } else if current_path.is_empty() {
+        runtime_parent
+    } else {
+        format!("{}{}{}", runtime_parent, path_sep, current_path)
+    };
+
+    let mut cmd = app.shell()
+        .command(normalize_path_string(&runtime_path))
+        .arg(normalize_path_string(&script_path))
+        .env("PORT", port.to_string())
+        .env("YOUCLAW_RUNTIME_KIND", runtime.as_str())
+        .env("YOUCLAW_SERVER_MODE", "diagnostic")
+        .env("PATH", composed_path);
+
+    if !log_dir.is_empty() {
+        cmd = cmd.env("YOUCLAW_LOG_DIR", log_dir.clone());
+    }
+    if let Some(app_data_dir) = &app_data_dir {
+        let app_data = normalize_path_string(app_data_dir);
+        cmd = cmd.env("DATA_DIR", app_data.clone()).current_dir(app_data);
+    }
+    if cfg!(target_os = "windows") {
+        if let Ok(temp) = std::env::var("TEMP") {
+            cmd = cmd.env("TEMP", temp.clone()).env("TMP", temp.clone()).env("BUN_TMPDIR", temp);
+        }
+        if let Ok(userprofile) = std::env::var("USERPROFILE") {
+            cmd = cmd.env("USERPROFILE", userprofile.clone());
+            if std::env::var("HOME").is_err() {
+                cmd = cmd.env("HOME", userprofile);
             }
         }
-    });
+    }
+
+    let app_handle = app.clone();
+    let (rx, child) = cmd.spawn().map_err(|e| {
+        format!(
+            "Failed to spawn diagnostic runtime '{}' with executable '{}': {}",
+            runtime.as_str(),
+            normalize_path_string(&runtime_path),
+            e,
+        )
+    })?;
+
+    let mut guard = state.0.lock().unwrap();
+    *guard = Some(child);
+
+    attach_sidecar_output_listener(app_handle, runtime.as_str().into(), launch_id, rx);
 
     Ok(port)
 }
@@ -487,13 +726,13 @@ fn get_platform() -> String {
 fn get_sidecar_status(app: AppHandle) -> SidecarEvent {
     let ready_state = app.state::<SidecarReadyState>();
     let state = ready_state.state.load(Ordering::SeqCst);
-    let port = *ready_state.port.lock().unwrap();
     let message = ready_state.message.lock().unwrap().clone();
     match state {
-        1 => SidecarEvent { status: "ready".into(), message: format!("Backend ready on port {}", port) },
-        2 => SidecarEvent { status: "error".into(), message },
-        3 => SidecarEvent { status: "port-conflict".into(), message },
-        _ => SidecarEvent { status: "pending".into(), message: "Backend starting...".into() },
+        1 => build_sidecar_event(&app, "ready", message),
+        2 => build_sidecar_event(&app, "error", message),
+        3 => build_sidecar_event(&app, "port-conflict", message),
+        4 => build_sidecar_event(&app, "terminated", message),
+        _ => build_sidecar_event(&app, "pending", if message.is_empty() { "Backend starting...".into() } else { message }),
     }
 }
 
@@ -510,9 +749,63 @@ fn set_deep_link_frontend_ready(app: AppHandle, ready: bool) {
     state.frontend_ready.store(ready, Ordering::SeqCst);
 }
 
+async fn switch_to_diagnostic_runtime(app: &AppHandle, runtime: RuntimeKind) -> Result<SidecarEvent, String> {
+    let launch_id = prepare_new_launch(app);
+    update_sidecar_state(
+        app,
+        0,
+        get_preferred_port(app),
+        format!("Switching backend to {}...", runtime.as_str()),
+        Some(runtime.as_str().into()),
+    );
+    emit_sidecar_event(app, "pending", format!("Switching backend to {}...", runtime.as_str()));
+
+    kill_sidecar(app);
+    tokio::time::sleep(Duration::from_millis(600)).await;
+
+    let port = match spawn_diagnostic_runtime(app, runtime, launch_id) {
+        Ok(port) => port,
+        Err(err) => {
+            update_sidecar_state(app, 2, get_preferred_port(app), err.clone(), Some(runtime.as_str().into()));
+            emit_sidecar_event(app, "error", err.clone());
+            return Err(err);
+        }
+    };
+    match wait_for_health(port, 60).await {
+        Ok(_) => {
+            let message = format!("Backend ready on port {} via {}", port, runtime.as_str());
+            update_sidecar_state(app, 1, port, message.clone(), Some(runtime.as_str().into()));
+            let event = build_sidecar_event(app, "ready", message);
+            let _ = app.emit("sidecar-event", event.clone());
+            Ok(event)
+        }
+        Err(err) => {
+            kill_sidecar(app);
+            let message = format!("Health check failed for {}: {}", runtime.as_str(), err);
+            update_sidecar_state(app, 2, port, message.clone(), Some(runtime.as_str().into()));
+            emit_sidecar_event(app, "error", message.clone());
+            Err(message)
+        }
+    }
+}
+
+#[tauri::command]
+async fn switch_sidecar_runtime(app: AppHandle, runtime: String) -> Result<SidecarEvent, String> {
+    if !DIAGNOSTIC_BUILD {
+        return Err("switch_sidecar_runtime is only available in the diagnostic build".into());
+    }
+
+    let runtime = RuntimeKind::parse(runtime.trim())
+        .ok_or_else(|| "Unsupported runtime, expected 'bun' or 'node22'".to_string())?;
+    switch_to_diagnostic_runtime(&app, runtime).await
+}
 
 #[tauri::command]
 async fn restart_sidecar(#[allow(unused)] app: AppHandle) -> Result<(), String> {
+    if DIAGNOSTIC_BUILD {
+        return Err("Diagnostic build: use switch_sidecar_runtime instead.".into());
+    }
+
     #[cfg(debug_assertions)]
     {
         return Err("Dev mode: please restart 'bun dev:tauri' manually to apply port changes.".into());
@@ -520,22 +813,17 @@ async fn restart_sidecar(#[allow(unused)] app: AppHandle) -> Result<(), String> 
     #[cfg(not(debug_assertions))]
     {
         // Reset ready state to pending during restart
-        let ready_state = app.state::<SidecarReadyState>();
-        ready_state.state.store(0, Ordering::SeqCst);
+        let launch_id = prepare_new_launch(&app);
+        update_sidecar_state(&app, 0, get_preferred_port(&app), "Restarting bundled sidecar...".into(), Some("bun-compiled-sidecar".into()));
 
         kill_sidecar(&app);
         tokio::time::sleep(Duration::from_millis(1000)).await;
-        let port = spawn_sidecar(&app)?;
+        let port = spawn_sidecar(&app, launch_id)?;
         wait_for_health(port, 30).await?;
 
-        let ready_state = app.state::<SidecarReadyState>();
-        *ready_state.port.lock().unwrap() = port;
-        ready_state.state.store(1, Ordering::SeqCst);
-
-        let _ = app.emit("sidecar-event", SidecarEvent {
-            status: "ready".into(),
-            message: format!("Backend ready on port {}", port),
-        });
+        let message = format!("Backend ready on port {}", port);
+        update_sidecar_state(&app, 1, port, message.clone(), Some("bun-compiled-sidecar".into()));
+        emit_sidecar_event(&app, "ready", message);
         Ok(())
     }
 }
@@ -600,6 +888,7 @@ pub fn run() {
             get_sidecar_status,
             take_pending_deep_links,
             set_deep_link_frontend_ready,
+            switch_sidecar_runtime,
             restart_sidecar,
         ])
         .setup(|app| {
@@ -689,21 +978,27 @@ pub fn run() {
                 quit_application(&quit_handle);
             });
 
-            // Start backend (dev mode uses beforeDevCommand, release mode uses sidecar)
+            // Start backend (diagnostic build uses bundled runtime + minimal JS server)
             let app_handle = handle.clone();
             tauri::async_runtime::spawn(async move {
+                if DIAGNOSTIC_BUILD {
+                    if let Err(err) = switch_to_diagnostic_runtime(&app_handle, RuntimeKind::Bun).await {
+                        log::error!("Failed to start diagnostic backend: {}", err);
+                    }
+                    return;
+                }
+
                 let port: u16;
 
                 #[cfg(not(debug_assertions))]
                 {
-                    match spawn_sidecar(&app_handle) {
+                    let launch_id = prepare_new_launch(&app_handle);
+                    match spawn_sidecar(&app_handle, launch_id) {
                         Ok(p) => port = p,
                         Err(e) => {
                             log::error!("Failed to spawn sidecar: {}", e);
-                            let _ = app_handle.emit("sidecar-event", SidecarEvent {
-                                status: "error".into(),
-                                message: e,
-                            });
+                            update_sidecar_state(&app_handle, 2, get_preferred_port(&app_handle), e.clone(), Some("bun-compiled-sidecar".into()));
+                            emit_sidecar_event(&app_handle, "error", e);
                             return;
                         }
                     }
@@ -733,26 +1028,14 @@ pub fn run() {
 
                 match wait_for_health(port, 60).await {
                     Ok(_) => {
-                        // Update ready state before emitting event (frontend can query this)
-                        let ready_state = app_handle.state::<SidecarReadyState>();
-                        *ready_state.port.lock().unwrap() = port;
-                        ready_state.state.store(1, Ordering::SeqCst);
-
-                        let _ = app_handle.emit("sidecar-event", SidecarEvent {
-                            status: "ready".into(),
-                            message: format!("Backend ready on port {}", port),
-                        });
+                        let message = format!("Backend ready on port {}", port);
+                        update_sidecar_state(&app_handle, 1, port, message.clone(), Some("bun-compiled-sidecar".into()));
+                        emit_sidecar_event(&app_handle, "ready", message);
                     }
                     Err(e) => {
                         log::error!("Health check failed: {}", e);
-                        let ready_state = app_handle.state::<SidecarReadyState>();
-                        *ready_state.message.lock().unwrap() = e.clone();
-                        ready_state.state.store(2, Ordering::SeqCst);
-
-                        let _ = app_handle.emit("sidecar-event", SidecarEvent {
-                            status: "error".into(),
-                            message: e,
-                        });
+                        update_sidecar_state(&app_handle, 2, port, e.clone(), Some("bun-compiled-sidecar".into()));
+                        emit_sidecar_event(&app_handle, "error", e);
                     }
                 }
             });
