@@ -157,6 +157,7 @@ export default function App() {
   const lastCheckedText = health.lastCheckedAt
     ? new Date(health.lastCheckedAt).toLocaleString()
     : 'waiting'
+  const runtimeText = health.details?.runtime ?? 'unknown'
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.22),transparent_32%),linear-gradient(180deg,#0b1020_0%,#111827_100%)] px-6 py-10 text-white">
@@ -170,11 +171,16 @@ export default function App() {
             </p>
           </div>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <StatusCard
               label="Backend"
               value={isUp ? 'UP' : health.state === 'checking' ? 'CHECKING' : 'DOWN'}
               tone={isUp ? 'good' : health.state === 'checking' ? 'neutral' : 'bad'}
+            />
+            <StatusCard
+              label="Runtime"
+              value={runtimeText}
+              tone={isUp ? 'good' : 'neutral'}
             />
             <StatusCard
               label="Port"
