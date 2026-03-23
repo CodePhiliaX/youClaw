@@ -1,4 +1,6 @@
 use serde::Serialize;
+use std::fs::{OpenOptions, create_dir_all};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{
     Mutex,
@@ -108,6 +110,26 @@ fn get_log_dir(app: &AppHandle) -> Option<String> {
         .map(|path| normalize_path_string(&path))
 }
 
+fn append_diagnostic_log(app: &AppHandle, message: &str) {
+    let Some(log_dir) = app.path().app_log_dir().ok() else { return };
+    if create_dir_all(&log_dir).is_err() {
+        return;
+    }
+
+    let log_path = log_dir.join("diagnostic-launch.log");
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(log_path) {
+        let _ = writeln!(file, "[{}] {}", chrono_like_timestamp(), message);
+    }
+}
+
+fn chrono_like_timestamp() -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    format!("unix:{}", now)
+}
+
 fn get_preferred_port(app: &AppHandle) -> u16 {
     app.store("settings.json").ok()
         .and_then(|store| store.get("preferred_port"))
@@ -153,6 +175,7 @@ fn build_sidecar_event(app: &AppHandle, status: &str, message: String) -> Sideca
 }
 
 fn emit_sidecar_event(app: &AppHandle, status: &str, message: String) {
+    append_diagnostic_log(app, &format!("event status={} message={}", status, message));
     let _ = app.emit("sidecar-event", build_sidecar_event(app, status, message));
 }
 
@@ -193,10 +216,12 @@ fn attach_sidecar_output_listener(
 
             match event {
                 CommandEvent::Stdout(line) => {
+                    append_diagnostic_log(&app, &format!("stdout [{}] {}", runtime_label, String::from_utf8_lossy(&line).trim_end()));
                     log::info!("[sidecar:{}] {}", runtime_label, String::from_utf8_lossy(&line).trim_end());
                 }
                 CommandEvent::Stderr(line) => {
                     let line_str = String::from_utf8_lossy(&line).trim_end().to_string();
+                    append_diagnostic_log(&app, &format!("stderr [{}] {}", runtime_label, line_str));
                     log::warn!("[sidecar:{}] {}", runtime_label, line_str);
                     if line_str.contains("[PORT_CONFLICT]") {
                         update_sidecar_state(&app, 3, get_preferred_port(&app), line_str.clone(), None);
@@ -205,12 +230,14 @@ fn attach_sidecar_output_listener(
                 }
                 CommandEvent::Error(err) => {
                     let message = format!("Sidecar stream error: {}", err);
+                    append_diagnostic_log(&app, &format!("stream-error [{}] {}", runtime_label, message));
                     log::error!("[sidecar:{}] {}", runtime_label, message);
                     update_sidecar_state(&app, 2, get_preferred_port(&app), message.clone(), None);
                     emit_sidecar_event(&app, "error", message);
                 }
                 CommandEvent::Terminated(payload) => {
                     let message = format!("Sidecar exited with code {:?}, signal {:?}", payload.code, payload.signal);
+                    append_diagnostic_log(&app, &format!("terminated [{}] {}", runtime_label, message));
                     log::error!("[sidecar:{}] {}", runtime_label, message);
                     update_sidecar_state(&app, 4, get_preferred_port(&app), message.clone(), None);
                     emit_sidecar_event(&app, "terminated", message);
@@ -584,6 +611,17 @@ fn spawn_diagnostic_runtime(app: &AppHandle, runtime: RuntimeKind, launch_id: u6
         normalize_path_string(&runtime_path),
         normalize_path_string(&script_path),
     );
+    append_diagnostic_log(
+        app,
+        &format!(
+            "spawn runtime={} exe={} script={} port={} log_dir={}",
+            runtime.as_str(),
+            normalize_path_string(&runtime_path),
+            normalize_path_string(&script_path),
+            port,
+            log_dir,
+        ),
+    );
 
     update_sidecar_state(
         app,
@@ -617,6 +655,10 @@ fn spawn_diagnostic_runtime(app: &AppHandle, runtime: RuntimeKind, launch_id: u6
     if !log_dir.is_empty() {
         cmd = cmd.env("YOUCLAW_LOG_DIR", log_dir.clone());
     }
+    if !log_dir.is_empty() {
+        let diagnostic_log_file = Path::new(&log_dir).join(format!("diagnostic-{}.log", runtime.as_str()));
+        cmd = cmd.env("YOUCLAW_DIAGNOSTIC_LOG_FILE", normalize_path_string(&diagnostic_log_file));
+    }
     if let Some(app_data_dir) = &app_data_dir {
         let app_data = normalize_path_string(app_data_dir);
         cmd = cmd.env("DATA_DIR", app_data.clone()).current_dir(app_data);
@@ -635,6 +677,15 @@ fn spawn_diagnostic_runtime(app: &AppHandle, runtime: RuntimeKind, launch_id: u6
 
     let app_handle = app.clone();
     let (rx, child) = cmd.spawn().map_err(|e| {
+        append_diagnostic_log(
+            app,
+            &format!(
+                "spawn-failed runtime={} exe={} error={}",
+                runtime.as_str(),
+                normalize_path_string(&runtime_path),
+                e,
+            ),
+        );
         format!(
             "Failed to spawn diagnostic runtime '{}' with executable '{}': {}",
             runtime.as_str(),
@@ -644,6 +695,7 @@ fn spawn_diagnostic_runtime(app: &AppHandle, runtime: RuntimeKind, launch_id: u6
     })?;
 
     let mut guard = state.0.lock().unwrap();
+    append_diagnostic_log(app, &format!("spawned runtime={} pid={}", runtime.as_str(), child.pid()));
     *guard = Some(child);
 
     attach_sidecar_output_listener(app_handle, runtime.as_str().into(), launch_id, rx);

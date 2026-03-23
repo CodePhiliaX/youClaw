@@ -11,6 +11,7 @@ type SidecarStatus = {
 }
 
 type HealthPayload = {
+  signature: string
   status: string
   mode: string
   runtime: string
@@ -23,7 +24,9 @@ type HealthPayload = {
   execPath: string
   nodeVersion: string | null
   bunVersion: string | null
+  runtimeVersion: string | null
   logDir: string | null
+  logFile: string | null
   tempDir: string | null
 }
 
@@ -44,6 +47,9 @@ async function fetchHealth(port?: number | null): Promise<HealthPayload | null> 
     throw new Error(`Health request failed: ${res.status}`)
   }
   const payload = await res.json() as HealthPayload
+  if (payload.signature !== 'youclaw-diagnostic-v1') {
+    throw new Error(`Port ${port} returned HTTP 200, but it is not the YouClaw diagnostic server`)
+  }
   if (payload.mode !== 'diagnostic') {
     throw new Error(`Port ${port} is occupied by a non-diagnostic service (mode=${payload.mode || 'unknown'})`)
   }
@@ -157,7 +163,11 @@ export function Diagnostic() {
   const activeRuntime = health?.runtime || sidecar?.runtime || 'unknown'
   const status = sidecar?.status || 'pending'
   const logPath = health?.logDir || sidecar?.log_dir || '-'
-  const blockedByOtherService = !!healthError && healthError.includes('non-diagnostic service')
+  const logFile = health?.logFile || '-'
+  const blockedByOtherService = !!healthError && (
+    healthError.includes('non-diagnostic service') ||
+    healthError.includes('not the YouClaw diagnostic server')
+  )
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#e2f3ff,_#f7f8fb_45%,_#eef1f6)] px-6 py-10 text-slate-900">
@@ -221,6 +231,7 @@ export function Diagnostic() {
               <Detail label="Executable" value={health?.execPath || '-'} />
               <Detail label="Started At" value={health?.startedAt || '-'} />
               <Detail label="Log Directory" value={logPath} />
+              <Detail label="Log File" value={logFile} />
               <Detail label="Temp Directory" value={health?.tempDir || '-'} />
             </dl>
           </section>

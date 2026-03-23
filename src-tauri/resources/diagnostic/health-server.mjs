@@ -1,14 +1,35 @@
 import http from 'node:http'
+import { appendFileSync, mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
 import os from 'node:os'
 import process from 'node:process'
 
+const signature = 'youclaw-diagnostic-v1'
 const port = Number.parseInt(process.env.PORT || '62601', 10)
 const runtime = process.env.YOUCLAW_RUNTIME_KIND || 'unknown'
 const mode = process.env.YOUCLAW_SERVER_MODE || 'diagnostic'
 const startedAt = new Date().toISOString()
+const logFile = process.env.YOUCLAW_DIAGNOSTIC_LOG_FILE || null
+
+function logLine(level, message, extra) {
+  const line = `[${new Date().toISOString()}] [${runtime}] [${level}] ${message}${extra ? ` ${JSON.stringify(extra)}` : ''}`
+  if (level === 'error') {
+    console.error(line)
+  } else {
+    console.log(line)
+  }
+
+  if (logFile) {
+    try {
+      mkdirSync(dirname(logFile), { recursive: true })
+      appendFileSync(logFile, `${line}\n`, 'utf-8')
+    } catch {}
+  }
+}
 
 function healthPayload() {
   return {
+    signature,
     status: 'ok',
     mode,
     runtime,
@@ -22,7 +43,9 @@ function healthPayload() {
     cwd: process.cwd(),
     nodeVersion: process.versions.node ?? null,
     bunVersion: process.versions.bun ?? null,
+    runtimeVersion: process.version ?? null,
     logDir: process.env.YOUCLAW_LOG_DIR || null,
+    logFile,
     tempDir: process.env.TEMP || process.env.TMP || os.tmpdir(),
   }
 }
@@ -37,6 +60,7 @@ function sendJson(res, statusCode, body) {
 
 const server = http.createServer((req, res) => {
   if (req.url === '/api/health') {
+    logLine('info', 'health request', { url: req.url, pid: process.pid })
     sendJson(res, 200, healthPayload())
     return
   }
@@ -48,27 +72,35 @@ const server = http.createServer((req, res) => {
 })
 
 server.on('listening', () => {
-  console.log(`[diagnostic-server] listening on http://127.0.0.1:${port} (runtime=${runtime}, pid=${process.pid})`)
+  logLine('info', 'diagnostic server listening', {
+    url: `http://127.0.0.1:${port}`,
+    pid: process.pid,
+    execPath: process.execPath,
+    cwd: process.cwd(),
+    nodeVersion: process.versions.node ?? null,
+    bunVersion: process.versions.bun ?? null,
+    logFile,
+  })
 })
 
 server.on('error', (error) => {
   const message = error instanceof Error ? error.stack || error.message : String(error)
-  console.error(`[diagnostic-server] server error: ${message}`)
+  logLine('error', 'server error', { message })
   process.exit(1)
 })
 
 process.on('uncaughtException', (error) => {
-  console.error(`[diagnostic-server] uncaughtException: ${error.stack || error.message}`)
+  logLine('error', 'uncaughtException', { message: error.stack || error.message })
   process.exit(1)
 })
 
 process.on('unhandledRejection', (reason) => {
-  console.error(`[diagnostic-server] unhandledRejection: ${reason instanceof Error ? reason.stack || reason.message : String(reason)}`)
+  logLine('error', 'unhandledRejection', { message: reason instanceof Error ? reason.stack || reason.message : String(reason) })
   process.exit(1)
 })
 
 function shutdown(signal) {
-  console.log(`[diagnostic-server] received ${signal}, shutting down`)
+  logLine('info', 'shutdown requested', { signal })
   server.close(() => {
     process.exit(0)
   })
