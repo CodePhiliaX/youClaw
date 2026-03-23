@@ -19,7 +19,7 @@ env:
   IS_BETA: ${{ contains(github.ref_name, 'beta') }}
 
 jobs:
-  # ── Stable releases are created first to avoid race condition ──
+  # ── Releases are created first to avoid race condition ──
   create-release:
     runs-on: ubuntu-latest
     name: Create Release
@@ -32,16 +32,25 @@ jobs:
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        if: env.IS_BETA != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.ref_name }}"
-          gh release create "$TAG" \
-            --title "You Claw v${{ steps.version.outputs.VERSION }}" \
-            --notes "" \
-            --latest \
-            || echo "Release already exists"
+          TITLE="You Claw v${{ steps.version.outputs.VERSION }}"
+          if [ "${IS_BETA}" = "true" ]; then
+            gh release create "$TAG" \
+              --title "$TITLE" \
+              --notes "" \
+              --draft \
+              --prerelease \
+              || echo "Release already exists"
+          else
+            gh release create "$TAG" \
+              --title "$TITLE" \
+              --notes "" \
+              --latest \
+              || echo "Release already exists"
+          fi
 
   # ── macOS builds ──
   build-mac:
@@ -131,7 +140,6 @@ jobs:
           p12-password: ${{ secrets.MAC_CERTS_PASSWORD }}
 
       - name: Build Tauri app
-        if: env.IS_BETA != 'true'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -146,31 +154,10 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "You Claw v${{ steps.setup.outputs.version }}"
           releaseBody: ""
-          releaseDraft: false
-          prerelease: false
+          releaseDraft: ${{ env.IS_BETA == 'true' }}
+          prerelease: ${{ env.IS_BETA == 'true' }}
           args: ${{ matrix.tauri_args }}
-          includeUpdaterJson: true
-
-      - name: Build beta Tauri app without GitHub Release
-        if: env.IS_BETA == 'true'
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.MAC_CERTS }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
-        run: bun tauri build ${{ matrix.tauri_args }}
-
-      - name: Upload beta macOS artifacts
-        if: env.IS_BETA == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: beta-${{ github.ref_name }}-mac-${{ matrix.arch }}
-          if-no-files-found: error
-          path: |
-            src-tauri/target/${{ matrix.sidecar_suffix }}/release/bundle/**
+          includeUpdaterJson: ${{ env.IS_BETA != 'true' }}
 
       - name: Notify Feishu
         if: always()
@@ -245,7 +232,6 @@ jobs:
           echo "Git installer size: $(stat --format=%s src-tauri/resources/git-installer/${GIT_INSTALLER_NAME}) bytes"
 
       - name: Build Tauri app
-        if: env.IS_BETA != 'true'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -255,26 +241,9 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "You Claw v${{ steps.setup.outputs.version }}"
           releaseBody: ""
-          releaseDraft: false
-          prerelease: false
-          includeUpdaterJson: true
-
-      - name: Build beta Tauri app without GitHub Release
-        if: env.IS_BETA == 'true'
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
-        shell: bash
-        run: bun tauri build
-
-      - name: Upload beta Windows artifacts
-        if: env.IS_BETA == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: beta-${{ github.ref_name }}-windows-x64
-          if-no-files-found: error
-          path: |
-            src-tauri/target/release/bundle/**
+          releaseDraft: ${{ env.IS_BETA == 'true' }}
+          prerelease: ${{ env.IS_BETA == 'true' }}
+          includeUpdaterJson: ${{ env.IS_BETA != 'true' }}
 
       - name: Notify Feishu
         if: always()
