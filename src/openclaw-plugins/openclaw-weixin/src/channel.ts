@@ -325,11 +325,12 @@ export const weixinPlugin: ChannelPlugin<ResolvedWeixinAccount> = {
         setStatus: ctx.setStatus,
       });
     },
-    loginWithQrStart: async ({ accountId, force, timeoutMs, verbose }) => {
+    loginWithQrStart: async ({ accountId, storageKey, force, timeoutMs, verbose }) => {
+      const stateKey = storageKey?.trim() || accountId?.trim() || undefined;
       // For re-login: use saved baseUrl from account data; fall back to default for new accounts.
-      const savedBaseUrl = accountId ? loadWeixinAccount(accountId)?.baseUrl?.trim() : "";
+      const savedBaseUrl = stateKey ? loadWeixinAccount(stateKey)?.baseUrl?.trim() : "";
       const result: WeixinQrStartResult = await startWeixinLoginWithQr({
-        accountId: accountId ?? undefined,
+        accountId: stateKey,
         apiBaseUrl: savedBaseUrl || DEFAULT_BASE_URL,
         botType: DEFAULT_ILINK_BOT_TYPE,
         force,
@@ -345,9 +346,10 @@ export const weixinPlugin: ChannelPlugin<ResolvedWeixinAccount> = {
     },
     loginWithQrWait: async (params) => {
       // sessionKey is forwarded by the client after loginWithQrStart (runtime param extension).
-      const sessionKey = (params as { sessionKey?: string }).sessionKey || params.accountId || "";
-      const savedBaseUrl = params.accountId
-        ? loadWeixinAccount(params.accountId)?.baseUrl?.trim()
+      const stateKey = params.storageKey?.trim() || params.accountId?.trim() || "";
+      const sessionKey = (params as { sessionKey?: string }).sessionKey || stateKey;
+      const savedBaseUrl = stateKey
+        ? loadWeixinAccount(stateKey)?.baseUrl?.trim()
         : "";
       const result: WeixinQrWaitResult = await waitForWeixinLogin({
         sessionKey,
@@ -358,14 +360,15 @@ export const weixinPlugin: ChannelPlugin<ResolvedWeixinAccount> = {
       if (result.connected && result.botToken && result.accountId) {
         try {
           const normalizedId = normalizeAccountId(result.accountId);
-          saveWeixinAccount(normalizedId, {
+          saveWeixinAccount(stateKey || normalizedId, {
             token: result.botToken,
             baseUrl: result.baseUrl,
             userId: result.userId,
+            linkedAccountId: normalizedId,
           });
-          registerWeixinAccountId(normalizedId);
+          registerWeixinAccountId(stateKey || normalizedId);
           triggerWeixinChannelReload();
-          logger.info(`loginWithQrWait: saved account data for accountId=${normalizedId}`);
+          logger.info(`loginWithQrWait: saved account data for stateKey=${stateKey || normalizedId} linkedAccountId=${normalizedId}`);
         } catch (err) {
           logger.error(`loginWithQrWait: failed to save account data err=${String(err)}`);
         }

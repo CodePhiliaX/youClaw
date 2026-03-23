@@ -5,6 +5,10 @@
 <h1 align="center">YouClaw</h1>
 
 <p align="center">
+  <strong>English</strong> | <a href="./README.zh-CN.md">简体中文</a> | <a href="./README.ja.md">日本語</a>
+</p>
+
+<p align="center">
   <strong>Desktop AI Assistant powered by Claude Agent SDK</strong>
 </p>
 
@@ -15,6 +19,20 @@
   <a href="https://github.com/CodePhiliaX/youClaw"><img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform" /></a>
 </p>
 
+<p align="center">
+  <strong>If YouClaw is useful to you, give it a GitHub Star.</strong><br />
+  More stars help more people discover the project.
+</p>
+
+<p align="center">
+  <a href="https://github.com/CodePhiliaX/youClaw/stargazers">
+    <img src="https://img.shields.io/github/stars/CodePhiliaX/youClaw?style=for-the-badge&logo=github&color=ffcb47&label=Star%20YouClaw" alt="Star YouClaw on GitHub" />
+  </a>
+</p>
+
+<p align="center">
+  <sub>One click helps keep YouClaw improving.</sub>
+</p>
 
 ---
 
@@ -89,6 +107,17 @@ Download the `.exe` installer from [Releases](https://github.com/CodePhiliaX/you
 - **Desktop mode**: Tauri spawns a Bun sidecar process; WebView loads the frontend
 - **Web mode**: Vite frontend + Bun backend deployed independently
 - **Three-layer design**: Entry (Telegram/DingTalk/Feishu/QQ/WeCom/Web/API) → Core (Agent/Scheduler/Memory/Skills) → Storage (SQLite/filesystem)
+
+<p align="center">
+  <a href="https://github.com/CodePhiliaX/youClaw/stargazers">
+    <img src="https://img.shields.io/badge/Star%20YouClaw%20before%20you%20start-Support%20the%20project-ffcb47?style=for-the-badge&logo=github&logoColor=black" alt="Star YouClaw before you start" />
+  </a>
+</p>
+
+<p align="center">
+  <strong>Before Quick Start: Star if you want to see YouClaw keep improving.</strong><br />
+  It is a small click that makes the project easier to sustain.
+</p>
 
 ## Quick Start (Development)
 
@@ -220,6 +249,16 @@ web/src/
 1. Fork the repo and create your branch from `main`
 2. Make your changes and ensure `bun typecheck` and `bun test` pass
 3. Submit a pull request
+
+<p align="center">
+  <a href="https://star-history.com/#CodePhiliaX/youClaw&Date">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=CodePhiliaX/youClaw&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=CodePhiliaX/youClaw&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=CodePhiliaX/youClaw&type=Date" />
+    </picture>
+  </a>
+</p>
 
 ## License
 

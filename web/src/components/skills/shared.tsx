@@ -51,7 +51,8 @@ export function SkillListItem({
   t: ReturnType<typeof useI18n>['t']
 }) {
   const isEditable = item.kind === 'editable'
-  const isSelected = !isEditable && selected === item.name
+  const canOpenDetail = !isEditable || item.skill.hasPublished
+  const isSelected = canOpenDetail && selected === item.name
   const runtimeSkill = item.kind === 'installed' ? item.skill : null
   let avatarClass = 'bg-primary/10 text-primary'
   let avatarIcon: ReactNode = <Puzzle className="h-4 w-4" />
@@ -76,7 +77,7 @@ export function SkillListItem({
     <button
       data-testid="skill-item"
       onClick={() => {
-        if (isEditable) {
+        if (isEditable && !item.skill.hasPublished) {
           onEditSkill(item.name)
           return
         }

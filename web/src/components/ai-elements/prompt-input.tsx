@@ -6,6 +6,7 @@ type FileUIPart = {
   url: string;
   mediaType: string;
   filePath?: string;
+  file?: File;
 };
 type SourceDocumentUIPart = {
   type: "source-document";
@@ -166,6 +167,18 @@ function getMimeFromPath(path: string): string {
   return EXTENSION_TO_MIME[ext] ?? "application/octet-stream";
 }
 
+function getDisplayFileName(file: File): string {
+  if (file.name.trim()) {
+    return file.name
+  }
+
+  const ext = MIME_TO_EXTENSIONS[file.type]?.[0]
+  if (file.type.startsWith('image/')) {
+    return ext ? `pasted-image.${ext}` : 'pasted-image'
+  }
+  return ext ? `attachment.${ext}` : 'attachment'
+}
+
 // Result from Tauri file dialog: lightweight metadata without file content
 interface TauriFileDialogResult {
   file: File;
@@ -296,13 +309,15 @@ export const PromptInputProvider = ({
       ...prev,
       ...incoming.map((file) => {
         const fp = filePathMap?.get(file);
+        const filename = getDisplayFileName(file);
         return {
-          filename: file.name,
+          filename,
           id: nanoid(),
           mediaType: file.type,
           type: "file" as const,
           url: fp ? `file://${fp}` : URL.createObjectURL(file),
           filePath: fp,
+          file: fp ? undefined : file,
         };
       }),
     ]);
@@ -592,13 +607,15 @@ export const PromptInput = ({
         const next: (FileUIPart & { id: string })[] = [];
         for (const file of capped) {
           const fp = filePathMap?.get(file);
+          const filename = getDisplayFileName(file);
           next.push({
-            filename: file.name,
+            filename,
             id: nanoid(),
             mediaType: file.type,
             type: "file",
             url: fp ? localAssetUrl(fp) : URL.createObjectURL(file),
             filePath: fp,
+            file: fp ? undefined : file,
           });
         }
         return [...prev, ...next];

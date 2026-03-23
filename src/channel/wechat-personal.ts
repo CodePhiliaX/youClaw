@@ -13,8 +13,13 @@ import {
 } from '../openclaw-plugins/openclaw-weixin/src/api/session-guard.ts'
 import {
   clearWeixinAccount,
+  deriveRawAccountId,
   DEFAULT_BASE_URL,
+  loadWeixinAccount,
+  registerWeixinAccountId,
   resolveWeixinAccount,
+  saveWeixinAccount,
+  unregisterWeixinAccountId,
 } from '../openclaw-plugins/openclaw-weixin/src/auth/accounts.ts'
 import { downloadMediaFromItem } from '../openclaw-plugins/openclaw-weixin/src/media/media-download.ts'
 import {
@@ -56,11 +61,11 @@ type WechatPersonalConfig = {
   cdnBaseUrl?: string
 }
 
-function buildChatId(accountId: string, peerId: string): string {
-  return `wxp:${accountId}:${peerId}`
+function buildChatId(stateKey: string, peerId: string): string {
+  return `wxp:${stateKey}:${peerId}`
 }
 
-function parseChatId(chatId: string): { accountId: string; peerId: string } {
+function parseChatId(chatId: string): { stateKey: string; peerId: string } {
   if (!chatId.startsWith('wxp:')) {
     throw new Error(`Unsupported WeChat chatId: ${chatId}`)
   }
@@ -70,7 +75,7 @@ function parseChatId(chatId: string): { accountId: string; peerId: string } {
     throw new Error(`Malformed WeChat chatId: ${chatId}`)
   }
   return {
-    accountId: rest.slice(0, firstColon),
+    stateKey: rest.slice(0, firstColon),
     peerId: rest.slice(firstColon + 1),
   }
 }
@@ -148,15 +153,13 @@ export class WechatPersonalChannel implements Channel {
   private abortController: AbortController | null = null
   private pollPromise: Promise<void> | null = null
   private pendingSessionKey: string | null = null
-  private activeAccountId: string | null = null
+  private readonly stateKey: string
 
   constructor(
     private config: WechatPersonalConfig,
-    private opts: { onMessage: OnInboundMessage },
+    private opts: { onMessage: OnInboundMessage; channelId: string },
   ) {
-    if (config.accountId?.trim()) {
-      this.activeAccountId = normalizeAccountId(config.accountId)
-    }
+    this.stateKey = normalizeAccountId(opts.channelId)
   }
 
   isConnected(): boolean {
@@ -195,22 +198,22 @@ export class WechatPersonalChannel implements Channel {
   }
 
   async sendMessage(chatId: string, text: string): Promise<void> {
-    const { accountId, peerId } = parseChatId(chatId)
-    const contextToken = getContextToken(accountId, peerId)
+    const { stateKey, peerId } = parseChatId(chatId)
+    const contextToken = getContextToken(stateKey, peerId)
     await OPENCLAW_WEIXIN_PLUGIN.outbound?.sendText?.({
-      cfg: this.buildCompatConfig(accountId),
+      cfg: this.buildCompatConfig(stateKey),
       to: peerId,
       text,
-      accountId,
+      accountId: stateKey,
     })
     if (!contextToken) {
-      getLogger().warn({ accountId, peerId }, 'WeChat outbound send had no cached context token')
+      getLogger().warn({ stateKey, peerId }, 'WeChat outbound send had no cached context token')
     }
   }
 
   async loginWithQrStart(params?: { force?: boolean; timeoutMs?: number; verbose?: boolean }): Promise<ChannelLoginStartResult> {
     const result = await OPENCLAW_WEIXIN_PLUGIN.gateway?.loginWithQrStart?.({
-      accountId: this.resolveAccountId() ?? undefined,
+      storageKey: this.stateKey,
       force: params?.force,
       timeoutMs: params?.timeoutMs,
       verbose: params?.verbose,
@@ -224,16 +227,13 @@ export class WechatPersonalChannel implements Channel {
 
   async loginWithQrWait(params?: { timeoutMs?: number }): Promise<ChannelLoginWaitResult> {
     const result = await OPENCLAW_WEIXIN_PLUGIN.gateway?.loginWithQrWait?.({
-      accountId: this.resolveAccountId() ?? undefined,
+      storageKey: this.stateKey,
       sessionKey: this.pendingSessionKey ?? undefined,
       timeoutMs: params?.timeoutMs,
     })
     this.pendingSessionKey = null
 
     const normalizedAccountId = result?.accountId ? normalizeAccountId(result.accountId) : undefined
-    if (normalizedAccountId) {
-      this.activeAccountId = normalizedAccountId
-    }
 
     return {
       connected: !!result?.connected,
@@ -243,75 +243,89 @@ export class WechatPersonalChannel implements Channel {
   }
 
   async logout(): Promise<{ cleared: boolean; message?: string }> {
-    const accountId = this.resolveAccountId()
     await this.disconnect()
     this.pendingSessionKey = null
 
-    if (!accountId) {
-      this.activeAccountId = null
+    this.ensureLegacyStateMigrated()
+
+    if (!loadWeixinAccount(this.stateKey)) {
       return { cleared: true, message: 'No active WeChat account' }
     }
 
-    clearWeixinAccount(accountId)
-    try {
-      unlinkSync(getSyncBufFilePath(accountId))
-    } catch {
-      // ignore
+    clearWeixinAccount(this.stateKey)
+    unregisterWeixinAccountId(this.stateKey)
+
+    for (const id of [this.stateKey, deriveRawAccountId(this.stateKey)].filter((value): value is string => !!value)) {
+      try {
+        unlinkSync(getSyncBufFilePath(id))
+      } catch {
+        // ignore
+      }
     }
-    this.activeAccountId = null
     return { cleared: true, message: 'WeChat login data cleared' }
   }
 
   async getAuthStatus(): Promise<ChannelAuthStatus> {
-    const accountId = this.resolveAccountId()
-    if (!accountId) {
-      return {
-        supportsQrLogin: true,
-        loggedIn: false,
-        connected: this.connected,
-      }
-    }
-
-    const account = resolveWeixinAccount(this.buildCompatConfig(accountId), accountId)
+    const account = this.getResolvedAccount()
     return {
       supportsQrLogin: true,
       loggedIn: account.configured,
       connected: this.connected,
-      accountId,
-      accountLabel: account.name || accountId,
+      accountId: account.linkedAccountId,
+      accountLabel: account.linkedAccountId || account.name || this.config.accountId,
     }
   }
 
-  private resolveAccountId(): string | null {
-    if (this.activeAccountId) return this.activeAccountId
-    if (this.config.accountId?.trim()) {
-      this.activeAccountId = normalizeAccountId(this.config.accountId)
-      return this.activeAccountId
+  private getLegacyStateKey(): string | null {
+    if (!this.config.accountId?.trim()) {
+      return null
     }
-    const indexedIds = OPENCLAW_WEIXIN_PLUGIN.config.listAccountIds(this.buildCompatConfig())
-    if (indexedIds.length === 1) {
-      this.activeAccountId = indexedIds[0] ?? null
-      return this.activeAccountId
+    const legacyStateKey = normalizeAccountId(this.config.accountId)
+    return legacyStateKey !== this.stateKey ? legacyStateKey : null
+  }
+
+  private ensureLegacyStateMigrated(): void {
+    if (loadWeixinAccount(this.stateKey)) {
+      return
     }
-    return null
+
+    const legacyStateKey = this.getLegacyStateKey()
+    if (!legacyStateKey) {
+      return
+    }
+
+    const legacyAccount = loadWeixinAccount(legacyStateKey)
+    if (!legacyAccount) {
+      return
+    }
+
+    saveWeixinAccount(this.stateKey, {
+      token: legacyAccount.token,
+      baseUrl: legacyAccount.baseUrl,
+      userId: legacyAccount.userId,
+      linkedAccountId: legacyAccount.linkedAccountId || legacyStateKey,
+    })
+    registerWeixinAccountId(this.stateKey)
+
+    const legacyGetUpdatesBuf = loadGetUpdatesBuf(getSyncBufFilePath(legacyStateKey))
+    if (legacyGetUpdatesBuf) {
+      saveGetUpdatesBuf(getSyncBufFilePath(this.stateKey), legacyGetUpdatesBuf)
+    }
   }
 
   private getResolvedAccount(): ResolvedWeixinAccount {
-    const accountId = this.resolveAccountId()
-    if (!accountId) {
-      throw new Error('WeChat personal channel requires login before connecting')
-    }
-    return resolveWeixinAccount(this.buildCompatConfig(accountId), accountId)
+    this.ensureLegacyStateMigrated()
+    return resolveWeixinAccount(this.buildCompatConfig(this.stateKey), this.stateKey)
   }
 
-  private buildCompatConfig(accountId?: string): OpenClawConfig {
-    const normalizedId = accountId ? normalizeAccountId(accountId) : undefined
+  private buildCompatConfig(stateKey?: string): OpenClawConfig {
+    const normalizedStateKey = stateKey ? normalizeAccountId(stateKey) : undefined
     return {
       channels: {
         'openclaw-weixin': {
-          accounts: normalizedId
+          accounts: normalizedStateKey
             ? {
-                [normalizedId]: {
+                [normalizedStateKey]: {
                   enabled: true,
                   cdnBaseUrl: this.config.cdnBaseUrl,
                 },

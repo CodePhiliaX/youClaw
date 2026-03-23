@@ -1,18 +1,19 @@
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog"
 import { GeneralPanel } from "./GeneralPanel"
+import { MarketplacePanel } from "./MarketplacePanel"
 import { ModelsPanel } from "./ModelsPanel"
 import { AccountPanel } from "./AccountPanel"
 import { AboutPanel } from "./AboutPanel"
 import { InvitationPanel } from "./InvitationPanel"
 import { Channels } from "@/pages/Channels"
 import { BrowserProfiles } from "@/pages/BrowserProfiles"
-import { X, User, Palette, Cpu, Radio, Globe, Info, UserPlus } from "lucide-react"
+import { X, User, Palette, Cpu, Radio, Globe, Info, UserPlus, Store } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/i18n"
 import { useAppStore } from "@/stores/app"
 
-type Tab = "account" | "general" | "models" | "channels" | "browser" | "invitation" | "about"
+type Tab = "account" | "general" | "marketplace" | "models" | "channels" | "browser" | "invitation" | "about"
 
 export type SettingsTab = Tab
 
@@ -38,6 +39,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab }: SettingsDialo
     { id: "account", label: t.account.title, icon: User, cloud: true },
     { id: "general", label: t.settings.general, icon: Palette },
     { id: "models", label: t.settings.models, icon: Cpu },
+    { id: "marketplace", label: t.settings.marketplaceConfig, icon: Store },
     { id: "channels", label: t.nav.channels, icon: Radio },
     { id: "browser", label: t.nav.browser, icon: Globe },
     { id: "invitation", label: t.invitation.title, icon: UserPlus, cloud: true },
@@ -80,12 +82,13 @@ export function SettingsDialog({ open, onOpenChange, initialTab }: SettingsDialo
         {/* Content area */}
         <div className={cn(
           "flex-1 overflow-hidden",
-          currentTab === "account" || currentTab === "general" || currentTab === "models" || currentTab === "invitation" || currentTab === "about"
+          currentTab === "account" || currentTab === "general" || currentTab === "marketplace" || currentTab === "models" || currentTab === "invitation" || currentTab === "about"
             ? "p-8 overflow-y-auto"
             : ""
         )}>
           {currentTab === "account" && <AccountPanel />}
           {currentTab === "general" && <GeneralPanel />}
+          {currentTab === "marketplace" && <MarketplacePanel />}
           {currentTab === "models" && <ModelsPanel />}
           {currentTab === "channels" && <Channels />}
           {currentTab === "browser" && <BrowserProfiles />}

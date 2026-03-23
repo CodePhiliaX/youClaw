@@ -9,10 +9,11 @@ import { Badge } from '@/components/ui/badge'
 import { Loader2, Search, Store } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import type { MarketplaceResultsViewModel } from '@/lib/marketplace-view-model'
+import type { MarketplaceChangeEvent } from '@/lib/marketplace-updates'
 
 interface MarketplaceViewProps {
   resultsViewModel: MarketplaceResultsViewModel
-  marketplaceStatus: 'idle' | 'loading' | 'loading-more' | 'error'
+  marketplaceStatus: 'idle' | 'loading' | 'refreshing' | 'loading-more' | 'error'
   marketplaceError: string
   marketplaceAppendError: string
   marketplaceSort: MarketplaceSort
@@ -22,7 +23,7 @@ interface MarketplaceViewProps {
   onRegistrySourceChange: (source: RegistrySelectableSource) => void
   searchQuery: string
   handleSearchChange: (value: string) => void
-  onChanged: () => void
+  onChanged: (change?: MarketplaceChangeEvent) => void
   onLoadMore: () => void
   onRetryLoadMore: () => void
   marketplaceScrollRef: RefObject<HTMLDivElement | null>
@@ -88,6 +89,13 @@ export function MarketplaceView({
                 {supportedSorts.includes('installsCurrent') && <option value="installsCurrent">{t.skills.marketplaceSortInstalls}</option>}
                 {supportedSorts.includes('installsAllTime') && <option value="installsAllTime">{t.skills.marketplaceSortInstallsAllTime}</option>}
               </select>
+            )}
+
+            {marketplaceStatus === 'refreshing' && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>{t.common.loading}</span>
+              </div>
             )}
           </div>
         </div>

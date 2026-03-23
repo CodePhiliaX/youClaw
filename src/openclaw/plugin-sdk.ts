@@ -97,6 +97,7 @@ export type ChannelPlugin<ResolvedAccount = unknown> = {
     stopAccount?: (ctx: unknown) => Promise<void>
     loginWithQrStart?: (params: {
       accountId?: string
+      storageKey?: string
       force?: boolean
       timeoutMs?: number
       verbose?: boolean
@@ -104,6 +105,7 @@ export type ChannelPlugin<ResolvedAccount = unknown> = {
     }) => Promise<{ qrDataUrl?: string; message: string; sessionKey?: string }>
     loginWithQrWait?: (params: {
       accountId?: string
+      storageKey?: string
       timeoutMs?: number
       sessionKey?: string
     }) => Promise<{ connected: boolean; message: string; accountId?: string }>

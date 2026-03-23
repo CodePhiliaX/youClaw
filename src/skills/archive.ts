@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { dirname, isAbsolute, relative, resolve, win32 } from 'node:path'
 import { unzipSync } from 'fflate'
 
 export const MAX_ARCHIVE_BYTES = 10 * 1024 * 1024
@@ -123,10 +123,24 @@ export function filterArchiveEntries(entries: ArchiveEntry[], prefix?: string): 
     .filter((entry) => entry.relativePath.length > 0)
 }
 
+function usesWindowsPaths(...paths: string[]): boolean {
+  return paths.some((value) => /^[a-zA-Z]:[\\/]/.test(value) || value.includes('\\'))
+}
+
+function isPathInsideRoot(rootDir: string, candidatePath: string): boolean {
+  const pathOps = usesWindowsPaths(rootDir, candidatePath)
+    ? win32
+    : { resolve, relative, isAbsolute }
+
+  const normalizedRoot = pathOps.resolve(rootDir)
+  const normalizedTarget = pathOps.resolve(candidatePath)
+  const relativeTarget = pathOps.relative(normalizedRoot, normalizedTarget)
+
+  return relativeTarget === '' || (!relativeTarget.startsWith('..') && !pathOps.isAbsolute(relativeTarget))
+}
+
 export function assertPathInsideRoot(rootDir: string, candidatePath: string, message = 'Archive entry escapes target directory') {
-  const normalizedRoot = resolve(rootDir)
-  const normalizedTarget = resolve(candidatePath)
-  if (normalizedTarget !== normalizedRoot && !normalizedTarget.startsWith(`${normalizedRoot}/`)) {
+  if (!isPathInsideRoot(rootDir, candidatePath)) {
     throw new Error(message)
   }
 }

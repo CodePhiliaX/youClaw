@@ -52,7 +52,7 @@ export function createChannelFromRecord(record: ChannelRecord, onMessage: OnInbo
       return channel
     }
     case 'wechat-personal': {
-      const channel = new WechatPersonalChannel(config, { onMessage })
+      const channel = new WechatPersonalChannel(config, { onMessage, channelId: record.id })
       channel.name = record.id
       return channel
     }

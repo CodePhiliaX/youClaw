@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import QRCode from 'qrcode'
 import {
   Radio, CheckCircle, Save, Eye, EyeOff,
@@ -18,6 +19,24 @@ import { SidePanel } from '@/components/layout/SidePanel'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useDragRegion } from "@/hooks/useDragRegion"
 
+type I18nText = ReturnType<typeof useI18n>['t']
+type ChannelConfigField = ChannelTypeInfo['configFields'][number]
+
+function getChannelTypeLabel(t: I18nText, typeInfo: Pick<ChannelTypeInfo, 'type' | 'label'>) {
+  const labels = t.channels.typeLabels as Record<string, string>
+  return labels[typeInfo.type] ?? typeInfo.label
+}
+
+function getChannelTypeDescription(t: I18nText, typeInfo: Pick<ChannelTypeInfo, 'type' | 'description'>) {
+  const descriptions = t.channels.typeDescriptions as Record<string, string>
+  return descriptions[typeInfo.type] ?? typeInfo.description
+}
+
+function getChannelFieldLabel(t: I18nText, type: string, field: Pick<ChannelConfigField, 'key' | 'label'>) {
+  const fieldLabels = t.channels.fieldLabels as Record<string, Record<string, string>>
+  return fieldLabels[type]?.[field.key] ?? field.label
+}
+
 export function Channels() {
   const { t } = useI18n()
   const drag = useDragRegion()
@@ -27,13 +46,13 @@ export function Channels() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
 
-  const fetchChannels = useCallback(() => {
-    getChannels()
-      .then((list) => {
-        setChannels(list)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
+  const fetchChannels = useCallback(async () => {
+    try {
+      const list = await getChannels()
+      setChannels(list)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -130,9 +149,9 @@ export function Channels() {
           <CreateChannelForm
             t={t}
             types={channelTypes}
-            onCreated={() => {
+            onCreated={async () => {
               setShowCreate(false)
-              fetchChannels()
+              await fetchChannels()
             }}
             onCancel={() => setShowCreate(false)}
           />
@@ -142,9 +161,9 @@ export function Channels() {
             channel={selectedChannel}
             typeInfo={channelTypes.find((ct) => ct.type === selectedChannel.type)}
             onUpdated={fetchChannels}
-            onDeleted={() => {
+            onDeleted={async () => {
               setSelected(null)
-              fetchChannels()
+              await fetchChannels()
             }}
           />
         ) : (
@@ -169,7 +188,7 @@ function CreateChannelForm({
 }: {
   t: ReturnType<typeof useI18n>['t']
   types: ChannelTypeInfo[]
-  onCreated: () => void
+  onCreated: () => Promise<void>
   onCancel: () => void
 }) {
   const visibleTypes = types.filter((t) => !t.hidden)
@@ -180,13 +199,14 @@ function CreateChannelForm({
   const [error, setError] = useState('')
 
   const typeInfo = visibleTypes.find((t) => t.type === selectedType)
+  const translatedTypeLabel = typeInfo ? getChannelTypeLabel(t, typeInfo) : ''
 
   useEffect(() => {
     if (typeInfo) {
-      setLabel(typeInfo.label)
+      setLabel(translatedTypeLabel)
       setConfigValues({})
     }
-  }, [typeInfo])
+  }, [typeInfo, translatedTypeLabel])
 
   const handleCreate = async () => {
     if (!selectedType) return
@@ -198,7 +218,7 @@ function CreateChannelForm({
         label,
         config: configValues,
       })
-      onCreated()
+      await onCreated()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -231,7 +251,9 @@ function CreateChannelForm({
           <SelectContent>
             <SelectItem value="__none__">{t.channels.selectType}</SelectItem>
             {visibleTypes.map((ct) => (
-              <SelectItem key={ct.type} value={ct.type}>{ct.label} - {ct.description}</SelectItem>
+              <SelectItem key={ct.type} value={ct.type}>
+                {getChannelTypeLabel(t, ct)} - {getChannelTypeDescription(t, ct)}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -253,7 +275,7 @@ function CreateChannelForm({
           {/* Config fields */}
           {typeInfo.configFields.map((field) => (
             <div key={field.key}>
-              <label className="text-xs font-medium mb-1.5 block">{field.label}</label>
+              <label className="text-xs font-medium mb-1.5 block">{getChannelFieldLabel(t, typeInfo.type, field)}</label>
               <input
                 type={field.secret ? 'password' : 'text'}
                 value={configValues[field.key] ?? ''}
@@ -303,8 +325,8 @@ function ChannelDetail({
   t: ReturnType<typeof useI18n>['t']
   channel: ChannelInstance
   typeInfo?: ChannelTypeInfo
-  onUpdated: () => void
-  onDeleted: () => void
+  onUpdated: () => Promise<void>
+  onDeleted: () => Promise<void>
 }) {
   const [actionLoading, setActionLoading] = useState('')
   const [actionError, setActionError] = useState('')
@@ -330,7 +352,7 @@ function ChannelDetail({
     setActionError('')
     try {
       await connectChannel(channel.id)
-      onUpdated()
+      await onUpdated()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -343,7 +365,7 @@ function ChannelDetail({
     setActionError('')
     try {
       await disconnectChannel(channel.id)
-      onUpdated()
+      await onUpdated()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -356,7 +378,7 @@ function ChannelDetail({
     setActionError('')
     try {
       await deleteChannel(channel.id)
-      onDeleted()
+      await onDeleted()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -377,7 +399,7 @@ function ChannelDetail({
     try {
       await updateChannel(channel.id, { label: trimmed })
       setEditingLabel(false)
-      onUpdated()
+      await onUpdated()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -390,7 +412,10 @@ function ChannelDetail({
     setActionError('')
     try {
       await updateChannel(channel.id, { enabled: !channel.enabled })
-      onUpdated()
+      flushSync(() => {
+        setActionLoading('')
+      })
+      await onUpdated().catch(() => {})
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -424,7 +449,7 @@ function ChannelDetail({
         if (waited.connected) {
           setQrImageUrl('')
           setActionLoading('')
-          onUpdated()
+          await onUpdated()
           return
         }
       }
@@ -445,7 +470,7 @@ function ChannelDetail({
       if (result.message) {
         setAuthMessage(result.message)
       }
-      onUpdated()
+      await onUpdated()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -540,10 +565,10 @@ function ChannelDetail({
             <PowerOff className="h-3.5 w-3.5" />
             {t.channels.disconnect}
           </button>
-        ) : !channel.supportsQrLogin || channel.loggedIn ? (
+        ) : channel.enabled && (!channel.supportsQrLogin || channel.loggedIn) ? (
           <button
             onClick={handleConnect}
-            disabled={!!actionLoading || !channel.enabled}
+            disabled={!!actionLoading}
             className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-xl border border-green-500/30 text-green-500 hover:bg-green-500/10 transition-colors disabled:opacity-50"
             data-testid="channel-connect-btn"
           >
@@ -554,9 +579,19 @@ function ChannelDetail({
         <button
           onClick={handleToggleEnabled}
           disabled={!!actionLoading}
-          className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-xl border border-border text-muted-foreground hover:bg-accent/50 transition-colors disabled:opacity-50"
+          className={cn(
+            'flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-xl border transition-colors disabled:opacity-50',
+            channel.enabled
+              ? 'border-border text-muted-foreground hover:bg-accent/50'
+              : 'border-green-500 bg-green-500 text-white shadow-[0_0_0_1px_rgba(34,197,94,0.2)] hover:bg-green-600 hover:border-green-600',
+          )}
           data-testid="channel-toggle-btn"
         >
+          {channel.enabled ? (
+            <PowerOff className="h-3.5 w-3.5" />
+          ) : (
+            <Power className="h-3.5 w-3.5" />
+          )}
           {channel.enabled ? t.channels.disable : t.channels.enable}
         </button>
         {!confirmDelete ? (
@@ -652,7 +687,7 @@ function ChannelDetail({
                 <button
                   onClick={handleStartQrLogin}
                   disabled={!!actionLoading}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-xl border border-green-500/30 text-green-500 hover:bg-green-500/10 transition-colors disabled:opacity-50"
+                  className="shrink-0 whitespace-nowrap flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-xl border border-green-500/30 text-green-500 hover:bg-green-500/10 transition-colors disabled:opacity-50"
                   data-testid="channel-qr-login-btn"
                 >
                   <QrCode className="h-3.5 w-3.5" />
@@ -663,7 +698,7 @@ function ChannelDetail({
                 <button
                   onClick={handleLogout}
                   disabled={!!actionLoading}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                  className="shrink-0 whitespace-nowrap flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
                   data-testid="channel-qr-logout-btn"
                 >
                   <PowerOff className="h-3.5 w-3.5" />
@@ -681,7 +716,7 @@ function ChannelDetail({
 
           {qrImageUrl && (
             <div className="rounded-2xl bg-muted/60 border border-border p-4 inline-flex flex-col gap-3" data-testid="channel-qr-code">
-              <img src={qrImageUrl} alt="WeChat login QR code" className="w-56 h-56 rounded-xl bg-white p-3" />
+              <img src={qrImageUrl} alt={t.channels.qrCodeAlt} className="w-56 h-56 rounded-xl bg-white p-3" />
               <div className="text-xs text-muted-foreground">{t.channels.scanQrHint}</div>
             </div>
           )}
@@ -699,6 +734,7 @@ function ChannelDetail({
                 t={t}
                 channelId={channel.id}
                 field={field}
+                fieldLabel={getChannelFieldLabel(t, channel.type, field)}
                 currentValue={channel.config[field.key] ?? ''}
                 isConfigured={channel.configuredFields.includes(field.key)}
                 onSaved={onUpdated}
@@ -716,6 +752,7 @@ function ConfigFieldEditor({
   t,
   channelId,
   field,
+  fieldLabel,
   currentValue,
   isConfigured,
   onSaved,
@@ -723,6 +760,7 @@ function ConfigFieldEditor({
   t: ReturnType<typeof useI18n>['t']
   channelId: string
   field: { key: string; label: string; placeholder: string; secret: boolean }
+  fieldLabel: string
   currentValue: string
   isConfigured: boolean
   onSaved: () => void
@@ -759,7 +797,7 @@ function ConfigFieldEditor({
     <div className="rounded-2xl border border-border p-4">
       <div className="flex items-center justify-between mb-3">
         <label className="text-xs font-medium">
-          {field.label}
+          {fieldLabel}
           <span className="text-muted-foreground ml-1.5 font-mono">{field.key}</span>
         </label>
         {isConfigured && (

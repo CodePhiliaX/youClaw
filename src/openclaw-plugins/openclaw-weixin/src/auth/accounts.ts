@@ -45,6 +45,15 @@ function resolveAccountIndexPath(): string {
   return path.join(resolveWeixinStateDir(), "accounts.json");
 }
 
+function resolveIndexedAccountIds(accountId: string): string[] {
+  const ids = [accountId];
+  const rawId = deriveRawAccountId(accountId);
+  if (rawId && rawId !== accountId) {
+    ids.push(rawId);
+  }
+  return ids;
+}
+
 /** Returns all accountIds registered via QR login. */
 export function listIndexedWeixinAccountIds(): string[] {
   const filePath = resolveAccountIndexPath();
@@ -71,6 +80,26 @@ export function registerWeixinAccountId(accountId: string): void {
   fs.writeFileSync(resolveAccountIndexPath(), JSON.stringify(updated, null, 2), "utf-8");
 }
 
+/** Remove accountId from the persistent index. */
+export function unregisterWeixinAccountId(accountId: string): void {
+  const filePath = resolveAccountIndexPath();
+  const idsToRemove = new Set(resolveIndexedAccountIds(accountId));
+  const existing = listIndexedWeixinAccountIds();
+  const updated = existing.filter((id) => !idsToRemove.has(id));
+
+  if (updated.length === existing.length) return;
+  if (updated.length === 0) {
+    try {
+      fs.unlinkSync(filePath);
+    } catch {
+      // ignore if not found
+    }
+    return;
+  }
+
+  fs.writeFileSync(filePath, JSON.stringify(updated, null, 2), "utf-8");
+}
+
 // ---------------------------------------------------------------------------
 // Account store (per-account credential files)
 // ---------------------------------------------------------------------------
@@ -82,6 +111,8 @@ export type WeixinAccountData = {
   baseUrl?: string;
   /** Last linked Weixin user id from QR login (optional). */
   userId?: string;
+  /** The remote Weixin bot account id linked to this local state key. */
+  linkedAccountId?: string;
 };
 
 function resolveAccountsDir(): string {
@@ -147,7 +178,7 @@ export function loadWeixinAccount(accountId: string): WeixinAccountData | null {
  */
 export function saveWeixinAccount(
   accountId: string,
-  update: { token?: string; baseUrl?: string; userId?: string },
+  update: { token?: string; baseUrl?: string; userId?: string; linkedAccountId?: string },
 ): void {
   const dir = resolveAccountsDir();
   fs.mkdirSync(dir, { recursive: true });
@@ -160,11 +191,16 @@ export function saveWeixinAccount(
     update.userId !== undefined
       ? update.userId.trim() || undefined
       : existing.userId?.trim() || undefined;
+  const linkedAccountId =
+    update.linkedAccountId !== undefined
+      ? update.linkedAccountId.trim() || undefined
+      : existing.linkedAccountId?.trim() || undefined;
 
   const data: WeixinAccountData = {
     ...(token ? { token, savedAt: new Date().toISOString() } : {}),
     ...(baseUrl ? { baseUrl } : {}),
     ...(userId ? { userId } : {}),
+    ...(linkedAccountId ? { linkedAccountId } : {}),
   };
 
   const filePath = resolveAccountPath(accountId);
@@ -178,10 +214,12 @@ export function saveWeixinAccount(
 
 /** Remove account data file. */
 export function clearWeixinAccount(accountId: string): void {
-  try {
-    fs.unlinkSync(resolveAccountPath(accountId));
-  } catch {
-    // ignore if not found
+  for (const id of resolveIndexedAccountIds(accountId)) {
+    try {
+      fs.unlinkSync(resolveAccountPath(id));
+    } catch {
+      // ignore if not found
+    }
   }
 }
 
@@ -235,6 +273,7 @@ export async function triggerWeixinChannelReload(): Promise<void> {}
 
 export type ResolvedWeixinAccount = {
   accountId: string;
+  linkedAccountId?: string;
   baseUrl: string;
   cdnBaseUrl: string;
   token?: string;
@@ -280,6 +319,7 @@ export function resolveWeixinAccount(
 
   return {
     accountId: id,
+    linkedAccountId: accountData?.linkedAccountId?.trim() || undefined,
     baseUrl: stateBaseUrl || DEFAULT_BASE_URL,
     cdnBaseUrl: accountCfg.cdnBaseUrl?.trim() || CDN_BASE_URL,
     token,

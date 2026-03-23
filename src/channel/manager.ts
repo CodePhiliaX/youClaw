@@ -242,7 +242,7 @@ export class ChannelManager {
 
     if (record.enabled) {
       try {
-        await this.startChannel(record)
+        await this.startChannel(record, { autoConnect: true })
       } catch (err) {
         getLogger().error({ channelId: id, error: err instanceof Error ? err.message : String(err) }, 'Channel hot reconnect failed')
       }
@@ -255,6 +255,10 @@ export class ChannelManager {
    * Delete a channel
    */
   async deleteChannel(id: string): Promise<void> {
+    const managed = this.ensureChannelInstance(id)
+    if (managed.instance?.logout) {
+      await managed.instance.logout()
+    }
     await this.stopChannel(id)
     deleteChannelRecord(id)
   }

@@ -34,6 +34,28 @@ export async function sendMessage(
   })
 }
 
+export async function uploadChatAttachment(file: File, filename?: string, mediaType?: string) {
+  const base = await getBackendBaseUrl()
+  const formData = new FormData()
+  formData.append('file', file, filename || file.name || 'attachment')
+  if (filename) {
+    formData.append('filename', filename)
+  }
+  if (mediaType) {
+    formData.append('mediaType', mediaType)
+  }
+
+  const res = await fetch(`${base}/api/attachments/upload`, {
+    method: 'POST',
+    body: formData,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error || `Upload failed: ${res.status}`)
+  }
+  return res.json() as Promise<Attachment>
+}
+
 // Get chat list
 export async function getChats() {
   return apiFetch<Array<{ chat_id: string; name: string; agent_id: string; channel: string; last_message_time: string; last_message: string | null; avatar: string | null }>>('/api/chats')

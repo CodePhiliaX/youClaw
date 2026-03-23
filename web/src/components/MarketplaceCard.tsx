@@ -11,6 +11,7 @@ import {
   type MarketplaceCardViewModel,
   type MarketplaceInstallDialogViewModel,
 } from '../lib/marketplace-view-model'
+import type { MarketplaceChangeEvent } from '../lib/marketplace-updates'
 import { useAppStore } from '../stores/app'
 import { Puzzle, Download, Loader2, Trash2, RefreshCw } from 'lucide-react'
 
@@ -39,7 +40,7 @@ export function MarketplaceCard({
   registrySource,
 }: {
   viewModel: MarketplaceCardViewModel
-  onChanged: () => void
+  onChanged: (change?: MarketplaceChangeEvent) => void
   extraActions?: ReactNode
   hideInstalledBadge?: boolean
   hideCategoryBadge?: boolean
@@ -71,7 +72,7 @@ export function MarketplaceCard({
         showGlobalBubble({
           message: buildMarketplaceMessage(t.skills.marketplaceInstallSuccess),
         })
-        onChanged()
+        onChanged({ type: 'install', slug: viewModel.slug, source: actionSource })
       } else {
         const message = formatActionError(result.error, t.skills.installFailed)
         setStatus('idle')
@@ -93,7 +94,7 @@ export function MarketplaceCard({
         showGlobalBubble({
           message: buildMarketplaceMessage(t.skills.marketplaceUpdateSuccess),
         })
-        onChanged()
+        onChanged({ type: 'update', slug: viewModel.slug, source: actionSource })
       } else {
         const message = formatActionError(result.error, t.skills.updateFailed)
         setStatus('idle')
@@ -127,7 +128,7 @@ export function MarketplaceCard({
         showGlobalBubble({
           message: buildMarketplaceMessage(t.skills.marketplaceUninstallSuccess),
         })
-        onChanged()
+        onChanged({ type: 'uninstall', slug: viewModel.slug, source: actionSource })
       } else {
         const message = formatActionError(result.error, t.skills.uninstallFailed)
         setStatus('idle')
