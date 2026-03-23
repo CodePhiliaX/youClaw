@@ -3,7 +3,7 @@
 import { execSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -34,6 +34,20 @@ function resolveExecutable(command, envKey) {
   return first
 }
 
+function resolveBunExecutable() {
+  const override = process.env.YOUCLAW_BUN_PATH?.trim()
+  if (override) {
+    return override
+  }
+
+  const execPath = process.execPath?.trim()
+  if (execPath && existsSync(execPath)) {
+    return execPath
+  }
+
+  return resolveExecutable('bun', 'YOUCLAW_BUN_PATH')
+}
+
 function shellEscape(value) {
   if (process.platform === 'win32') {
     return `"${value.replace(/"/g, '""')}"`
@@ -60,7 +74,7 @@ function getNode22Distribution() {
     const baseName = `node-${nodeVersion}-win-${arch}`
     return {
       archiveName: `${baseName}.zip`,
-      binaryRelativePath: resolve(baseName, 'node.exe'),
+      binaryRelativePath: join(baseName, 'node.exe'),
     }
   }
 
@@ -68,7 +82,7 @@ function getNode22Distribution() {
     const baseName = `node-${nodeVersion}-${platform}-${arch}`
     return {
       archiveName: `${baseName}.tar.gz`,
-      binaryRelativePath: resolve(baseName, 'bin', 'node'),
+      binaryRelativePath: join(baseName, 'bin', 'node'),
     }
   }
 
@@ -185,7 +199,9 @@ async function resolveNode22Executable() {
 async function copyRuntime({ label, envKey, command, targetDir, targetName, expectedNodeMajor }) {
   const executablePath = expectedNodeMajor === 22
     ? await resolveNode22Executable()
-    : resolveExecutable(command, envKey)
+    : command === 'bun'
+      ? resolveBunExecutable()
+      : resolveExecutable(command, envKey)
   const version = readVersion(executablePath)
 
   if (expectedNodeMajor) {
