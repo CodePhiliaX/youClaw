@@ -193,6 +193,39 @@ describe('documentService', () => {
     }
   })
 
+  test('reuses parsed document content without leaking an old temporary filename', async () => {
+    const filePath = `/tmp/reused-doc-${Date.now()}.pdf`
+
+    try {
+      await Bun.write(filePath, buildPdf('Same parsed PDF content'))
+
+      const first = await documentService.ingestAttachment('chat-docx-a', {
+        filename: '_docx.pdf',
+        mediaType: 'application/pdf',
+        filePath,
+      })
+      expect(first.status).toBe('parsed')
+      expect(first.meta.filename).toBe('_docx.pdf')
+
+      const second = await documentService.ingestAttachment('chat-docx-b', {
+        filename: '爱懒科技使用手册docx.pdf',
+        mediaType: 'application/pdf',
+        filePath,
+      })
+
+      expect(second.status).toBe('parsed')
+      expect(second.docId).toBe(first.docId)
+      expect(second.meta.filename).toBe('爱懒科技使用手册docx.pdf')
+      expect(second.sourcePath).toBe(filePath)
+
+      const stored = documentService.getDocument(first.docId)
+      expect(stored?.chatId).toBe('chat-docx-b')
+      expect(stored?.meta.filename).toBe('爱懒科技使用手册docx.pdf')
+    } finally {
+      try { unlinkSync(filePath) } catch {}
+    }
+  })
+
   test('extracts table-heavy docx content through mammoth parser', async () => {
     const filePath = `/tmp/docx-table-${Date.now()}.docx`
 
