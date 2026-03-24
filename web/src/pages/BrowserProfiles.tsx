@@ -1,18 +1,30 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, type FormEvent, type ReactNode } from 'react'
 import {
   createBrowserProfile,
   deleteBrowserProfile,
-  launchBrowserProfile,
-  BrowserLaunchError,
+  restartBrowserProfile,
+  startBrowserProfile,
+  stopBrowserProfile,
 } from '../api/client'
 import type { BrowserProfileDTO } from '../api/client'
 import { cn } from '../lib/utils'
 import { useI18n } from '../i18n'
 import { useChatContext } from '../hooks/chatCtx'
 import { SidePanel } from '@/components/layout/SidePanel'
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
-import { Globe, Plus, Trash2, Play, FolderOpen } from 'lucide-react'
-import { useDragRegion } from "@/hooks/useDragRegion"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { FolderOpen, Globe, Link, Play, Plus, RotateCw, Square, Trash2 } from 'lucide-react'
+import { useDragRegion } from '@/hooks/useDragRegion'
+
+type Notice = { type: 'success' | 'error'; text: string } | null
 
 export function BrowserProfiles() {
   const { t } = useI18n()
@@ -26,6 +38,8 @@ export function BrowserProfiles() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [notice, setNotice] = useState<Notice>(null)
 
   const selectedProfile = profiles.find((p) => p.id === selectedId) ?? null
 
@@ -44,31 +58,30 @@ export function BrowserProfiles() {
     loadProfiles()
   }
 
-  const [launchingId, setLaunchingId] = useState<string | null>(null)
-  const [launchMessage, setLaunchMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-
-  const handleLaunch = async (id: string) => {
-    setLaunchingId(id)
-    setLaunchMessage(null)
+  const handleControl = async (id: string, action: 'start' | 'stop' | 'restart') => {
+    setBusyId(id)
+    setNotice(null)
     try {
-      await launchBrowserProfile(id)
-      setLaunchMessage({ type: 'success', text: t.browser.launchSuccess })
-    } catch (err) {
-      if (err instanceof BrowserLaunchError && err.code === 'AGENT_BROWSER_NOT_FOUND') {
-        const hint = err.installHint ? `\n${t.browser.installHint}: ${err.installHint}` : ''
-        setLaunchMessage({ type: 'error', text: `${t.browser.notInstalled}${hint}` })
+      if (action === 'start') {
+        await startBrowserProfile(id)
+        setNotice({ type: 'success', text: t.browser.launchSuccess })
+      } else if (action === 'stop') {
+        await stopBrowserProfile(id)
+        setNotice({ type: 'success', text: 'Browser stopped' })
       } else {
-        const detail = err instanceof Error ? err.message : ''
-        setLaunchMessage({ type: 'error', text: detail || t.browser.launchFailed })
+        await restartBrowserProfile(id)
+        setNotice({ type: 'success', text: 'Browser restarted' })
       }
+      loadProfiles()
+    } catch (err) {
+      setNotice({ type: 'error', text: err instanceof Error ? err.message : t.browser.launchFailed })
     } finally {
-      setLaunchingId(null)
+      setBusyId(null)
     }
   }
 
   return (
     <div className="flex h-full">
-      {/* Left panel — Profile list */}
       <SidePanel>
         <div className="h-9 shrink-0 px-3 border-b border-[var(--subtle-border)] flex items-center justify-between" {...drag}>
           <h2 className="font-semibold text-sm">{t.browser.title}</h2>
@@ -108,21 +121,21 @@ export function BrowserProfiles() {
                     'flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer transition-all',
                     selectedId === profile.id
                       ? 'bg-accent text-accent-foreground shadow-sm'
-                      : 'text-muted-foreground hover:bg-accent/50'
+                      : 'text-muted-foreground hover:bg-accent/50',
                   )}
                 >
                   <div className={cn(
                     'w-9 h-9 rounded-xl flex items-center justify-center shrink-0',
-                    selectedId === profile.id ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+                    selectedId === profile.id ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
                   )}>
                     <Globe className="h-4 w-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate text-foreground">
-                      {profile.name}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(profile.created_at).toLocaleString()}
+                    <div className="text-sm font-medium truncate text-foreground">{profile.name}</div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-2">
+                      <span>{profile.driver}</span>
+                      <span>·</span>
+                      <span>{profile.runtime?.status ?? 'stopped'}</span>
                     </div>
                   </div>
                 </div>
@@ -132,7 +145,6 @@ export function BrowserProfiles() {
         </div>
       </SidePanel>
 
-      {/* Right panel */}
       <div className="flex-1 overflow-y-auto">
         {showCreate ? (
           <CreateProfileForm
@@ -145,10 +157,12 @@ export function BrowserProfiles() {
         ) : selectedProfile ? (
           <ProfileDetail
             profile={selectedProfile}
-            onLaunch={() => handleLaunch(selectedProfile.id)}
+            isBusy={busyId === selectedProfile.id}
+            notice={selectedId === selectedProfile.id ? notice : null}
+            onStart={() => handleControl(selectedProfile.id, 'start')}
+            onStop={() => handleControl(selectedProfile.id, 'stop')}
+            onRestart={() => handleControl(selectedProfile.id, 'restart')}
             onDelete={() => setDeleteId(selectedProfile.id)}
-            isLaunching={launchingId === selectedProfile.id}
-            launchMessage={selectedId === selectedProfile.id ? launchMessage : null}
           />
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -164,13 +178,16 @@ export function BrowserProfiles() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t.browser.confirmDelete}</AlertDialogTitle>
-            <AlertDialogDescription>{''}</AlertDialogDescription>
+            <AlertDialogDescription>Delete this browser profile and its persisted browser data directory.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => { if (deleteId) handleDelete(deleteId); setDeleteId(null) }}
+              onClick={() => {
+                if (deleteId) handleDelete(deleteId)
+                setDeleteId(null)
+              }}
             >
               {t.common.delete}
             </AlertDialogAction>
@@ -181,26 +198,29 @@ export function BrowserProfiles() {
   )
 }
 
-// ===== Profile details =====
-
 function ProfileDetail({
   profile,
-  onLaunch,
+  isBusy,
+  notice,
+  onStart,
+  onStop,
+  onRestart,
   onDelete,
-  isLaunching,
-  launchMessage,
 }: {
   profile: BrowserProfileDTO
-  onLaunch: () => void
+  isBusy: boolean
+  notice: Notice
+  onStart: () => void
+  onStop: () => void
+  onRestart: () => void
   onDelete: () => void
-  isLaunching: boolean
-  launchMessage: { type: 'success' | 'error'; text: string } | null
 }) {
-  const { t } = useI18n()
+  const runtimeStatus = profile.runtime?.status ?? 'stopped'
+  const running = runtimeStatus === 'running' || runtimeStatus === 'starting'
 
   return (
     <div className="p-6 space-y-6" data-testid="browser-profile-detail">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
             <Globe className="h-6 w-6 text-primary" />
@@ -213,18 +233,26 @@ function ProfileDetail({
         <div className="flex items-center gap-2">
           <button
             data-testid="browser-launch-btn"
-            onClick={onLaunch}
-            disabled={isLaunching}
+            onClick={running ? onStop : onStart}
+            disabled={isBusy}
             className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
-            <Play className="h-3.5 w-3.5" />
-            {isLaunching ? t.browser.launching : t.browser.launch}
+            {running ? <Square className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            {running ? 'Stop Browser' : 'Start Browser'}
+          </button>
+          <button
+            onClick={onRestart}
+            disabled={isBusy}
+            className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-xl border border-border hover:bg-accent transition-colors disabled:opacity-50"
+          >
+            <RotateCw className="h-3.5 w-3.5" />
+            Restart
           </button>
           <button
             data-testid="browser-delete-btn"
             onClick={onDelete}
             className="p-2 rounded-xl hover:bg-destructive/20 text-muted-foreground hover:text-red-400 transition-colors"
-            title={t.common.delete}
+            title="Delete"
           >
             <Trash2 className="h-4 w-4" />
           </button>
@@ -232,46 +260,75 @@ function ProfileDetail({
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-2xl border border-border p-4">
-          <div className="text-xs text-muted-foreground mb-1.5">{t.browser.created}</div>
-          <div className="text-sm font-semibold">{new Date(profile.created_at).toLocaleString()}</div>
-        </div>
-        <div className="rounded-2xl border border-border p-4">
-          <div className="text-xs text-muted-foreground mb-1.5">{t.browser.dataDir}</div>
-          <div className="text-sm font-mono flex items-center gap-1.5">
-            <FolderOpen className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-            <span className="truncate">browser-profiles/{profile.id}/</span>
-          </div>
-        </div>
+        <InfoCard label="Driver" value={profile.driver} />
+        <InfoCard label="Runtime" value={runtimeStatus} />
+        <InfoCard label="Created" value={new Date(profile.createdAt).toLocaleString()} />
+        <InfoCard label="Default" value={profile.isDefault ? 'Yes' : 'No'} />
+        <InfoCard
+          label="Data Dir"
+          value={profile.userDataDir ? (
+            <span className="text-sm font-mono flex items-center gap-1.5">
+              <FolderOpen className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+              <span className="truncate">{profile.userDataDir}</span>
+            </span>
+          ) : 'N/A'}
+        />
+        <InfoCard
+          label="CDP Endpoint"
+          value={profile.cdpUrl ?? (profile.cdpPort ? `127.0.0.1:${profile.cdpPort}` : 'N/A')}
+        />
       </div>
 
-      {launchMessage && (
+      {profile.runtime?.wsEndpoint && (
+        <div className="rounded-2xl border border-border p-4">
+          <div className="text-xs text-muted-foreground mb-1.5">WebSocket Endpoint</div>
+          <div className="text-sm font-mono break-all flex items-start gap-2">
+            <Link className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+            <span>{profile.runtime.wsEndpoint}</span>
+          </div>
+        </div>
+      )}
+
+      {notice && (
         <div
           data-testid="browser-launch-message"
           className={cn(
             'text-xs rounded-xl p-3 border whitespace-pre-line',
-            launchMessage.type === 'success'
+            notice.type === 'success'
               ? 'bg-green-500/10 border-green-500/30 text-green-500'
               : 'bg-red-500/10 border-red-500/30 text-red-400',
           )}
         >
-          {launchMessage.text}
+          {notice.text}
+        </div>
+      )}
+
+      {profile.runtime?.lastError && (
+        <div className="text-xs rounded-xl p-3 border bg-red-500/10 border-red-500/30 text-red-400 whitespace-pre-line">
+          {profile.runtime.lastError}
         </div>
       )}
 
       <div className="text-xs text-muted-foreground bg-muted/50 rounded-2xl p-4 border border-border space-y-1">
         <p className="font-medium text-foreground mb-2">Usage</p>
-        <p>1. Click "Launch Browser" to open a headed browser window</p>
-        <p>2. Manually log in to the required websites in the browser</p>
-        <p>3. Close the browser; login state is saved automatically</p>
-        <p>4. Bind this Profile in Agent details, or select it during chat</p>
-        <p>5. The Agent will automatically reuse the saved login state</p>
+        <p>1. Start the browser for a managed profile.</p>
+        <p>2. Log in manually to websites that require authentication.</p>
+        <p>3. The browser state is stored in the profile data directory.</p>
+        <p>4. Bind this profile to an agent or select it in chat.</p>
+        <p>5. Browser MCP tools will reuse the same persisted session.</p>
       </div>
     </div>
   )
 }
 
-// ===== Create form =====
+function InfoCard({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-border p-4">
+      <div className="text-xs text-muted-foreground mb-1.5">{label}</div>
+      <div className="text-sm font-semibold break-all">{value}</div>
+    </div>
+  )
+}
 
 function CreateProfileForm({
   onCreated,
@@ -282,16 +339,22 @@ function CreateProfileForm({
 }) {
   const { t } = useI18n()
   const [name, setName] = useState('')
+  const [driver, setDriver] = useState<'managed' | 'remote-cdp'>('managed')
+  const [cdpUrl, setCdpUrl] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
     setSubmitting(true)
     setError('')
     try {
-      await createBrowserProfile(name.trim())
+      await createBrowserProfile({
+        name: name.trim(),
+        driver,
+        cdpUrl: driver === 'remote-cdp' ? cdpUrl.trim() || null : undefined,
+      })
       onCreated()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create profile')
@@ -316,6 +379,31 @@ function CreateProfileForm({
             autoFocus
           />
         </div>
+
+        <div>
+          <label className="block text-xs font-medium mb-1.5">Driver</label>
+          <select
+            value={driver}
+            onChange={(e) => setDriver(e.target.value as 'managed' | 'remote-cdp')}
+            className="w-full px-3 py-2 text-sm rounded-xl bg-muted border border-border focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="managed">Managed Chromium</option>
+            <option value="remote-cdp">Remote CDP</option>
+          </select>
+        </div>
+
+        {driver === 'remote-cdp' && (
+          <div>
+            <label className="block text-xs font-medium mb-1.5">CDP URL</label>
+            <input
+              type="text"
+              value={cdpUrl}
+              onChange={(e) => setCdpUrl(e.target.value)}
+              placeholder="http://127.0.0.1:9222 or ws://host/devtools/browser/..."
+              className="w-full px-3 py-2 text-sm rounded-xl bg-muted border border-border focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+        )}
 
         {error && <p data-testid="browser-form-error" className="text-xs text-red-400">{error}</p>}
 

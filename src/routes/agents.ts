@@ -9,6 +9,30 @@ import { DEFAULT_WORKSPACE_DOCS, DEFAULT_MEMORY_MD } from '../agent/index.ts'
 // Workspace documents accessible via API
 const ALLOWED_DOCS = ['SOUL.md', 'AGENT.md', 'USER.md', 'TOOLS.md']
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function applyConfigPatch(target: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...target }
+
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null) {
+      delete next[key]
+      continue
+    }
+
+    if (isPlainObject(value) && isPlainObject(next[key])) {
+      next[key] = applyConfigPatch(next[key] as Record<string, unknown>, value)
+      continue
+    }
+
+    next[key] = value
+  }
+
+  return next
+}
+
 export function createAgentsRoutes(agentManager: AgentManager) {
   const agents = new Hono()
 
@@ -193,8 +217,8 @@ export function createAgentsRoutes(agentManager: AgentManager) {
     const existingYaml = readFileSync(configPath, 'utf-8')
     const existingConfig = parseYaml(existingYaml) as Record<string, unknown>
 
-    // Merge config (id cannot be changed)
-    const merged = { ...existingConfig, ...body, id }
+    // Merge config (id cannot be changed). null values delete keys.
+    const merged = applyConfigPatch(existingConfig, { ...body, id })
 
     // Write back agent.yaml
     writeFileSync(configPath, stringifyYaml(merged))

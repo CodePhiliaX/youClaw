@@ -1,7 +1,7 @@
 import {
-  test, expect, UNIQUE,
+  test, expect, UNIQUE, API_BASE,
   createTaskViaAPI, cleanupE2ETasks,
-  navigateToTasks, fillAndSubmitTaskForm,
+  navigateToTasks, fillAndSubmitTaskForm, reloadTasksPage,
 } from './helpers'
 
 test.describe('Level 5: 边界情况与错误处理', () => {
@@ -26,7 +26,7 @@ test.describe('Level 5: 边界情况与错误处理', () => {
     await page.getByTestId('task-submit-btn').click()
 
     await expect(page.getByTestId('task-form-error')).toBeVisible()
-    await expect(page.getByTestId('task-form-error')).toContainText('All fields are required')
+    await expect(page.getByTestId('task-form-error')).toContainText('所有字段均为必填')
 
     // 确认没有发出 POST 请求
     expect(postSent).toBe(false)
@@ -38,7 +38,7 @@ test.describe('Level 5: 边界情况与错误处理', () => {
     await page.getByTestId('task-submit-btn').click()
 
     await expect(page.getByTestId('task-form-error')).toBeVisible()
-    await expect(page.getByTestId('task-form-error')).toContainText('All fields are required')
+    await expect(page.getByTestId('task-form-error')).toContainText('所有字段均为必填')
   })
 
   test('interval 为 0 或负数', async ({ page }) => {
@@ -48,13 +48,14 @@ test.describe('Level 5: 边界情况与错误处理', () => {
     await page.getByTestId('task-submit-btn').click()
 
     await expect(page.getByTestId('task-form-error')).toBeVisible()
-    await expect(page.getByTestId('task-form-error')).toContainText('Interval must be a positive number')
+    await expect(page.getByTestId('task-form-error')).toContainText('间隔必须为正数')
   })
 
   test('无效 cron 表达式', async ({ page }) => {
     await page.getByTestId('task-create-btn').click()
     await page.getByTestId('task-input-prompt').fill('test prompt')
     await page.getByTestId('task-schedule-type-cron').click()
+    await page.getByTestId('task-cron-mode-custom').click()
     await page.getByTestId('task-input-schedule').fill('invalid-cron')
 
     await page.getByTestId('task-submit-btn').click()
@@ -67,8 +68,7 @@ test.describe('Level 5: 边界情况与错误处理', () => {
     const taskName = UNIQUE()
     await createTaskViaAPI(request, { name: taskName })
 
-    await page.reload()
-    await page.waitForLoadState('networkidle')
+    await reloadTasksPage(page)
 
     await page.getByTestId('task-item').filter({ hasText: taskName }).click()
     await page.getByTestId('task-edit-btn').click()
@@ -90,8 +90,7 @@ test.describe('Level 5: 边界情况与错误处理', () => {
     await createTaskViaAPI(request, { name: nameA, prompt: 'prompt-A-unique' })
     await createTaskViaAPI(request, { name: nameB, prompt: 'prompt-B-unique' })
 
-    await page.reload()
-    await page.waitForLoadState('networkidle')
+    await reloadTasksPage(page)
 
     // 点击 A
     await page.getByTestId('task-item').filter({ hasText: nameA }).click()
@@ -126,5 +125,49 @@ test.describe('Level 5: 边界情况与错误处理', () => {
     // 两个都在列表中
     await expect(page.getByTestId('task-item').filter({ hasText: nameA })).toBeVisible()
     await expect(page.getByTestId('task-item').filter({ hasText: nameB })).toBeVisible()
+  })
+
+  test('编辑成同 chat 下已存在的任务名时显示冲突错误', async ({ page, request }) => {
+    const agentRes = await request.get(`${API_BASE}/api/agents`)
+    const agents = await agentRes.json()
+    const agentId = agents[0]?.id
+    expect(agentId).toBeTruthy()
+
+    const sharedChatId = `task:${crypto.randomUUID().slice(0, 8)}`
+    const nameA = UNIQUE()
+    const nameB = UNIQUE()
+
+    const createA = await request.post(`${API_BASE}/api/tasks`, {
+      data: {
+        agentId,
+        chatId: sharedChatId,
+        prompt: 'task A',
+        scheduleType: 'interval',
+        scheduleValue: '3600000',
+        name: nameA,
+      },
+    })
+    expect(createA.status()).toBe(201)
+
+    const createB = await request.post(`${API_BASE}/api/tasks`, {
+      data: {
+        agentId,
+        chatId: sharedChatId,
+        prompt: 'task B',
+        scheduleType: 'interval',
+        scheduleValue: '3600000',
+        name: nameB,
+      },
+    })
+    expect(createB.status()).toBe(201)
+
+    await reloadTasksPage(page)
+    await page.getByTestId('task-item').filter({ hasText: nameA }).click()
+    await page.getByTestId('task-edit-btn').click()
+    await page.getByTestId('task-input-name').fill(nameB)
+    await page.getByTestId('task-submit-btn').click()
+
+    await expect(page.getByTestId('task-form-error')).toBeVisible()
+    await expect(page.getByTestId('task-form-error')).toContainText('Task already exists')
   })
 })

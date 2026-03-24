@@ -53,7 +53,7 @@ export async function sendMessage(
   agentId: string,
   prompt: string,
   chatId?: string,
-  browserProfileId?: string,
+  browserProfileId?: string | null,
   attachments?: Attachment[],
   messageId?: string,
 ) {
@@ -61,6 +61,28 @@ export async function sendMessage(
     method: 'POST',
     body: JSON.stringify({ prompt, chatId, browserProfileId, attachments, messageId }),
   })
+}
+
+export async function uploadChatAttachment(file: File, filename?: string, mediaType?: string) {
+  const base = await getBackendBaseUrl()
+  const formData = new FormData()
+  formData.append('file', file, filename || file.name || 'attachment')
+  if (filename) {
+    formData.append('filename', filename)
+  }
+  if (mediaType) {
+    formData.append('mediaType', mediaType)
+  }
+
+  const res = await fetch(`${base}/api/attachments/upload`, {
+    method: 'POST',
+    body: formData,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error || `Upload failed: ${res.status}`)
+  }
+  return res.json() as Promise<Attachment>
 }
 
 // Get chat list
@@ -708,51 +730,76 @@ export async function uninstallRecommendedSkill(slug: string, source?: RegistryS
 export interface BrowserProfileDTO {
   id: string
   name: string
-  created_at: string
+  driver: 'managed' | 'remote-cdp' | 'extension-relay'
+  isDefault: boolean
+  executablePath: string | null
+  userDataDir: string | null
+  cdpPort: number | null
+  cdpUrl: string | null
+  headless: boolean
+  noSandbox: boolean
+  attachOnly: boolean
+  launchArgs: string[]
+  createdAt: string
+  updatedAt: string | null
+  runtime: {
+    status: 'starting' | 'running' | 'stopped' | 'error'
+    pid: number | null
+    wsEndpoint: string | null
+    lastError: string | null
+    lastStartedAt: string | null
+    heartbeatAt: string | null
+  } | null
 }
 
 export async function getBrowserProfiles() {
-  return apiFetch<BrowserProfileDTO[]>('/api/browser-profiles')
+  return apiFetch<BrowserProfileDTO[]>('/api/browser/profiles')
 }
 
-export async function createBrowserProfile(name: string) {
-  return apiFetch<BrowserProfileDTO>('/api/browser-profiles', {
+export async function createBrowserProfile(input: { name: string; driver?: 'managed' | 'remote-cdp' | 'extension-relay'; cdpUrl?: string | null }) {
+  return apiFetch<BrowserProfileDTO>('/api/browser/profiles', {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(input),
   })
 }
 
 export async function deleteBrowserProfile(id: string) {
-  return apiFetch<{ ok: boolean }>(`/api/browser-profiles/${encodeURIComponent(id)}`, {
+  return apiFetch<{ ok: boolean }>(`/api/browser/profiles/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
 }
 
-export class BrowserLaunchError extends Error {
-  code?: string
-  installHint?: string
-  constructor(message: string, code?: string, installHint?: string) {
-    super(message)
-    this.code = code
-    this.installHint = installHint
-  }
+export async function updateBrowserProfile(id: string, patch: Partial<Pick<BrowserProfileDTO, 'name' | 'driver' | 'cdpUrl' | 'headless' | 'noSandbox' | 'attachOnly'>>) {
+  return apiFetch<BrowserProfileDTO>(`/api/browser/profiles/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
 }
 
-export async function launchBrowserProfile(id: string) {
-  const base = await getBackendBaseUrl()
-  const res = await fetch(`${base}/api/browser-profiles/${encodeURIComponent(id)}/launch`, {
+export async function startBrowserProfile(id: string) {
+  return apiFetch<{ ok: boolean; runtime: BrowserProfileDTO['runtime'] }>(`/api/browser/profiles/${encodeURIComponent(id)}/start`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
   })
-  if (!res.ok) {
-    const body = await res.json().catch(() => null)
-    throw new BrowserLaunchError(
-      body?.error || `API error: ${res.status}`,
-      body?.code,
-      body?.installHint,
-    )
-  }
-  return res.json() as Promise<{ ok: boolean; profileDir: string }>
+}
+
+export async function stopBrowserProfile(id: string) {
+  return apiFetch<{ ok: boolean; runtime: BrowserProfileDTO['runtime'] }>(`/api/browser/profiles/${encodeURIComponent(id)}/stop`, {
+    method: 'POST',
+  })
+}
+
+export async function restartBrowserProfile(id: string) {
+  return apiFetch<{ ok: boolean; runtime: BrowserProfileDTO['runtime'] }>(`/api/browser/profiles/${encodeURIComponent(id)}/restart`, {
+    method: 'POST',
+  })
+}
+
+export async function getBrowserProfileStatus(id: string) {
+  return apiFetch<NonNullable<BrowserProfileDTO['runtime']>>(`/api/browser/profiles/${encodeURIComponent(id)}/status`)
+}
+
+export async function getBrowserProfileTabs(id: string) {
+  return apiFetch<{ tabs: Array<{ id: string; title?: string; url?: string; type?: string }> }>(`/api/browser/profiles/${encodeURIComponent(id)}/tabs`)
 }
 
 // ===== Scheduled Tasks API =====

@@ -13,7 +13,7 @@ import {
   Github,
   BookOpen,
   User,
-  Wrench,
+  Puzzle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
@@ -68,7 +68,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
     { to: "/", icon: SquarePen, label: t.nav.chat },
     { to: "/agents", icon: Bot, label: t.nav.agents },
     { to: "/cron", icon: CalendarClock, label: t.nav.tasks },
-    { to: "/skills", icon: Wrench, label: t.nav.skills },
+    { to: "/skills", icon: Puzzle, label: t.nav.skills },
     { to: "/memory", icon: Brain, label: t.nav.memory },
     { to: "/logs", icon: ScrollText, label: t.nav.logs },
   ];

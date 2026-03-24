@@ -15,7 +15,7 @@ export interface ChatContextType {
   pendingToolUse: ToolUseItem[]
   documentStatuses: Record<string, { filename: string; status: 'parsing' | 'parsed' | 'failed'; error?: string }>
   chatStatus: 'submitted' | 'streaming' | 'ready' | 'error'
-  send: (prompt: string, browserProfileId?: string, attachments?: Attachment[]) => Promise<void>
+  send: (prompt: string, browserProfileId?: string | null, attachments?: Attachment[]) => Promise<void>
   loadChat: (chatId: string) => Promise<void>
   newChat: () => void
   stop: () => void

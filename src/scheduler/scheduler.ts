@@ -1,22 +1,22 @@
-import { Cron } from 'croner'
 import { getLogger } from '../logger/index.ts'
 import {
-  getTasksDueBy,
-  getStuckTasks,
-  updateTask,
-  saveTaskRunLog,
   saveMessage,
   upsertChat,
-  pruneOldTaskRunLogs,
 } from '../db/index.ts'
 import { cleanOldLogs } from '../logger/reader.ts'
+import {
+  calculateTaskNextRun,
+  deleteTaskRunLogsOlderThan,
+  insertTaskRunLog,
+  listDueTasks,
+  listStuckTasks,
+  updateTaskRecord,
+} from '../task/index.ts'
 import type { ScheduledTask } from '../db/index.ts'
 import type { AgentQueue } from '../agent/queue.ts'
 import type { AgentManager } from '../agent/manager.ts'
 import type { EventBus } from '../events/index.ts'
 
-// Backoff delay tiers (ms): 30s, 1m, 5m, 15m, 60m
-const BACKOFF_DELAYS = [30_000, 60_000, 300_000, 900_000, 3_600_000]
 // Auto-pause after N consecutive failures
 const MAX_CONSECUTIVE_FAILURES = 5
 // Stuck detection threshold (5 minutes)
@@ -71,11 +71,11 @@ export class Scheduler {
     this.recoverStuckTasks()
 
     const now = new Date().toISOString()
-    const dueTasks = getTasksDueBy(now)
+    const dueTasks = listDueTasks(now)
 
     for (const task of dueTasks) {
       // Lock task synchronously to prevent duplicate pickup on next tick (race condition fix)
-      updateTask(task.id, { runningSince: now })
+      updateTaskRecord(task.id, { runningSince: now })
 
       // No await: execute multiple due tasks in parallel
       this.executeTask(task).catch((err) => {
@@ -88,7 +88,8 @@ export class Scheduler {
     if (this.tickCount >= PRUNE_INTERVAL_TICKS) {
       this.tickCount = 0
       try {
-        const deleted = pruneOldTaskRunLogs(LOG_RETAIN_DAYS)
+        const cutoff = new Date(Date.now() - LOG_RETAIN_DAYS * 24 * 60 * 60 * 1000).toISOString()
+        const deleted = deleteTaskRunLogsOlderThan(cutoff)
         if (deleted > 0) {
           logger.info({ deleted }, 'Pruned expired run logs')
         }
@@ -107,7 +108,7 @@ export class Scheduler {
   private recoverStuckTasks(): void {
     const logger = getLogger()
     const cutoff = new Date(Date.now() - STUCK_THRESHOLD_MS).toISOString()
-    const stuckTasks = getStuckTasks(cutoff)
+    const stuckTasks = listStuckTasks(cutoff)
 
     for (const task of stuckTasks) {
       const newFailures = (task.consecutive_failures ?? 0) + 1
@@ -116,7 +117,7 @@ export class Scheduler {
         'Stuck task detected, resetting running_since'
       )
 
-      saveTaskRunLog({
+      insertTaskRunLog({
         taskId: task.id,
         runAt: task.running_since!,
         durationMs: Date.now() - new Date(task.running_since!).getTime(),
@@ -127,7 +128,7 @@ export class Scheduler {
       if (newFailures >= MAX_CONSECUTIVE_FAILURES) {
         // Too many consecutive failures, auto-pause (pass consecutiveFailures for correct backoff nextRun)
         const nextRun = this.calculateNextRun(task, { consecutiveFailures: newFailures })
-        updateTask(task.id, {
+        updateTaskRecord(task.id, {
           runningSince: null,
           consecutiveFailures: newFailures,
           status: 'paused',
@@ -138,7 +139,7 @@ export class Scheduler {
       } else {
         // Calculate next run time with backoff
         const nextRun = this.calculateNextRun(task, { consecutiveFailures: newFailures })
-        updateTask(task.id, {
+        updateTaskRecord(task.id, {
           runningSince: null,
           consecutiveFailures: newFailures,
           lastResult: `ERROR: Task execution timed out`,
@@ -168,7 +169,7 @@ export class Scheduler {
       // Deliver to external channel (best-effort)
       const deliveryStatus = this.deliver(task, result ?? '(no output)')
 
-      saveTaskRunLog({
+      insertTaskRunLog({
         taskId: task.id,
         runAt,
         durationMs,
@@ -180,7 +181,7 @@ export class Scheduler {
       // Calculate next run time (reset backoff on success)
       const nextRun = this.calculateNextRun(task)
       if (nextRun) {
-        updateTask(task.id, {
+        updateTaskRecord(task.id, {
           lastRun: runAt,
           nextRun,
           runningSince: null,
@@ -189,7 +190,7 @@ export class Scheduler {
         })
       } else {
         // Mark once-type tasks as completed after execution
-        updateTask(task.id, {
+        updateTaskRecord(task.id, {
           lastRun: runAt,
           nextRun: null,
           status: 'completed',
@@ -204,7 +205,7 @@ export class Scheduler {
       const durationMs = Date.now() - startMs
       const errorMsg = err instanceof Error ? err.message : String(err)
 
-      saveTaskRunLog({
+      insertTaskRunLog({
         taskId: task.id,
         runAt,
         durationMs,
@@ -218,7 +219,7 @@ export class Scheduler {
       if (newFailures >= MAX_CONSECUTIVE_FAILURES) {
         // Too many consecutive failures, auto-pause (pass consecutiveFailures for correct backoff nextRun)
         const nextRun = this.calculateNextRun(task, { consecutiveFailures: newFailures })
-        updateTask(task.id, {
+        updateTaskRecord(task.id, {
           lastRun: runAt,
           nextRun,
           runningSince: null,
@@ -231,7 +232,7 @@ export class Scheduler {
         // Calculate next run time with backoff
         const nextRun = this.calculateNextRun(task, { consecutiveFailures: newFailures })
         if (nextRun) {
-          updateTask(task.id, {
+          updateTaskRecord(task.id, {
             lastRun: runAt,
             nextRun,
             runningSince: null,
@@ -239,7 +240,7 @@ export class Scheduler {
             lastResult: `ERROR: ${errorMsg}`.slice(0, 500),
           })
         } else {
-          updateTask(task.id, {
+          updateTaskRecord(task.id, {
             lastRun: runAt,
             nextRun: null,
             status: 'completed',
@@ -337,7 +338,7 @@ export class Scheduler {
       const deliveryStatus = this.deliver(task, result ?? '(no output)')
 
       // Record run log
-      saveTaskRunLog({
+      insertTaskRunLog({
         taskId: task.id,
         runAt,
         durationMs,
@@ -352,7 +353,7 @@ export class Scheduler {
       const error = err instanceof Error ? err.message : String(err)
 
       // Record failure log
-      saveTaskRunLog({
+      insertTaskRunLog({
         taskId: task.id,
         runAt,
         durationMs,
@@ -370,50 +371,6 @@ export class Scheduler {
     task: Pick<ScheduledTask, 'schedule_type' | 'schedule_value' | 'last_run'> & { timezone?: string | null },
     options?: { consecutiveFailures?: number },
   ): string | null {
-    const now = new Date()
-    let nextTime: Date | null = null
-
-    switch (task.schedule_type) {
-      case 'cron': {
-        const cronOpts: { timezone?: string } = {}
-        if (task.timezone) cronOpts.timezone = task.timezone
-        const job = new Cron(task.schedule_value, cronOpts)
-        const next = job.nextRun()
-        nextTime = next
-        break
-      }
-      case 'interval': {
-        const intervalMs = parseInt(task.schedule_value, 10)
-        if (isNaN(intervalMs) || intervalMs <= 0) return null
-        const base = task.last_run ? new Date(task.last_run) : now
-        nextTime = new Date(base.getTime() + intervalMs)
-        break
-      }
-      case 'once': {
-        // Return null after once succeeds (marks completed); on failure, backoff logic calculates retry time
-        if (!options?.consecutiveFailures) return null
-        // Has failures, need backoff retry: calculate backoff based on current time
-        nextTime = now
-        break
-      }
-      default:
-        return null
-    }
-
-    if (!nextTime) return null
-
-    // Backoff logic: delay next run on consecutive failures
-    const failures = options?.consecutiveFailures ?? 0
-    if (failures > 0) {
-      const backoffIdx = Math.min(failures - 1, BACKOFF_DELAYS.length - 1)
-      const backoffMs = BACKOFF_DELAYS[backoffIdx]!
-      const backoffTime = new Date(now.getTime() + backoffMs)
-      // Take max(normal next time, now + backoffDelay)
-      if (backoffTime.getTime() > nextTime.getTime()) {
-        nextTime = backoffTime
-      }
-    }
-
-    return nextTime.toISOString()
+    return calculateTaskNextRun(task, options)
   }
 }

@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { getPaths } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
 
@@ -70,7 +70,38 @@ CREATE INDEX IF NOT EXISTS idx_task_runs ON task_run_logs(task_id, run_at);
 CREATE TABLE IF NOT EXISTS browser_profiles (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  driver TEXT NOT NULL DEFAULT 'managed',
+  is_default INTEGER NOT NULL DEFAULT 0,
+  executable_path TEXT,
+  user_data_dir TEXT,
+  cdp_port INTEGER,
+  cdp_url TEXT,
+  headless INTEGER NOT NULL DEFAULT 0,
+  no_sandbox INTEGER NOT NULL DEFAULT 0,
+  attach_only INTEGER NOT NULL DEFAULT 0,
+  launch_args_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS browser_profile_runtime (
+  profile_id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  pid INTEGER,
+  ws_endpoint TEXT,
+  last_error TEXT,
+  last_started_at TEXT,
+  heartbeat_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS chat_browser_state (
+  chat_id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL,
+  profile_id TEXT NOT NULL,
+  active_target_id TEXT,
+  active_page_url TEXT,
+  active_page_title TEXT,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS channels (
@@ -156,11 +187,30 @@ export function initDatabase(): Database {
   // Migration: add delivery status column to run logs
   try { _db.exec('ALTER TABLE task_run_logs ADD COLUMN delivery_status TEXT') } catch {}
 
+  // Query indexes for task filtering and scheduler scans
+  _db.exec('CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_agent_created_at ON scheduled_tasks(agent_id, created_at DESC)')
+  _db.exec('CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_agent_chat_name ON scheduled_tasks(agent_id, chat_id, name)')
+  _db.exec('CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_status_next_run ON scheduled_tasks(status, next_run)')
+  _db.exec('CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_running_since ON scheduled_tasks(running_since)')
+
   // Migration: add attachments column
   try { _db.exec('ALTER TABLE messages ADD COLUMN attachments TEXT') } catch {}
 
   // Migration: add chat avatar column
   try { _db.exec('ALTER TABLE chats ADD COLUMN avatar TEXT') } catch {}
+
+  // Browser profile migrations
+  try { _db.exec("ALTER TABLE browser_profiles ADD COLUMN driver TEXT NOT NULL DEFAULT 'managed'") } catch {}
+  try { _db.exec('ALTER TABLE browser_profiles ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0') } catch {}
+  try { _db.exec('ALTER TABLE browser_profiles ADD COLUMN executable_path TEXT') } catch {}
+  try { _db.exec('ALTER TABLE browser_profiles ADD COLUMN user_data_dir TEXT') } catch {}
+  try { _db.exec('ALTER TABLE browser_profiles ADD COLUMN cdp_port INTEGER') } catch {}
+  try { _db.exec('ALTER TABLE browser_profiles ADD COLUMN cdp_url TEXT') } catch {}
+  try { _db.exec('ALTER TABLE browser_profiles ADD COLUMN headless INTEGER NOT NULL DEFAULT 0') } catch {}
+  try { _db.exec('ALTER TABLE browser_profiles ADD COLUMN no_sandbox INTEGER NOT NULL DEFAULT 0') } catch {}
+  try { _db.exec('ALTER TABLE browser_profiles ADD COLUMN attach_only INTEGER NOT NULL DEFAULT 0') } catch {}
+  try { _db.exec('ALTER TABLE browser_profiles ADD COLUMN launch_args_json TEXT') } catch {}
+  try { _db.exec('ALTER TABLE browser_profiles ADD COLUMN updated_at TEXT') } catch {}
 
   getLogger().info({ path: paths.db }, 'Database initialized')
   return _db
@@ -270,6 +320,11 @@ export function saveSession(agentId: string, chatId: string, sessionId: string) 
   )
 }
 
+export function deleteSession(agentId: string, chatId: string) {
+  const db = getDatabase()
+  db.run('DELETE FROM sessions WHERE agent_id = ? AND chat_id = ?', [agentId, chatId])
+}
+
 // ===== Scheduled Task Operations =====
 
 export interface ScheduledTask {
@@ -343,7 +398,7 @@ export function updateTask(id: string, updates: Partial<{
   status: string
   nextRun: string | null
   lastRun: string
-  name: string
+  name: string | null
   description: string
   runningSince: string | null
   consecutiveFailures: number
@@ -437,14 +492,30 @@ export function getTaskRunLogs(taskId: string, limit = 50): TaskRunLog[] {
 export interface BrowserProfile {
   id: string
   name: string
+  driver?: string
+  is_default?: number
+  executable_path?: string | null
+  user_data_dir?: string | null
+  cdp_port?: number | null
+  cdp_url?: string | null
+  headless?: number
+  no_sandbox?: number
+  attach_only?: number
+  launch_args_json?: string | null
   created_at: string
+  updated_at?: string | null
 }
 
 export function createBrowserProfile(profile: { id: string; name: string }): void {
   const db = getDatabase()
+  const now = new Date().toISOString()
+  const userDataDir = resolve(getPaths().browserProfiles, profile.id)
   db.run(
-    'INSERT INTO browser_profiles (id, name, created_at) VALUES (?, ?, ?)',
-    [profile.id, profile.name, new Date().toISOString()]
+    `INSERT INTO browser_profiles (
+      id, name, driver, is_default, executable_path, user_data_dir, cdp_port, cdp_url,
+      headless, no_sandbox, attach_only, launch_args_json, created_at, updated_at
+    ) VALUES (?, ?, 'managed', 0, NULL, ?, NULL, NULL, 0, 0, 0, '[]', ?, ?)`,
+    [profile.id, profile.name, userDataDir, now, now]
   )
 }
 

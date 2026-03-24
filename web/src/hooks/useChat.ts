@@ -34,7 +34,7 @@ export function useChatActions(agentId: string) {
   const send = useCallback(
     async (
       prompt: string,
-      browserProfileId?: string,
+      browserProfileId?: string | null,
       attachments?: Attachment[],
     ) => {
       const store = useChatStore.getState()
@@ -142,8 +142,8 @@ export function useChatActions(agentId: string) {
     const chatId = store.activeChatId
     if (!chatId) return
 
-    sseManager.disconnect(chatId)
-    store.setProcessing(chatId, false)
+    // Keep SSE connected so the backend can deliver the final
+    // partial assistant reply and processing=false after abort.
     abortChat(chatId).catch(() => {})
   }, [])
 

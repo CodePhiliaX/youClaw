@@ -31,6 +31,9 @@ export function cleanAllTables() {
   db.run('DELETE FROM scheduled_tasks')
   db.run('DELETE FROM task_run_logs')
   db.run('DELETE FROM sessions')
+  db.run('DELETE FROM browser_profile_runtime')
+  db.run('DELETE FROM chat_browser_state')
+  db.run('DELETE FROM browser_profiles')
 }
 
 /** Clear specified tables */

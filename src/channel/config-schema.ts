@@ -140,7 +140,7 @@ export const CHANNEL_TYPE_REGISTRY: Record<string, ChannelTypeInfo> = {
     description: 'WeChat personal account via OpenClaw-compatible bridge',
     chatIdPrefix: 'wxp:',
     configFields: [],
-    docsUrl: '',
+    docsUrl: `${DOCS_BASE_URL}/wechat-personal`,
     configSchema: WechatPersonalConfigSchema,
   },
 }

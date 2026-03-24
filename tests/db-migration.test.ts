@@ -87,4 +87,51 @@ describe('database migration — name/description fields', () => {
     expect(colNames).toContain('result')
     expect(colNames).toContain('error')
   })
+
+  test('browser_profiles table includes managed profile fields', () => {
+    const db = getDatabase()
+    const columns = db.query("PRAGMA table_info('browser_profiles')").all() as Array<{ name: string }>
+    const colNames = columns.map((c) => c.name)
+
+    expect(colNames).toContain('id')
+    expect(colNames).toContain('name')
+    expect(colNames).toContain('driver')
+    expect(colNames).toContain('is_default')
+    expect(colNames).toContain('executable_path')
+    expect(colNames).toContain('user_data_dir')
+    expect(colNames).toContain('cdp_port')
+    expect(colNames).toContain('cdp_url')
+    expect(colNames).toContain('headless')
+    expect(colNames).toContain('no_sandbox')
+    expect(colNames).toContain('attach_only')
+    expect(colNames).toContain('launch_args_json')
+    expect(colNames).toContain('created_at')
+    expect(colNames).toContain('updated_at')
+  })
+
+  test('browser runtime tables exist', () => {
+    const db = getDatabase()
+    const runtimeCols = db.query("PRAGMA table_info('browser_profile_runtime')").all() as Array<{ name: string }>
+    const stateCols = db.query("PRAGMA table_info('chat_browser_state')").all() as Array<{ name: string }>
+
+    expect(runtimeCols.map((c) => c.name)).toEqual([
+      'profile_id',
+      'status',
+      'pid',
+      'ws_endpoint',
+      'last_error',
+      'last_started_at',
+      'heartbeat_at',
+    ])
+
+    expect(stateCols.map((c) => c.name)).toEqual([
+      'chat_id',
+      'agent_id',
+      'profile_id',
+      'active_target_id',
+      'active_page_url',
+      'active_page_title',
+      'updated_at',
+    ])
+  })
 })

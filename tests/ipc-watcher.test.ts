@@ -8,15 +8,14 @@
  * - Throws error on unknown message type
  * - JSON file processing (write -> read -> delete)
  * - Error files moved to errors directory
- * - writeTasksSnapshot writes snapshot
  */
 
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test'
-import { mkdirSync, writeFileSync, existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, writeFileSync, existsSync, readdirSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import './setup.ts'
 import { getPaths } from '../src/config/index.ts'
-import { IpcWatcher, writeTasksSnapshot } from '../src/ipc/watcher.ts'
+import { IpcWatcher } from '../src/ipc/watcher.ts'
 
 const ipcDir = resolve(getPaths().data, 'ipc')
 
@@ -284,50 +283,6 @@ describe('IpcWatcher — file handling', () => {
     expect(existsSync(filePath)).toBe(false)
     const errorsDir = join(ipcDir, 'errors')
     expect(existsSync(errorsDir)).toBe(true)
-  })
-})
-
-// ===== writeTasksSnapshot =====
-
-describe('writeTasksSnapshot', () => {
-  afterEach(() => cleanIpcDir())
-
-  test('writes snapshot file', async () => {
-    writeTasksSnapshot('snap-agent', [
-      { id: 't1', prompt: 'p1', schedule_type: 'interval', schedule_value: '60000', status: 'active', next_run: '2026-03-10T10:00:00.000Z', last_run: null },
-      { id: 't2', prompt: 'p2', schedule_type: 'cron', schedule_value: '0 9 * * *', status: 'paused', next_run: null, last_run: '2026-03-09T09:00:00.000Z' },
-    ])
-
-    const snapshotPath = join(ipcDir, 'snap-agent', 'current_tasks.json')
-    expect(existsSync(snapshotPath)).toBe(true)
-
-    const content = JSON.parse(readFileSync(snapshotPath, 'utf-8'))
-    expect(content.updatedAt).toBeTruthy()
-    expect(content.tasks.length).toBe(2)
-    expect(content.tasks[0].id).toBe('t1')
-    expect(content.tasks[1].status).toBe('paused')
-  })
-
-  test('writes empty array for empty task list', async () => {
-    writeTasksSnapshot('empty-agent', [])
-
-    const snapshotPath = join(ipcDir, 'empty-agent', 'current_tasks.json')
-    const content = JSON.parse(readFileSync(snapshotPath, 'utf-8'))
-    expect(content.tasks.length).toBe(0)
-  })
-
-  test('overwrites existing snapshot', async () => {
-    writeTasksSnapshot('overwrite-agent', [
-      { id: 't1', prompt: 'old', schedule_type: 'interval', schedule_value: '60000', status: 'active', next_run: null, last_run: null },
-    ])
-    writeTasksSnapshot('overwrite-agent', [
-      { id: 't2', prompt: 'new', schedule_type: 'cron', schedule_value: '* * * * *', status: 'active', next_run: null, last_run: null },
-    ])
-
-    const snapshotPath = join(ipcDir, 'overwrite-agent', 'current_tasks.json')
-    const content = JSON.parse(readFileSync(snapshotPath, 'utf-8'))
-    expect(content.tasks.length).toBe(1)
-    expect(content.tasks[0].id).toBe('t2')
   })
 })
 
@@ -614,60 +569,5 @@ describe('IpcWatcher — file handling (extended scenarios)', () => {
     expect(onScheduleTask).toHaveBeenCalledTimes(3)
     // tick sorts by filename: 1000-a < 2000-b < 3000-c
     expect(calls).toEqual(['first', 'second', 'third'])
-  })
-})
-
-describe('writeTasksSnapshot — extended scenarios', () => {
-  afterEach(() => cleanIpcDir())
-
-  test('includes name and description fields', () => {
-    writeTasksSnapshot('named-agent', [
-      {
-        id: 't-named',
-        prompt: 'named task',
-        schedule_type: 'cron',
-        schedule_value: '0 9 * * *',
-        status: 'active',
-        next_run: '2026-03-11T09:00:00.000Z',
-        last_run: null,
-        name: 'Scheduled Report',
-        description: 'Generate report daily at 9am',
-      } as any,
-    ])
-
-    const snapshotPath = join(ipcDir, 'named-agent', 'current_tasks.json')
-    expect(existsSync(snapshotPath)).toBe(true)
-
-    const content = JSON.parse(readFileSync(snapshotPath, 'utf-8'))
-    expect(content.tasks.length).toBe(1)
-    expect(content.tasks[0].name).toBe('Scheduled Report')
-    expect(content.tasks[0].description).toBe('Generate report daily at 9am')
-    expect(content.tasks[0].id).toBe('t-named')
-  })
-
-  test('correctly writes large number of tasks (100)', () => {
-    const tasks = Array.from({ length: 100 }, (_, i) => ({
-      id: `task-${i}`,
-      prompt: `prompt-${i}`,
-      schedule_type: 'interval',
-      schedule_value: `${(i + 1) * 1000}`,
-      status: i % 2 === 0 ? 'active' : 'paused',
-      next_run: null,
-      last_run: null,
-    }))
-
-    writeTasksSnapshot('bulk-agent', tasks)
-
-    const snapshotPath = join(ipcDir, 'bulk-agent', 'current_tasks.json')
-    expect(existsSync(snapshotPath)).toBe(true)
-
-    const content = JSON.parse(readFileSync(snapshotPath, 'utf-8'))
-    expect(content.tasks.length).toBe(100)
-    expect(content.tasks[0].id).toBe('task-0')
-    expect(content.tasks[99].id).toBe('task-99')
-    expect(content.tasks[50].prompt).toBe('prompt-50')
-    expect(content.tasks[1].status).toBe('paused')
-    expect(content.tasks[2].status).toBe('active')
-    expect(content.updatedAt).toBeTruthy()
   })
 })

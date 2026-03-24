@@ -1,6 +1,7 @@
 import type { MarketplacePage, MarketplaceSkill, MarketplaceSkillDetail } from '@/api/client'
 import type { Translations } from '@/i18n/types'
 import { getMarketplaceCategoryLabels, groupMarketplaceSkillsByCategory, normalizeMarketplaceCategory } from '@/lib/marketplace-category'
+import { getVisibleMarketplaceItems } from '@/lib/marketplace-updates'
 
 function formatMarketplaceDate(timestamp: number) {
   return new Date(timestamp).toLocaleDateString()
@@ -178,7 +179,7 @@ export function toMarketplaceResultsViewModel(
   t: Translations,
 ): MarketplaceResultsViewModel {
   const isSearching = searchQuery.trim().length > 0
-  const visibleItems = page.items.filter((skill) => !skill.installed)
+  const visibleItems = getVisibleMarketplaceItems(page)
   const flatItems = visibleItems.map((skill) => toMarketplaceCardViewModel(skill, t))
   const categoryLabels = getMarketplaceCategoryLabels(t)
   const groupedItems = groupMarketplaceSkillsByCategory(visibleItems).map((group) => ({

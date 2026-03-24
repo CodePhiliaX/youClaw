@@ -96,8 +96,9 @@ export class DocumentService {
     const docId = `doc_${fileHash}`
     const existing = this.getDocument(docId)
     if (existing && existing.status === 'parsed') {
-      this.bindDocumentToChat(docId, chatId)
-      return existing
+      const refreshed = this.refreshExistingDocument(existing, chatId, attachment)
+      this.saveDocument(refreshed, resolve(getDocumentsDir(), docId))
+      return refreshed
     }
 
     const now = new Date().toISOString()
@@ -332,14 +333,18 @@ export class DocumentService {
     }))
   }
 
-  private bindDocumentToChat(documentId: string, chatId: string): void {
-    const db = getDatabase()
-    db.run(
-      `UPDATE documents
-       SET chat_id = ?, updated_at = ?
-       WHERE id = ?`,
-      [chatId, new Date().toISOString(), documentId],
-    )
+  private refreshExistingDocument(document: ParsedDocument, chatId: string, attachment: Attachment): ParsedDocument {
+    const now = new Date().toISOString()
+    return {
+      ...document,
+      chatId,
+      sourcePath: attachment.filePath,
+      meta: {
+        ...document.meta,
+        filename: attachment.filename,
+      },
+      updatedAt: now,
+    }
   }
 
   private saveDocument(document: ParsedDocument, docDir: string): void {

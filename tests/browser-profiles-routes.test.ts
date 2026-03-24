@@ -98,4 +98,45 @@ describe('browser profile routes', () => {
     expect(manager.getAgent(agentId)?.config.browserProfile).toBeUndefined()
     expect(existsSync(resolve(getPaths().browserProfiles, profileId))).toBe(false)
   })
+
+  test('DELETE /browser-profiles/:id also clears structured browser.defaultProfile bindings', async () => {
+    const manager = await createRealManager()
+    const agentsApp = createAgentsRoutes(manager)
+    const browserProfilesApp = createBrowserProfilesRoutes(manager)
+    const agentId = createAgentId('browser-structured-binding')
+    const profileId = createProfileId('browser-profile')
+
+    const createAgentRes = await agentsApp.request('/agents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: agentId, name: 'Structured Browser Agent' }),
+    })
+    expect(createAgentRes.status).toBe(201)
+
+    createBrowserProfile({ id: profileId, name: 'OpenClaw Profile' })
+    mkdirSync(resolve(getPaths().browserProfiles, profileId), { recursive: true })
+
+    const bindRes = await agentsApp.request(`/agents/${agentId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        browser: {
+          enabled: true,
+          allowChatOverride: true,
+          defaultProfile: profileId,
+        },
+      }),
+    })
+    expect(bindRes.status).toBe(200)
+
+    const deleteRes = await browserProfilesApp.request(`/browser-profiles/${profileId}`, {
+      method: 'DELETE',
+    })
+    expect(deleteRes.status).toBe(200)
+
+    const yaml = parseYaml(readFileSync(resolve(getAgentDir(agentId), 'agent.yaml'), 'utf-8')) as Record<string, unknown>
+    const browser = yaml.browser as Record<string, unknown> | undefined
+    expect(browser?.defaultProfile).toBeUndefined()
+    expect(manager.getAgent(agentId)?.config.browser?.defaultProfile).toBeUndefined()
+  })
 })

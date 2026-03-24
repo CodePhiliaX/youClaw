@@ -250,6 +250,59 @@ describe('ImportManager', () => {
     ])
   })
 
+  test('imports a raw.githubusercontent.com refs/heads SKILL.md URL through the GitHub provider', async () => {
+    const requests: string[] = []
+    let installed: { metadata?: Record<string, unknown>; files: Record<string, string> } | null = null
+
+    globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requests.push(url)
+
+      if (url === 'https://api.github.com/repos/acme/tools/contents/skills/github-ops/SKILL.md?ref=main') {
+        return jsonResponse({
+          type: 'file',
+          name: 'SKILL.md',
+          path: 'skills/github-ops/SKILL.md',
+          encoding: 'base64',
+          content: Buffer.from('---\nname: github-ops\ndescription: GitHub helper\n---\n# GitHub Ops\n').toString('base64'),
+          size: 68,
+        })
+      }
+
+      return new Response('not found', { status: 404 })
+    }) as typeof fetch
+
+    const manager = new ImportManager({
+      installFromLocal: async (sourcePath: string, _targetDir: string, metadata?: Record<string, unknown>) => {
+        installed = {
+          metadata,
+          files: collectFiles(sourcePath),
+        }
+      },
+    } as any)
+
+    await manager.import('github', {
+      repoUrl: 'https://raw.githubusercontent.com/acme/tools/refs/heads/main/skills/github-ops/SKILL.md',
+    })
+
+    expect(installed).toEqual({
+      metadata: expect.objectContaining({
+        source: 'github',
+        provider: 'github',
+        sourceUrl: 'https://github.com/acme/tools/blob/main/skills/github-ops/SKILL.md',
+        ref: 'main',
+        path: 'skills/github-ops/SKILL.md',
+      }),
+      files: {
+        'SKILL.md': '---\nname: github-ops\ndescription: GitHub helper\n---\n# GitHub Ops\n',
+      },
+    })
+    expect(requests).toEqual([
+      'https://api.github.com/repos/acme/tools/contents/skills/github-ops/SKILL.md?ref=main',
+      'https://api.github.com/repos/acme/tools/contents/skills/github-ops/SKILL.md?ref=main',
+    ])
+  })
+
   test('rejects GitHub repository roots that are not skill directories', async () => {
     globalThis.fetch = mock(async (input: RequestInfo | URL) => {
       const url = String(input)

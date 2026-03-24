@@ -9,9 +9,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useI18n } from '@/i18n'
 import {
+  extractDuplicateSkillName,
   getPrimaryImportErrorCode,
   mapImportActionError,
   normalizePastedUrl,
+  resolveImportModeFromUrl,
 } from '@/lib/skill-import'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
@@ -51,9 +53,11 @@ const initialForms: Record<SkillImportProviderId, ProviderFormValues> = {
 export function SkillImportPanel({
   mode,
   onImported,
+  existingSkillNames = [],
 }: {
   mode: SkillImportProviderId
   onImported: () => void | Promise<void>
+  existingSkillNames?: string[]
 }) {
   const { t } = useI18n()
   const showGlobalBubble = useAppStore((state) => state.showGlobalBubble)
@@ -61,6 +65,7 @@ export function SkillImportPanel({
   const [probeResult, setProbeResult] = useState<ProbeResult | null>(null)
   const [actionStatus, setActionStatus] = useState<'idle' | 'probing' | 'importing'>('idle')
   const [actionError, setActionError] = useState('')
+  const existingSkillNameSet = useMemo(() => new Set(existingSkillNames), [existingSkillNames])
 
   const definitions = useMemo<Record<SkillImportProviderId, ProviderDefinition>>(() => ({
     'raw-url': {
@@ -74,8 +79,18 @@ export function SkillImportPanel({
           placeholder: t.skills.importFieldUrlPlaceholder,
         },
       ],
-      probe: async (values) => probeRawUrlImport({ url: values.url.trim() }),
-      importSkill: async (values) => importFromRawUrl({ url: values.url.trim() }),
+      probe: async (values) => {
+        const url = values.url.trim()
+        return resolveImportModeFromUrl(url) === 'github'
+          ? probeGitHubSkillImport({ repoUrl: url })
+          : probeRawUrlImport({ url })
+      },
+      importSkill: async (values) => {
+        const url = values.url.trim()
+        return resolveImportModeFromUrl(url) === 'github'
+          ? importFromGitHub({ repoUrl: url })
+          : importFromRawUrl({ url })
+      },
     },
     github: {
       title: t.skills.importFromGitHub,
@@ -114,6 +129,7 @@ export function SkillImportPanel({
   }), [t.skills])
 
   const selectedDefinition = definitions[mode]
+  const supportsProbe = mode === 'github'
   const formValues = forms[mode]
   const primaryFieldKey = mode === 'github' ? 'repoUrl' : 'url'
   const normalizedPrimaryValue = normalizePastedUrl(formValues[primaryFieldKey] ?? '')
@@ -123,6 +139,20 @@ export function SkillImportPanel({
     .filter((field) => !field.optional)
     .every((field) => Boolean(formValues[field.key]?.trim()))
   const canSubmit = requiredFieldsFilled && !primaryFieldError && actionStatus === 'idle'
+  const suggestedSkillName = probeResult?.provider === mode ? probeResult.suggestedName?.trim() || '' : ''
+  const nameConflictMessage = suggestedSkillName && existingSkillNameSet.has(suggestedSkillName)
+    ? t.skills.importSkillAlreadyExists.replace('{name}', suggestedSkillName)
+    : ''
+  const canImport = canSubmit && (!supportsProbe || !nameConflictMessage)
+  const duplicateErrorPrefix = t.skills.importSkillAlreadyExists.split('{name}')[0] || t.skills.importSkillAlreadyExists
+  const isDuplicateErrorMessage = Boolean(
+    actionError
+    && (
+      actionError === t.skills.importSkillAlreadyExistsGeneric
+      || actionError.startsWith(duplicateErrorPrefix)
+    ),
+  )
+  const visibleActionError = isDuplicateErrorMessage ? '' : actionError
 
   const updateField = useCallback((key: string, value: string) => {
     setForms((current) => ({
@@ -137,7 +167,7 @@ export function SkillImportPanel({
   }, [mode])
 
   const handleProbe = useCallback(async () => {
-    if (primaryFieldError) {
+    if (!supportsProbe || primaryFieldError) {
       setActionError('')
       setProbeResult(null)
       return
@@ -154,7 +184,7 @@ export function SkillImportPanel({
     } finally {
       setActionStatus('idle')
     }
-  }, [formValues, mode, primaryFieldError, selectedDefinition, t.skills.requestFailed])
+  }, [formValues, mode, primaryFieldError, selectedDefinition, supportsProbe, t.skills.requestFailed])
 
   const handleImport = useCallback(async () => {
     if (primaryFieldError) {
@@ -165,18 +195,32 @@ export function SkillImportPanel({
     setActionError('')
 
     try {
+      if (supportsProbe) {
+        const nextProbeResult = probeResult?.provider === mode ? probeResult : await selectedDefinition.probe(formValues)
+        setProbeResult(nextProbeResult)
+
+        const nextSuggestedName = nextProbeResult.suggestedName?.trim() || ''
+        if (nextSuggestedName && existingSkillNameSet.has(nextSuggestedName)) {
+          const message = t.skills.importSkillAlreadyExists.replace('{name}', nextSuggestedName)
+          showGlobalBubble({ type: 'error', message })
+          return
+        }
+      }
+
       await selectedDefinition.importSkill(formValues)
       await onImported()
       showGlobalBubble({ message: t.skills.importSuccess })
     } catch (error) {
+      const message = getMappedImportErrorMessage(mode, error, t)
+      setActionError(message)
       showGlobalBubble({
         type: 'error',
-        message: getMappedImportErrorMessage(mode, error, t),
+        message,
       })
     } finally {
       setActionStatus('idle')
     }
-  }, [formValues, mode, onImported, primaryFieldError, selectedDefinition, showGlobalBubble, t])
+  }, [existingSkillNameSet, formValues, mode, onImported, primaryFieldError, probeResult, selectedDefinition, showGlobalBubble, supportsProbe, t])
 
   const ProviderIcon = selectedDefinition.icon
 
@@ -211,33 +255,35 @@ export function SkillImportPanel({
                     aria-invalid={field.key === primaryFieldKey && Boolean(primaryFieldError)}
                     className={cn(
                       'rounded-xl',
-                      field.key === primaryFieldKey && primaryFieldError && 'border-red-500/70 focus-visible:ring-red-500/60',
+                      field.key === primaryFieldKey && primaryFieldError && 'border-destructive/70 focus-visible:ring-destructive/60',
                     )}
                   />
                   {field.key === primaryFieldKey && primaryFieldError && (
-                    <div className="text-sm text-red-400">{primaryFieldError}</div>
+                    <div className="text-sm text-destructive">{primaryFieldError}</div>
                   )}
                 </label>
               ))}
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-3">
-              <Button
-                variant="outline"
-                onClick={() => void handleProbe()}
-                disabled={!canSubmit}
-                className="disabled:border-border disabled:bg-black disabled:text-muted-foreground disabled:opacity-100"
-              >
-                {actionStatus === 'probing' ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t.skills.importInspect}</>
-                ) : (
-                  <><Wand2 className="mr-2 h-4 w-4" />{t.skills.importInspect}</>
-                )}
-              </Button>
+              {supportsProbe && (
+                <Button
+                  variant="outline"
+                  onClick={() => void handleProbe()}
+                  disabled={!canSubmit}
+                  className="disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:opacity-100"
+                >
+                  {actionStatus === 'probing' ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t.skills.importInspect}</>
+                  ) : (
+                    <><Wand2 className="mr-2 h-4 w-4" />{t.skills.importInspect}</>
+                  )}
+                </Button>
+              )}
               <Button
                 onClick={() => void handleImport()}
-                disabled={!canSubmit}
-                className="disabled:border disabled:border-border disabled:bg-black disabled:text-muted-foreground disabled:opacity-100"
+                disabled={!canImport}
+                className="disabled:border disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:opacity-100"
               >
                 {actionStatus === 'importing' ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t.skills.importing}</>
@@ -248,7 +294,7 @@ export function SkillImportPanel({
             </div>
           </div>
 
-          {probeResult && (
+          {supportsProbe && probeResult && (
             <div className="rounded-2xl border border-border bg-muted/30 px-4 py-4 text-sm">
               <div className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
                 <Sparkles className="h-3.5 w-3.5" />
@@ -271,9 +317,9 @@ export function SkillImportPanel({
             </div>
           )}
 
-          {actionError && (
-            <div className="whitespace-pre-wrap rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-              {actionError}
+          {visibleActionError && (
+            <div className="whitespace-pre-wrap rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {visibleActionError}
             </div>
           )}
         </div>
@@ -302,6 +348,12 @@ function getMappedImportErrorMessage(
   const code = mapImportActionError(mode, rawMessage)
 
   switch (code) {
+    case 'duplicate_skill': {
+      const name = extractDuplicateSkillName(rawMessage)
+      return name
+        ? t.skills.importSkillAlreadyExists.replace('{name}', name)
+        : t.skills.importSkillAlreadyExistsGeneric
+    }
     case 'invalid_github_url':
       return `${t.skills.importInvalidGitHubUrl}\n${t.skills.importGitHubUseSupportedLinks}`
     case 'invalid_url':
@@ -314,6 +366,9 @@ function getMappedImportErrorMessage(
       return t.skills.importGitHubNotFound
     case 'request_failed':
     default:
+      if (rawMessage && !/^API error:\s*\d+$/.test(rawMessage) && rawMessage !== t.skills.requestFailed) {
+        return rawMessage
+      }
       return mode === 'github' ? t.skills.importGitHubRequestFailed : t.skills.requestFailed
   }
 }

@@ -1,5 +1,7 @@
 import { defineConfig } from '@playwright/test'
 
+const E2E_BACKEND_PORT = 62601
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: false,
@@ -14,13 +16,13 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'bun run dev',
-      port: 62601,
+      command: `PORT=${E2E_BACKEND_PORT} bun run dev`,
+      port: E2E_BACKEND_PORT,
       reuseExistingServer: true,
       cwd: '..',
     },
     {
-      command: 'bun run dev',
+      command: `PORT=${E2E_BACKEND_PORT} bun run dev`,
       port: 5173,
       reuseExistingServer: true,
       cwd: '../web',

@@ -4,24 +4,22 @@ Respond in the same language as the user's message. Be concise and helpful.
 
 ## Scheduled Tasks (Cron Jobs)
 
-**IMPORTANT**: Do NOT use the built-in CronCreate/CronDelete/CronList tools. Those create session-level tasks that expire when the process exits. Instead, ALWAYS use the IPC file method described below to create persistent scheduled tasks stored in the database.
+**IMPORTANT**: Do NOT use the built-in CronCreate/CronDelete/CronList tools. Those create session-level tasks that expire when the process exits.
 
-You can create, pause, resume, and cancel scheduled tasks by writing JSON files.
+Use task MCP tools instead:
 
-**Directory**: Write JSON files to `./data/ipc/{your_agent_id}/tasks/` (the directory will be created automatically if it doesn't exist).
-
-**File naming**: Use `{timestamp}-{random}.json` format, e.g., `1710000000000-abc123.json`
+- `mcp__task__list_tasks`: list existing tasks (always call this before write operations)
+- `mcp__task__update_task`: create/update/pause/resume/delete tasks via the `action` field
 
 ### Create a scheduled task
 ```json
 {
-  "type": "schedule_task",
+  "action": "create",
+  "name": "Daily summary",
   "prompt": "The prompt to execute on schedule",
   "schedule_type": "cron",
   "schedule_value": "0 9 * * *",
-  "chatId": "CURRENT_CHAT_ID",
-  "name": "Optional task name",
-  "description": "Optional task description"
+  "chat_id": "CURRENT_CHAT_ID"
 }
 ```
 
@@ -32,12 +30,10 @@ You can create, pause, resume, and cancel scheduled tasks by writing JSON files.
 
 ### Pause/Resume/Cancel a task
 ```json
-{ "type": "pause_task", "taskId": "task-xxx" }
-{ "type": "resume_task", "taskId": "task-xxx" }
-{ "type": "cancel_task", "taskId": "task-xxx" }
+{ "action": "update", "name": "Daily summary", "chat_id": "CURRENT_CHAT_ID", "prompt": "new prompt", "schedule_type": "cron", "schedule_value": "0 10 * * *" }
+{ "action": "pause", "name": "Daily summary", "chat_id": "CURRENT_CHAT_ID" }
+{ "action": "resume", "name": "Daily summary", "chat_id": "CURRENT_CHAT_ID" }
+{ "action": "delete", "name": "Daily summary", "chat_id": "CURRENT_CHAT_ID" }
 ```
 
-### Current tasks
-You can read `./data/ipc/{your_agent_id}/current_tasks.json` to see existing scheduled tasks.
-
-**Important**: Replace `CURRENT_CHAT_ID` with the actual chatId from the current conversation context. The task result will be delivered to this chat.
+Always call `mcp__task__list_tasks` before any `mcp__task__update_task` write operation to avoid duplicates and mistaken edits.

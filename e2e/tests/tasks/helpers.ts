@@ -76,8 +76,35 @@ export async function cleanupE2ETasks(request: APIRequestContext) {
 /** 导航到任务页并等待加载 */
 export async function navigateToTasks(page: Page) {
   await page.getByTestId('nav-cron').click()
-  await page.waitForLoadState('networkidle')
+  await page.waitForURL(/\/cron$/)
   await expect(page.getByTestId('task-create-btn')).toBeVisible()
+}
+
+/** 刷新任务页并等待关键元素恢复 */
+export async function reloadTasksPage(page: Page) {
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForURL(/\/cron$/)
+  await expect(page.getByTestId('task-create-btn')).toBeVisible()
+}
+
+/** 通过弹层日历 + 小时/分钟选择器设置 once 时间 */
+export async function setOnceDateTime(page: Page, datetimeLocal: string) {
+  const [datePart, timePart] = datetimeLocal.split('T')
+  const [hour, minute] = timePart.split(':')
+
+  await page.getByTestId('task-once-preset-custom').click()
+
+  const targetDay = page.getByTestId(`task-once-day-${datePart}`).first()
+  for (let i = 0; i < 12; i++) {
+    if (await targetDay.isVisible().catch(() => false)) break
+    await page.getByTestId('calendar-next-month').click()
+  }
+
+  await targetDay.click()
+  await page.getByTestId(`task-once-hour-option-${hour}`).click()
+  await page.getByTestId(`task-once-minute-option-${minute}`).click()
+
+  await page.keyboard.press('Escape')
 }
 
 /** 填写表单并提交，等待 API 响应 */
@@ -102,7 +129,14 @@ export async function fillAndSubmitTaskForm(
     await page.getByTestId(`task-schedule-type-${opts.scheduleType}`).click()
   }
 
-  await page.getByTestId('task-input-schedule').fill(opts.scheduleValue)
+  if (opts.scheduleType === 'once') {
+    await setOnceDateTime(page, opts.scheduleValue)
+  } else if (opts.scheduleType === 'cron') {
+    await page.getByTestId('task-cron-mode-custom').click()
+    await page.getByTestId('task-input-schedule').fill(opts.scheduleValue)
+  } else {
+    await page.getByTestId('task-input-schedule').fill(opts.scheduleValue)
+  }
 
   const responsePromise = page.waitForResponse(
     (r) => r.url().includes('/api/tasks') && r.request().method() === 'POST' && r.status() === 201

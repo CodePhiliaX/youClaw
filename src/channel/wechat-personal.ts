@@ -211,6 +211,21 @@ export class WechatPersonalChannel implements Channel {
     }
   }
 
+  async sendMedia(chatId: string, text: string, mediaUrl: string): Promise<void> {
+    const { stateKey, peerId } = parseChatId(chatId)
+    const contextToken = getContextToken(stateKey, peerId)
+    await OPENCLAW_WEIXIN_PLUGIN.outbound?.sendMedia?.({
+      cfg: this.buildCompatConfig(stateKey),
+      to: peerId,
+      text,
+      mediaUrl,
+      accountId: stateKey,
+    })
+    if (!contextToken) {
+      getLogger().warn({ stateKey, peerId, mediaUrl }, 'WeChat outbound media send had no cached context token')
+    }
+  }
+
   async loginWithQrStart(params?: { force?: boolean; timeoutMs?: number; verbose?: boolean }): Promise<ChannelLoginStartResult> {
     const result = await OPENCLAW_WEIXIN_PLUGIN.gateway?.loginWithQrStart?.({
       storageKey: this.stateKey,

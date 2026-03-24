@@ -6,7 +6,7 @@ import { execSync } from 'node:child_process'
 import { getEnv } from '../config/index.ts'
 import { which } from '../utils/shell-env.ts'
 import { getLogger } from '../logger/index.ts'
-import { getSession, saveSession } from '../db/index.ts'
+import { deleteSession, getSession, saveSession } from '../db/index.ts'
 import type { EventBus } from '../events/index.ts'
 import { ErrorCode } from '../events/types.ts'
 import type { PromptBuilder } from './prompt-builder.ts'
@@ -14,11 +14,15 @@ import type { AgentCompiler } from './compiler.ts'
 import type { HooksManager } from './hooks.ts'
 import { resolveMcpServers } from './mcp-utils.ts'
 import { createBuiltinMcpServer } from './builtin-mcp.ts'
+import { createMessageMcpServer } from './message-mcp.ts'
 import { buildParsedDocumentsPrompt, createDocumentMcpServer, ingestDocumentAttachments } from './document-mcp.ts'
+import { createTaskMcpServer } from './task-mcp.ts'
 import { preprocessAttachments } from './document-converter.ts'
 import { abortRegistry } from './abort-registry.ts'
 import { getActiveModelConfig } from '../settings/manager.ts'
 import { getAuthToken } from '../routes/auth.ts'
+import type { BrowserManager } from '../browser/index.ts'
+import { createBrowserMcpServer, logBrowserToolRegistration } from '../browser/index.ts'
 import type { AgentConfig, ProcessParams } from './types.ts'
 
 // Safe logger wrapper — resolveCliPath() may run before logger is initialised
@@ -363,6 +367,7 @@ export class AgentRuntime {
   private promptBuilder: PromptBuilder
   private compiler: AgentCompiler | null
   private hooksManager: HooksManager | null
+  private browserManager: BrowserManager | null
 
   constructor(
     config: AgentConfig,
@@ -370,12 +375,14 @@ export class AgentRuntime {
     promptBuilder: PromptBuilder,
     compiler?: AgentCompiler,
     hooksManager?: HooksManager,
+    browserManager?: BrowserManager,
   ) {
     this.config = config
     this.eventBus = eventBus
     this.promptBuilder = promptBuilder
     this.compiler = compiler ?? null
     this.hooksManager = hooksManager ?? null
+    this.browserManager = browserManager ?? null
   }
 
   /**
@@ -573,7 +580,7 @@ export class AgentRuntime {
         category: 'agent',
       }, 'SDK env config before query')
 
-      const { fullText, sessionId } = await this.executeQuery(
+      const { fullText, sessionId, aborted } = await this.executeQuery(
         finalPrompt,
         agentId,
         chatId,
@@ -584,8 +591,10 @@ export class AgentRuntime {
         params.attachments,
       )
 
-      // Save session
-      if (sessionId) {
+      // Save or clear session
+      if (aborted) {
+        deleteSession(agentId, chatId)
+      } else if (sessionId) {
         saveSession(agentId, chatId, sessionId)
       }
 
@@ -603,14 +612,18 @@ export class AgentRuntime {
         }
       }
 
-      // Broadcast completion event
-      this.eventBus.emit({
-        type: 'complete',
-        agentId,
-        chatId,
-        fullText: finalText,
-        sessionId,
-      })
+      // Broadcast completion event. Skip empty abort completions to avoid
+      // creating empty assistant messages while still letting processing=false
+      // arrive through the finally path.
+      if (!aborted || finalText.trim().length > 0) {
+        this.eventBus.emit({
+          type: 'complete',
+          agentId,
+          chatId,
+          fullText: finalText,
+          sessionId,
+        })
+      }
 
       const durationMs = Date.now() - startTime
       logger.info({ agentId, chatId, sessionId, responseLength: finalText.length, durationMs, category: 'agent' }, 'Message processing completed')
@@ -670,20 +683,40 @@ export class AgentRuntime {
     existingSessionId: string | null,
     model: string,
     requestedSkills?: string[],
-    browserProfileId?: string,
+    browserProfileId?: string | null,
     attachments?: Array<{ filename: string; mediaType: string; filePath: string }>,
-  ): Promise<{ fullText: string; sessionId: string }> {
+  ): Promise<{ fullText: string; sessionId: string; aborted: boolean }> {
     const logger = getLogger()
     const abortController = new AbortController()
     abortRegistry.register(chatId, abortController)
     let fullText = ''
     let sessionId = existingSessionId ?? ''
+    const browserDisabled = browserProfileId === null
+    const resolvedBrowserProfile = this.browserManager
+      ? (browserDisabled
+          ? null
+          : this.browserManager.resolveProfileSelection(browserProfileId, this.config.browser?.defaultProfile ?? this.config.browserProfile))
+      : null
+    const effectiveBrowserProfileId = resolvedBrowserProfile?.id
 
     // Build system prompt on the fly
     const systemPrompt = this.promptBuilder.build(
       this.config.workspaceDir,
       this.config,
-      { agentId, chatId, requestedSkills, browserProfileId },
+      {
+        agentId,
+        chatId,
+        requestedSkills,
+        browserProfileId: effectiveBrowserProfileId,
+        browserDisabled,
+        browserProfile: resolvedBrowserProfile
+          ? {
+              id: resolvedBrowserProfile.id,
+              driver: resolvedBrowserProfile.driver,
+              userDataDir: resolvedBrowserProfile.userDataDir,
+            }
+          : undefined,
+      },
     )
 
     // Build query options
@@ -696,6 +729,7 @@ export class AgentRuntime {
       model,
       isResume: !!existingSessionId,
       mcpServers: mcpServerNames.length > 0 ? mcpServerNames : undefined,
+      browserProfileId: effectiveBrowserProfileId,
       subAgents: this.config.agents ? Object.keys(this.config.agents).length : 0,
       maxTurns: this.config.maxTurns,
       category: 'agent',
@@ -746,7 +780,7 @@ export class AgentRuntime {
       }
     }
 
-    // MCP servers: resolve env vars + inject built-in image analysis/document servers
+    // MCP servers: resolve env vars + inject built-in image analysis/document/task servers
     const mcpServers: Record<string, unknown> = {}
     if (this.config.mcpServers) {
       // Filter out legacy external minimax MCP (replaced by built-in)
@@ -757,7 +791,21 @@ export class AgentRuntime {
     }
     // Always inject built-in minimax MCP (runs in-process, no external dependency)
     mcpServers['minimax'] = createBuiltinMcpServer()
+    mcpServers['message'] = createMessageMcpServer(chatId)
     mcpServers['document'] = createDocumentMcpServer(chatId)
+    if (this.browserManager && resolvedBrowserProfile) {
+      mcpServers['browser'] = createBrowserMcpServer({
+        browserManager: this.browserManager,
+        chatId,
+        agentId,
+        profileId: resolvedBrowserProfile.id,
+      })
+      logBrowserToolRegistration(resolvedBrowserProfile.id)
+    }
+    mcpServers['task'] = createTaskMcpServer({
+      agentId,
+      chatId,
+    })
     queryOptions.mcpServers = mcpServers as Record<string, import('@anthropic-ai/claude-agent-sdk').McpServerConfig>
 
     // Tool access control (ensure Skill tool is always included)
@@ -870,6 +918,7 @@ export class AgentRuntime {
     let firstMessageReceived = false
     let firstResponseLogged = false
     let turnCount = 0
+    const browserDisabledNotice = { sent: false }
 
     // 60s timeout for first message — if SDK subprocess hangs, fail fast
     const FIRST_MESSAGE_TIMEOUT_MS = 60_000
@@ -931,13 +980,13 @@ export class AgentRuntime {
           fullText += text
         }, (sid) => {
           sessionId = sid
-        })
+        }, browserDisabled, browserDisabledNotice)
       }
     } catch (err) {
       // User-initiated abort — return partial text gracefully instead of throwing
       if (abortController.signal.aborted) {
         logger.info({ agentId, chatId, category: 'agent' }, 'SDK query aborted by user, returning partial text')
-        return { fullText, sessionId }
+        return { fullText, sessionId, aborted: true }
       }
 
       // When SDK process crashes, fullText may contain actual error info from upstream API
@@ -1002,7 +1051,7 @@ export class AgentRuntime {
       category: 'agent',
     }, 'SDK query finished')
 
-    return { fullText, sessionId }
+    return { fullText, sessionId, aborted: false }
   }
 
   /**
@@ -1014,6 +1063,8 @@ export class AgentRuntime {
     chatId: string,
     appendText: (text: string) => void,
     setSessionId: (sid: string) => void,
+    browserDisabled = false,
+    browserDisabledNotice: { sent: boolean },
   ): Promise<void> {
     switch (message.type) {
       case 'assistant': {
@@ -1028,6 +1079,16 @@ export class AgentRuntime {
             appendText(block.text)
             this.emitStream(agentId, chatId, block.text)
           } else if (block.type === 'tool_use') {
+            const disabledBrowserReason = this.getDisabledBrowserToolBlockReason(block.name, block.input, browserDisabled)
+            if (disabledBrowserReason) {
+              if (!browserDisabledNotice.sent) {
+                browserDisabledNotice.sent = true
+                const message = this.buildDisabledBrowserUserMessage(disabledBrowserReason)
+                appendText(message)
+                this.emitStream(agentId, chatId, message)
+              }
+              continue
+            }
             // pre_tool_use hook
             if (this.hooksManager) {
               const preCtx = await this.hooksManager.execute(agentId, 'pre_tool_use', {
@@ -1067,6 +1128,26 @@ export class AgentRuntime {
         break
       }
     }
+  }
+
+  private getDisabledBrowserToolBlockReason(toolName: string, input: unknown, browserDisabled: boolean): string | null {
+    if (!browserDisabled) return null
+    if (!input || typeof input !== 'object') return null
+
+    const payload = input as Record<string, unknown>
+    if (toolName === 'Skill' && payload.skill === 'agent-browser') {
+      return 'If this task is blocked by login, CAPTCHA, or site verification, ask the user to switch the chat browser setting from "None" to a browser profile and retry.'
+    }
+
+    if (toolName === 'Bash' && typeof payload.command === 'string' && /\bagent-browser\b/.test(payload.command)) {
+      return 'If this task is blocked by login, CAPTCHA, or site verification, ask the user to switch the chat browser setting from "None" to a browser profile and retry.'
+    }
+
+    return null
+  }
+
+  private buildDisabledBrowserUserMessage(reason: string): string {
+    return `This chat is currently set to "No browser". ${reason}`
   }
 
   /**

@@ -22,8 +22,10 @@ import {
   usePromptInputAttachments,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
+import { uploadChatAttachment } from "@/api/client";
 import { useChatContext } from "@/hooks/chatCtx";
 import { useI18n } from "@/i18n";
+import { resolveChatAttachments } from "@/lib/chat-attachments";
 import { useAppStore } from "@/stores/app";
 import { Bot, Globe, PlusIcon } from "lucide-react";
 
@@ -104,18 +106,17 @@ export function ChatInput() {
       return;
     }
 
-    // Build Attachment objects from file paths
-    const attachments = msg.files
-      .filter((f) => f.filePath)
-      .map((f) => ({
-        filename: f.filename,
-        mediaType: f.mediaType,
-        filePath: f.filePath!,
-      }));
+    const attachments = await resolveChatAttachments(
+      msg.files,
+      uploadChatAttachment,
+    ).catch((error) => {
+      alert(error instanceof Error ? error.message : String(error));
+      throw error;
+    });
 
     send(
       text,
-      selectedProfileId ?? undefined,
+      selectedProfileId,
       attachments.length > 0 ? attachments : undefined,
     );
   };

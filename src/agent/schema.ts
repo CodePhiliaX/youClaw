@@ -77,6 +77,12 @@ export const SecurityConfigSchema = z.object({
   }).optional(),
 })
 
+export const BrowserConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  defaultProfile: z.string().optional(),
+  allowChatOverride: z.boolean().default(true),
+})
+
 // Agent config schema
 export const AgentConfigSchema = z.object({
   id: z.string().min(1),
@@ -105,6 +111,8 @@ export const AgentConfigSchema = z.object({
   mcpServers: z.record(z.string(), McpServerSchema).optional(),
   maxTurns: z.number().optional(),
   effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
+  browser: BrowserConfigSchema.optional(),
+  // Legacy browser binding fields kept for backward compatibility
   browserProfile: z.string().optional(),
   browserHeaded: z.boolean().default(false),
   // Bindings routing
@@ -118,6 +126,7 @@ export const AgentConfigSchema = z.object({
 // Infer types from schema
 export type AgentConfig = z.infer<typeof AgentConfigSchema>
 export type McpServerConfig = z.infer<typeof McpServerSchema>
+export type BrowserConfig = z.infer<typeof BrowserConfigSchema>
 export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>
 export type AgentRef = z.infer<typeof AgentRefSchema>
 export type AgentEntry = z.infer<typeof AgentEntrySchema>

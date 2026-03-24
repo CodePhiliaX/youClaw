@@ -1,7 +1,6 @@
 import type { ReactNode, RefObject } from 'react'
-import type { Skill } from '@/api/client'
-import { MarkdownAuthoringEditor } from '@/components/skills/MarkdownAuthoringEditor'
-import { Badge } from '@/components/ui/badge'
+import type { ManagedSkill, Skill } from '@/api/client'
+import { SkillDetailView } from '@/components/skills/SkillDetailView'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -14,31 +13,14 @@ import { useI18n } from '@/i18n'
 import { useDragRegion } from '@/hooks/useDragRegion'
 import { cn } from '@/lib/utils'
 import {
-  AlertTriangle,
-  CheckCircle,
   ChevronDown,
-  Cpu,
-  FolderGit2,
-  Globe,
-  Key,
-  Link,
+  Github,
   Link2,
   Plus,
   Puzzle,
-  Terminal,
-  Trash2,
-  Wrench,
-  XCircle,
 } from 'lucide-react'
 import {
-  EnvConfigRow,
-  EnvToolInstallButton,
-  InfoRow,
-  InstallButton,
-  InstallSectionHeader,
-  SectionTitle,
   SkillListItem,
-  resolveEnvTools,
 } from './shared'
 import type { InstalledSkillListItem } from './skills-view-types'
 
@@ -50,6 +32,7 @@ interface InstalledSkillsViewProps {
   selected: string | null
   setSelected: (value: string | null) => void
   selectedSkill?: Skill
+  selectedManagedSkill?: ManagedSkill | null
   onCreateSkill: () => void
   onImportSkill: (provider: 'raw-url' | 'github') => void
   onEditSkill: (skillName: string) => void
@@ -67,6 +50,7 @@ export function InstalledSkillsView({
   selected,
   setSelected,
   selectedSkill,
+  selectedManagedSkill,
   onCreateSkill,
   onImportSkill,
   onEditSkill,
@@ -94,14 +78,14 @@ export function InstalledSkillsView({
             <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-56">
               <DropdownMenuItem className="cursor-pointer" onSelect={onCreateSkill}>
                 <Plus className="h-4 w-4" />
-                {t.skills.newSkill}
+                {t.skills.customSkill}
               </DropdownMenuItem>
               <DropdownMenuItem className="cursor-pointer" onSelect={() => onImportSkill('raw-url')}>
                 <Link2 className="h-4 w-4" />
                 {t.skills.importFromRawUrl}
               </DropdownMenuItem>
               <DropdownMenuItem className="cursor-pointer" onSelect={() => onImportSkill('github')}>
-                <FolderGit2 className="h-4 w-4" />
+                <Github className="h-4 w-4" />
                 {t.skills.importFromGitHub}
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -158,8 +142,10 @@ export function InstalledSkillsView({
         {workspaceContent ?? (
           <div className="h-full overflow-y-auto p-6">
             {selectedSkill ? (
-              <InstalledSkillDetail
+              <SkillDetailView
                 skill={selectedSkill}
+                managedSkill={selectedManagedSkill}
+                onEditSkill={onEditSkill}
                 onDeleteSkill={onDeleteSkill}
                 onReloadSkills={onReloadSkills}
                 onToggleSkill={onToggleSkill}
@@ -175,194 +161,6 @@ export function InstalledSkillsView({
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-function InstalledSkillDetail({
-  skill,
-  onDeleteSkill,
-  onReloadSkills,
-  onToggleSkill,
-}: {
-  skill: Skill
-  onDeleteSkill: (skillName: string) => void
-  onReloadSkills: () => void
-  onToggleSkill: (skillName: string, enabled: boolean) => Promise<void>
-}) {
-  const { t } = useI18n()
-
-  return (
-    <div className="max-w-2xl space-y-6">
-      <div className="flex items-center gap-4">
-        <div className={cn(
-          'w-12 h-12 rounded-full flex items-center justify-center',
-          !skill.enabled ? 'bg-muted' : skill.usable ? 'bg-green-500/10' : 'bg-red-500/10'
-        )}>
-          <Puzzle className="h-6 w-6" />
-        </div>
-        <div className="flex-1">
-          <h1 className="text-xl font-semibold">{skill.name}</h1>
-          <p className="text-sm text-muted-foreground">{skill.frontmatter.description}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            data-testid="skill-toggle-btn"
-            variant={skill.enabled ? 'secondary' : 'default'}
-            size="sm"
-            onClick={() => void onToggleSkill(skill.name, !skill.enabled)}
-          >
-            {skill.enabled ? t.skills.disable : t.skills.enable}
-          </Button>
-          {skill.source !== 'workspace' && (
-            <Button
-              data-testid="skill-delete-btn"
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-red-400"
-              onClick={() => onDeleteSkill(skill.name)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <div className="rounded-md border border-border p-4 space-y-3">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          {!skill.enabled ? (
-            <>
-              <XCircle className="h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">{t.skills.disabled}</span>
-            </>
-          ) : skill.usable ? (
-            <>
-              <CheckCircle className="h-4 w-4 text-green-400" />
-              <span className="text-green-400">{t.skills.usable}</span>
-            </>
-          ) : (
-            <>
-              <AlertTriangle className="h-4 w-4 text-yellow-400" />
-              <span className="text-yellow-400">{t.skills.enabledNotReady}</span>
-            </>
-          )}
-        </div>
-
-        {skill.eligibilityDetail?.env.results.length > 0 && (
-          <div className="space-y-2">
-            {skill.eligibilityDetail.env.results.map((result) => (
-              <EnvConfigRow key={result.name} envName={result.name} configured={result.found} onSaved={onReloadSkills} />
-            ))}
-          </div>
-        )}
-
-        {skill.eligibilityDetail?.dependencies.passed === false && (() => {
-          const missingDeps = skill.eligibilityDetail?.dependencies.results.filter(r => !r.found).map(r => r.name) ?? []
-          const envTools = resolveEnvTools(missingDeps)
-          const hasManualInstall = skill.frontmatter.install && Object.keys(skill.frontmatter.install).length > 0
-          return (envTools.length > 0 || hasManualInstall) ? (
-            <div className="pt-2 border-t border-border/50 space-y-2">
-              <InstallSectionHeader onRefresh={onReloadSkills}>{t.skills.install}</InstallSectionHeader>
-              {/* One-click install via environment module (CDN download) */}
-              {envTools.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {envTools.map((tool) => (
-                    <EnvToolInstallButton key={tool} tool={tool} onInstalled={onReloadSkills} />
-                  ))}
-                </div>
-              )}
-              {/* Fallback: manual install commands from skill frontmatter */}
-              {hasManualInstall && (
-                <div className="space-y-1">
-                  {Object.entries(skill.frontmatter.install!).map(([method, command]) => (
-                    <InstallButton key={method} method={method} command={command} skillName={skill.name} onInstalled={onReloadSkills} />
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : null
-        })()}
-      </div>
-
-      <div className="grid gap-4">
-        {skill.frontmatter.version && <InfoRow label={t.skills.version} value={skill.frontmatter.version} />}
-        {skill.registryMeta?.sourceUrl && (
-          <InfoRow
-            label={t.skills.sourceUrlLabel}
-            value={(
-              <a
-                href={skill.registryMeta.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex max-w-full items-start gap-1.5 text-right text-xs text-primary hover:underline break-all"
-              >
-                <Link className="mt-0.5 h-3 w-3 shrink-0" />
-                <span>{skill.registryMeta.sourceUrl}</span>
-              </a>
-            )}
-          />
-        )}
-        {skill.frontmatter.os && skill.frontmatter.os.length > 0 && (
-          <InfoRow
-            label={t.skills.os}
-            value={
-              <span className="flex items-center gap-1.5">
-                <Globe className="h-3 w-3 shrink-0" />
-                {skill.frontmatter.os.map((os) => <Badge key={os} variant="outline" className="text-xs">{os}</Badge>)}
-              </span>
-            }
-          />
-        )}
-        {skill.frontmatter.dependencies && skill.frontmatter.dependencies.length > 0 && (
-          <InfoRow
-            label={t.skills.dependencies}
-            value={
-              <span className="flex items-center gap-1.5 flex-wrap">
-                <Terminal className="h-3 w-3 shrink-0" />
-                {skill.frontmatter.dependencies.map((dep) => <Badge key={dep} variant="outline" className="text-xs font-mono">{dep}</Badge>)}
-              </span>
-            }
-          />
-        )}
-        {skill.frontmatter.env && skill.frontmatter.env.length > 0 && (
-          <InfoRow
-            label={t.skills.envVars}
-            value={
-              <span className="flex items-center gap-1.5 flex-wrap">
-                <Key className="h-3 w-3 shrink-0" />
-                {skill.frontmatter.env.map((env) => <Badge key={env} variant="outline" className="text-xs font-mono">{env}</Badge>)}
-              </span>
-            }
-          />
-        )}
-        {skill.frontmatter.tools && skill.frontmatter.tools.length > 0 && (
-          <InfoRow
-            label={t.skills.tools}
-            value={
-              <span className="flex items-center gap-1.5 flex-wrap">
-                <Wrench className="h-3 w-3 shrink-0" />
-                {skill.frontmatter.tools.map((tool) => <Badge key={tool} variant="outline" className="text-xs">{tool}</Badge>)}
-              </span>
-            }
-          />
-        )}
-      </div>
-
-      {skill.content && (
-        <div className="space-y-2">
-          <SectionTitle icon={<Cpu className="h-4 w-4" />}>{t.skills.content}</SectionTitle>
-          <MarkdownAuthoringEditor
-            title={skill.name}
-            version={skill.frontmatter.version}
-            description={skill.frontmatter.description}
-            value={skill.content}
-            readOnly
-            defaultMode="preview"
-            hideHeader
-            bare
-          />
-        </div>
-      )}
     </div>
   )
 }

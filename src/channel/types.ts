@@ -10,7 +10,7 @@ export interface InboundMessage {
   agentId?: string        // target agent (Web API scenario)
   tags?: string[]         // routing tags from web frontend
   requestedSkills?: string[]  // explicitly requested skills
-  browserProfileId?: string   // dynamically override agent.yaml browserProfile
+  browserProfileId?: string | null   // null explicitly disables browser for this message
   attachments?: Array<{ filename: string; mediaType: string; filePath: string }>
 }
 
@@ -37,6 +37,7 @@ export interface Channel {
   name: string
   connect(): Promise<void>
   sendMessage(chatId: string, text: string): Promise<void>
+  sendMedia?(chatId: string, text: string, mediaUrl: string): Promise<void>
   isConnected(): boolean
   ownsChatId(chatId: string): boolean
   disconnect(): Promise<void>

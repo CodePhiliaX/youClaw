@@ -31,13 +31,10 @@ class AbortRegistry {
     logger.info({ chatId, category: 'agent' }, 'Query aborted by user')
 
     entry.abortController.abort()
-    if (entry.query?.close) {
-      try {
-        entry.query.close()
-      } catch {
-        // close() may throw if already terminated
-      }
-    }
+    // Do not force-close the SDK query stream here.
+    // Let the AbortController propagate first so runtime can emit
+    // complete/processing=false cleanly without surfacing SDK
+    // "Operation aborted" noise or dropping the partial assistant reply.
     this.entries.delete(chatId)
     return true
   }

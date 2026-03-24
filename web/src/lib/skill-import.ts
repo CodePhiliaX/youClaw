@@ -6,6 +6,7 @@ export type SkillImportErrorCode =
   | 'not_skill_directory'
   | 'wrong_skill_file'
   | 'not_found'
+  | 'duplicate_skill'
   | 'request_failed'
 
 const GITHUB_ALLOWED_HOSTS = new Set(['github.com', 'www.github.com', 'raw.githubusercontent.com'])
@@ -34,6 +35,10 @@ export function getPrimaryImportErrorCode(mode: SkillImportMode, value: string):
 }
 
 export function mapImportActionError(mode: SkillImportMode, message: string): SkillImportErrorCode {
+  if (message.includes('already exists in target directory')) {
+    return 'duplicate_skill'
+  }
+
   if (mode === 'github') {
     if (
       message.includes('Selected GitHub location is not a skill directory')
@@ -64,4 +69,22 @@ export function mapImportActionError(mode: SkillImportMode, message: string): Sk
   }
 
   return message.includes('Invalid URL') ? 'invalid_url' : 'request_failed'
+}
+
+export function extractDuplicateSkillName(message: string): string | null {
+  const match = message.match(/Skill "(.+)" already exists in target directory/)
+  return match?.[1] ?? null
+}
+
+export function resolveImportModeFromUrl(value: string): SkillImportMode {
+  try {
+    const parsed = new URL(value)
+    if (GITHUB_ALLOWED_HOSTS.has(parsed.hostname)) {
+      return 'github'
+    }
+  } catch {
+    return 'raw-url'
+  }
+
+  return 'raw-url'
 }

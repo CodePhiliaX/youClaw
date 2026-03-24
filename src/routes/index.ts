@@ -25,6 +25,7 @@ import type { RegistryManager } from '../skills/index.ts'
 import type { MemoryManager } from '../memory/index.ts'
 import type { MemoryIndexer } from '../memory/index.ts'
 import type { Scheduler } from '../scheduler/index.ts'
+import type { BrowserManager } from '../browser/index.ts'
 import { getEnv } from '../config/env.ts'
 
 interface AppDeps {
@@ -38,10 +39,11 @@ interface AppDeps {
   memoryManager: MemoryManager
   memoryIndexer: MemoryIndexer | null
   scheduler: Scheduler
+  browserManager: BrowserManager
 }
 
 export function createApp(deps: AppDeps) {
-  const { agentManager, agentQueue, eventBus, router, channelManager, skillsLoader, registryManager, memoryManager, memoryIndexer, scheduler } = deps
+  const { agentManager, agentQueue, eventBus, router, channelManager, skillsLoader, registryManager, memoryManager, memoryIndexer, scheduler, browserManager } = deps
   const app = new Hono()
 
   // CORS — allow Vite dev server + Tauri WebView
@@ -67,7 +69,7 @@ export function createApp(deps: AppDeps) {
   app.route('/api', createTasksRoutes(scheduler, agentManager, agentQueue))
   app.route('/api', createSystemRoutes(agentManager, eventBus, router))
   app.route('/api', createChannelsRoutes(channelManager))
-  app.route('/api', createBrowserProfilesRoutes(agentManager))
+  app.route('/api', createBrowserProfilesRoutes(agentManager, browserManager))
   app.route('/api', createRegistryRoutes(registryManager))
   app.route('/api', createLogsRoutes())
   app.route('/api', createWebhooksRoutes(channelManager))

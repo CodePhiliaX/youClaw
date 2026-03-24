@@ -18,6 +18,7 @@ import { InstalledSkillsView } from '@/components/skills/InstalledSkillsView'
 import { MarketplaceView } from '@/components/skills/MarketplaceView'
 import { getExternalSkillSourceLabel } from '@/components/skills/shared-utils'
 import { compareByNewestThenName, type InstalledSkillListItem } from '@/components/skills/skills-view-types'
+import { applyMarketplaceChangeToPage, type MarketplaceChangeEvent } from '@/lib/marketplace-updates'
 import { toMarketplaceResultsViewModel } from '@/lib/marketplace-view-model'
 import {
   AlertDialog,
@@ -34,6 +35,7 @@ import { useI18n } from '@/i18n'
 import { useAppStore } from '@/stores/app'
 
 type TabType = 'installed' | 'marketplace'
+type MarketplaceLoadMode = 'replace' | 'refresh' | 'append'
 type InstalledWorkspace =
   | { kind: 'detail'; skillName: string | null }
   | { kind: 'create' }
@@ -62,7 +64,7 @@ export function Skills() {
     query: '',
     sort: 'trending',
   })
-  const [marketplaceStatus, setMarketplaceStatus] = useState<'idle' | 'loading' | 'loading-more' | 'error'>('idle')
+  const [marketplaceStatus, setMarketplaceStatus] = useState<'idle' | 'loading' | 'refreshing' | 'loading-more' | 'error'>('idle')
   const [marketplaceError, setMarketplaceError] = useState('')
   const [marketplaceAppendError, setMarketplaceAppendError] = useState('')
   const [marketplaceSort, setMarketplaceSort] = useState<MarketplaceSort>('trending')
@@ -92,8 +94,9 @@ export function Skills() {
   }, [])
 
   const loadMarketplace = useCallback(
-    (options?: { append?: boolean; cursor?: string | null; query?: string; sort?: MarketplaceSort; source?: typeof registrySource }) => {
-      const append = Boolean(options?.append)
+    (options?: { mode?: MarketplaceLoadMode; cursor?: string | null; query?: string; sort?: MarketplaceSort; source?: typeof registrySource }) => {
+      const mode = options?.mode ?? 'replace'
+      const append = mode === 'append'
       const query = (options?.query ?? searchQuery).trim()
       const sort = options?.sort ?? marketplaceSort
       const source = options?.source ?? registrySource
@@ -108,8 +111,16 @@ export function Skills() {
         setMarketplaceAppendError('')
       }
 
-      setMarketplaceStatus(append ? 'loading-more' : 'loading')
-      setMarketplaceError('')
+      if (append) {
+        setMarketplaceStatus('loading-more')
+      } else if (mode === 'refresh') {
+        setMarketplaceStatus('refreshing')
+      } else {
+        setMarketplaceStatus('loading')
+      }
+      if (mode !== 'refresh') {
+        setMarketplaceError('')
+      }
 
       getMarketplaceSkills({ source, query, sort, cursor, limit: 24 })
         .then((page) => {
@@ -124,8 +135,12 @@ export function Skills() {
         })
         .catch((error) => {
           if (!append) {
-            setMarketplace((current) => ({ ...current, items: [], nextCursor: null }))
             marketplacePendingCursorRef.current = null
+            if (mode === 'refresh') {
+              setMarketplaceStatus('idle')
+              return
+            }
+            setMarketplace((current) => ({ ...current, items: [], nextCursor: null }))
             setMarketplaceStatus('error')
             setMarketplaceError(error instanceof Error ? error.message : t.skills.marketplaceLoadFailed)
             return
@@ -146,7 +161,7 @@ export function Skills() {
   useEffect(() => {
     if (tab !== 'marketplace') return
     const timer = window.setTimeout(() => {
-      loadMarketplace({ query: searchQuery, source: registrySource })
+      loadMarketplace({ mode: 'replace', query: searchQuery, source: registrySource })
     }, 0)
     return () => window.clearTimeout(timer)
   }, [loadMarketplace, marketplaceSort, registrySource, searchQuery, tab])
@@ -164,6 +179,7 @@ export function Skills() {
 
   const selectedSkillName = installedWorkspace.kind === 'detail' ? installedWorkspace.skillName : null
   const selectedSkill = skills.find((skill) => skill.name === selectedSkillName)
+  const selectedManagedSkill = mySkills.find((skill) => skill.name === selectedSkillName) ?? null
   const editableSkills = mySkills.filter((skill) => skill.editable)
   const editableSkillNames = useMemo(() => new Set(editableSkills.map((skill) => skill.name)), [editableSkills])
 
@@ -224,13 +240,16 @@ export function Skills() {
 
   const handleMarketplaceLoadMore = useCallback(() => {
     if (!canAutoLoadMore || marketplaceStatus !== 'idle') return
-    loadMarketplace({ append: true, source: registrySource })
+    loadMarketplace({ mode: 'append', source: registrySource })
   }, [canAutoLoadMore, loadMarketplace, marketplaceStatus, registrySource])
 
-  const handleMarketplaceChanged = useCallback(() => {
+  const handleMarketplaceChanged = useCallback((change?: MarketplaceChangeEvent) => {
+    if (change) {
+      setMarketplace((current) => applyMarketplaceChangeToPage(current, change))
+    }
     refreshInstalledData().catch(() => {})
     if (tab === 'marketplace') {
-      loadMarketplace({ query: searchQuery, source: registrySource })
+      loadMarketplace({ mode: 'refresh', query: searchQuery, source: registrySource })
     }
   }, [loadMarketplace, refreshInstalledData, registrySource, searchQuery, tab])
 
@@ -329,12 +348,13 @@ export function Skills() {
         <SkillImportPanel
           mode={installedWorkspace.provider}
           onImported={handleImportSuccess}
+          existingSkillNames={skills.map((skill) => skill.name)}
         />
       )
     }
 
     return undefined
-  }, [handleImportSuccess, installedWorkspace, refreshInstalledData])
+  }, [handleImportSuccess, installedWorkspace, refreshInstalledData, skills])
 
   return (
     <div className="flex h-full flex-col">
@@ -374,6 +394,7 @@ export function Skills() {
           externalSkillItems={externalSkillItems}
           customSkillItems={customSkillItems}
           selectedSkill={selectedSkill}
+          selectedManagedSkill={selectedManagedSkill}
           selected={selectedSkillName}
           setSelected={(skillName) => setInstalledWorkspace({ kind: 'detail', skillName })}
           onEditSkill={openSkillBuilder}
@@ -431,7 +452,7 @@ export function Skills() {
           onLoadMore={handleMarketplaceLoadMore}
           onRetryLoadMore={() => {
             setMarketplaceAppendError('')
-            loadMarketplace({ append: true, source: registrySource })
+            loadMarketplace({ mode: 'append', source: registrySource })
           }}
           marketplaceScrollRef={marketplaceScrollRef}
           marketplaceLoadMoreRef={marketplaceLoadMoreRef}

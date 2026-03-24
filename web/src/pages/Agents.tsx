@@ -33,6 +33,19 @@ import {
   resolveMarketplaceLocalSkillName,
 } from '../lib/agent-skill-state'
 
+function normalizeMarketplaceActionError(message: string, fallback: string, skillNotFoundLabel: string) {
+  if (!message) {
+    return fallback
+  }
+
+  const skillNotFoundMatch = message.match(/^Skill "(.+)" was not found$/)
+  if (skillNotFoundMatch) {
+    return skillNotFoundLabel.replace('{name}', skillNotFoundMatch[1] ?? '')
+  }
+
+  return message
+}
+
 type AgentState = {
   sessionId: string | null
   isProcessing: boolean
@@ -147,7 +160,8 @@ export function Agents() {
     getAgentConfig(selected)
       .then((config) => {
         setSubAgents((config.agents as SubAgentsMap) ?? {})
-        setAgentBrowserProfile(config.browserProfile as string | undefined)
+        const browserConfig = config.browser as { defaultProfile?: string } | undefined
+        setAgentBrowserProfile(browserConfig?.defaultProfile ?? config.browserProfile as string | undefined)
         setAgentSkills(config.skills as string[] | undefined)
       })
       .catch(() => {
@@ -174,7 +188,14 @@ export function Agents() {
   const handleSaveBrowserProfile = async (profileId: string | undefined) => {
     if (!selected) return
     setAgentBrowserProfile(profileId)
-    await updateAgentConfig(selected, { browserProfile: profileId ?? null })
+    await updateAgentConfig(selected, {
+      browser: {
+        enabled: true,
+        allowChatOverride: true,
+        ...(profileId ? { defaultProfile: profileId } : {}),
+      },
+      browserProfile: null,
+    })
   }
 
   // Rename Agent
@@ -807,6 +828,7 @@ function AgentSkillsSection({
   const registrySource = useAppStore((s) => s.registrySource)
   const registrySources = useAppStore((s) => s.registrySources)
   const setRegistrySource = useAppStore((s) => s.setRegistrySource)
+  const showGlobalBubble = useAppStore((s) => s.showGlobalBubble)
   const [search, setSearch] = useState('')
 
   // Marketplace dialog state
@@ -834,6 +856,12 @@ function AgentSkillsSection({
     normalizedAgentSkillNames,
     boundSkillNames,
   } = bindingsModel
+  const buildMarketplaceMessage = useCallback((template: string, skillLabel: string) => (
+    template.replace('{name}', skillLabel)
+  ), [])
+  const formatActionError = useCallback((message: string | undefined, fallback: string) => (
+    normalizeMarketplaceActionError(message ?? '', fallback, t.skills.marketplaceSkillNotFound)
+  ), [t.skills.marketplaceSkillNotFound])
 
   const filteredSkills = allSkills.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -940,14 +968,35 @@ function AgentSkillsSection({
     marketplacePendingCursorRef.current = null
   }
 
-  const installAndBindSkill = async (slug: string) => {
-    setInstallingSlug(slug)
+  const markMarketplaceSkillInstalled = useCallback((slug: string, installedSkillName?: string) => {
+    setMarketplaceResults((prev) => prev.map((item) => (
+      item.slug === slug
+        ? {
+            ...item,
+            installed: true,
+            installedSkillName: installedSkillName ?? item.installedSkillName ?? item.slug,
+            hasUpdate: false,
+          }
+        : item
+    )))
+  }, [])
+
+  const installAndBindSkill = async (skill: Pick<MarketplaceSkill, 'slug' | 'displayName'>) => {
+    setInstallingSlug(skill.slug)
     try {
       const beforeNames = new Set(installedSkillNames)
-      await installRecommendedSkill(slug, registrySource)
+      const result = await installRecommendedSkill(skill.slug, registrySource)
+      if (!result.ok) {
+        showGlobalBubble({
+          type: 'error',
+          message: formatActionError(result.error, t.skills.installFailed),
+        })
+        return
+      }
+
       const freshSkills = await getSkills()
 
-      const newSkill = freshSkills.find((skill) => skill.registryMeta?.slug === slug)
+      const newSkill = freshSkills.find((item) => item.registryMeta?.slug === skill.slug)
         ?? freshSkills.find((skill) => !beforeNames.has(skill.name))
 
       if (newSkill && !isWildcard) {
@@ -956,10 +1005,16 @@ function AgentSkillsSection({
           await updateAgentConfig(agentId, { skills: [...current, newSkill.name] })
         }
       }
+      markMarketplaceSkillInstalled(skill.slug, newSkill?.name)
       onUpdate()
-      handleCloseMarketplace()
-    } catch {
-      // Error is silently handled; the user can retry
+      showGlobalBubble({
+        message: buildMarketplaceMessage(t.skills.marketplaceInstallSuccess, skill.displayName),
+      })
+    } catch (error) {
+      showGlobalBubble({
+        type: 'error',
+        message: formatActionError(error instanceof Error ? error.message : undefined, t.skills.installFailed),
+      })
     } finally {
       setInstallingSlug(null)
     }
@@ -985,7 +1040,6 @@ function AgentSkillsSection({
 
   const handleBindSkill = async (skillName: string) => {
     await handleToggleSkill(skillName, true)
-    handleCloseMarketplace()
   }
 
   const visibleMarketplaceResults = useMemo(
@@ -1237,10 +1291,10 @@ function AgentSkillsSection({
               if (!open) setConfirmDetail(null)
             }}
             onConfirm={() => {
-              const slug = confirmDetail?.slug
+              const skill = confirmDetail ? { slug: confirmDetail.slug, displayName: confirmDetail.displayName } : null
               setConfirmDetail(null)
-              if (slug) {
-                void installAndBindSkill(slug)
+              if (skill) {
+                void installAndBindSkill(skill)
               }
             }}
           />
