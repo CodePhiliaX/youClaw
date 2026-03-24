@@ -73,9 +73,9 @@ web/src/
 ## Environment Variables
 
 - `ANTHROPIC_API_KEY` (required)
-- `PORT` (default 3000)
+- `PORT` (default 62601)
 - `DATA_DIR` (default ./data)
-- `AGENT_MODEL` (default claude-sonnet-4-6)
+- `AGENT_MODEL` (default minimax/MiniMax-M2.7-highspeed)
 - `LOG_LEVEL` (debug/info/warn/error, default info)
 - `TELEGRAM_BOT_TOKEN` (optional, enables Telegram channel)
 
