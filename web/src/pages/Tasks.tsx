@@ -129,6 +129,9 @@ const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, minute) => pad2(minute))
 const DAY_OF_MONTH_OPTIONS = Array.from({ length: 31 }, (_, day) => String(day + 1))
 const WHEEL_ITEM_HEIGHT = 40
 const WHEEL_VISIBLE_ROWS = 5
+const FORM_LABEL_CLASS = 'block text-sm font-medium text-foreground/90'
+const FORM_LABEL_WITH_MARGIN_CLASS = `${FORM_LABEL_CLASS} mb-1.5`
+const INLINE_FIELD_LABEL_CLASS = 'flex items-center gap-1 text-sm font-medium text-foreground/85'
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
@@ -605,7 +608,7 @@ function WheelPicker({
 
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+      <div className={INLINE_FIELD_LABEL_CLASS}>
         <Clock3 className="h-3.5 w-3.5" />
         <span>{label}</span>
       </div>
@@ -811,7 +814,7 @@ function CronFieldSelect({
 }) {
   return (
     <div className="space-y-1.5">
-      <label className="block text-xs text-muted-foreground">{label}</label>
+      <label className={FORM_LABEL_CLASS}>{label}</label>
       <Select value={value} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger data-testid={testId} className="w-full">
           <SelectValue />
@@ -1112,33 +1115,33 @@ function TaskForm({
       <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         {/* Name */}
         <div>
-          <label className="block text-xs text-muted-foreground mb-1">{t.tasks.name}</label>
+          <label className={FORM_LABEL_WITH_MARGIN_CLASS}>{t.tasks.name}</label>
           <input
             data-testid="task-input-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t.tasks.namePlaceholder}
-            className="w-full px-3 py-2 text-sm rounded-md bg-accent/30 border border-border focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full rounded-md border border-border bg-accent/30 px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
 
         {/* Description */}
         <div>
-          <label className="block text-xs text-muted-foreground mb-1">{t.tasks.description}</label>
+          <label className={FORM_LABEL_WITH_MARGIN_CLASS}>{t.tasks.description}</label>
           <input
             data-testid="task-input-desc"
             type="text"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t.tasks.descriptionPlaceholder}
-            className="w-full px-3 py-2 text-sm rounded-md bg-accent/30 border border-border focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full rounded-md border border-border bg-accent/30 px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
 
         {/* Agent (only selectable when creating) */}
         <div>
-          <label className="block text-xs text-muted-foreground mb-1">{t.tasks.agent}</label>
+          <label className={FORM_LABEL_WITH_MARGIN_CLASS}>{t.tasks.agent}</label>
           <Select
             value={agentId}
             onValueChange={setAgentId}
@@ -1159,20 +1162,20 @@ function TaskForm({
 
         {/* Prompt */}
         <div>
-          <label className="block text-xs text-muted-foreground mb-1">{t.tasks.prompt}</label>
+          <label className={FORM_LABEL_WITH_MARGIN_CLASS}>{t.tasks.prompt}</label>
           <textarea
             data-testid="task-input-prompt"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             rows={3}
             placeholder={t.tasks.promptPlaceholder}
-            className="w-full px-3 py-2 text-sm rounded-md bg-accent/30 border border-border focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+            className="w-full resize-none rounded-md border border-border bg-accent/30 px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
 
         {/* Schedule Type */}
         <div>
-          <label className="block text-xs text-muted-foreground mb-1">{t.tasks.scheduleType}</label>
+          <label className={FORM_LABEL_WITH_MARGIN_CLASS}>{t.tasks.scheduleType}</label>
           <div className="flex gap-2">
             {(['interval', 'cron', 'once'] as const).map((st) => (
               <button
@@ -1216,7 +1219,7 @@ function TaskForm({
 
         {/* Schedule Value */}
         <div>
-          <label className="block text-xs text-muted-foreground mb-1">
+          <label className={FORM_LABEL_WITH_MARGIN_CLASS}>
             {scheduleType === 'interval' && t.tasks.intervalMinutes}
             {scheduleType === 'cron' && t.tasks.cronExpression}
             {scheduleType === 'once' && t.tasks.runAt}
@@ -1289,7 +1292,7 @@ function TaskForm({
                   ? t.tasks.intervalPlaceholder
                   : t.tasks.cronPlaceholder
               }
-              className="w-full px-3 py-2 text-sm rounded-md bg-accent/30 border border-border focus:outline-none focus:ring-1 focus:ring-ring"
+              className="w-full rounded-md border border-border bg-accent/30 px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           )}
         </div>

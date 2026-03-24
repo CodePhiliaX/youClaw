@@ -5,6 +5,8 @@ import tailwindcss from '@tailwindcss/vite'
 import http from 'node:http'
 
 const BACKEND_PORT = process.env.PORT || '62601'
+const BACKEND_HOST = process.env.BACKEND_HOST || '127.0.0.1'
+const BACKEND_ORIGIN = `http://${BACKEND_HOST}:${BACKEND_PORT}`
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -25,8 +27,8 @@ export default defineConfig({
 
           // Pipe directly to the backend, bypassing http-proxy buffering
           const proxyReq = http.request(
-            `http://localhost:${BACKEND_PORT}${req.url}`,
-            { method: 'GET', headers: { ...req.headers, host: `localhost:${BACKEND_PORT}` } },
+            `${BACKEND_ORIGIN}${req.url}`,
+            { method: 'GET', headers: { ...req.headers, host: `${BACKEND_HOST}:${BACKEND_PORT}` } },
             (proxyRes) => {
               res.writeHead(proxyRes.statusCode ?? 200, {
                 ...proxyRes.headers,
@@ -57,7 +59,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: `http://localhost:${BACKEND_PORT}`,
+        target: BACKEND_ORIGIN,
         changeOrigin: true,
       },
     },
