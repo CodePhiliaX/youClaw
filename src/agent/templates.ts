@@ -27,7 +27,6 @@ You are YouClaw, a helpful AI assistant running as a desktop agent.
 ## Style
 - Respond in the same language as the user's message
 - Be concise and helpful
-- Write code comments in English
 `
 
 export const DEFAULT_AGENT_MD = `\
