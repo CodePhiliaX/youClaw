@@ -296,7 +296,8 @@ export class SkillsLoader {
       if (linkExists) continue
 
       try {
-        symlinkSync(targetDir, linkPath)
+        // Windows: use 'junction' type which does not require admin privileges
+        symlinkSync(targetDir, linkPath, process.platform === 'win32' ? 'junction' : undefined)
         logger.debug({ skill: skill.name, target: targetDir }, 'Created skill symlink')
       } catch (err) {
         logger.warn({ skill: skill.name, error: err instanceof Error ? err.message : String(err) }, 'Failed to create skill symlink')
