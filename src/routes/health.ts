@@ -334,6 +334,101 @@ async function installBun(): Promise<{ ok: boolean; stdout: string; stderr: stri
   }
 }
 
+const GIT_CDN_URL = 'https://cdn.chat2db-ai.com/youclaw/tools/git/Git-2.53.0.2-64-bit.exe.zip'
+
+/**
+ * Download Git installer from CDN, extract, and run silent install on Windows.
+ * Downloads .exe.zip → extracts .exe → runs with /VERYSILENT /NORESTART.
+ */
+async function installGitWindows(): Promise<{ ok: boolean; stdout: string; stderr: string; exitCode: number }> {
+  const logger = getLogger()
+
+  // Download zip
+  logger.info({ category: 'install' }, `[install-git] Downloading from ${GIT_CDN_URL}...`)
+  let zipBuffer: ArrayBuffer | null = null
+  try {
+    const resp = await fetch(GIT_CDN_URL, { signal: AbortSignal.timeout(180_000) })
+    if (!resp.ok) {
+      const msg = `HTTP ${resp.status} from ${GIT_CDN_URL}`
+      logger.error({ category: 'install' }, `[install-git] ${msg}`)
+      return { ok: false, stdout: '', stderr: msg, exitCode: 1 }
+    }
+    zipBuffer = await resp.arrayBuffer()
+    logger.info({ category: 'install' }, `[install-git] Downloaded ${(zipBuffer.byteLength / 1024 / 1024).toFixed(1)}MB`)
+  } catch (err: any) {
+    const msg = `Download failed: ${err.message}`
+    logger.error({ category: 'install' }, `[install-git] ${msg}`)
+    return { ok: false, stdout: '', stderr: msg, exitCode: 1 }
+  }
+
+  try {
+    // Write zip to temp
+    const ts = Date.now()
+    const tmpZip = resolve(tmpdir(), `git-install-${ts}.zip`)
+    const tmpExtractDir = resolve(tmpdir(), `git-extract-${ts}`)
+    writeFileSync(tmpZip, Buffer.from(zipBuffer))
+    logger.info({ category: 'install' }, `[install-git] Zip saved to ${tmpZip}, extracting...`)
+
+    // Extract
+    mkdirSync(tmpExtractDir, { recursive: true })
+    execSync(
+      `powershell -NoProfile -Command "Expand-Archive -Force -Path '${tmpZip}' -DestinationPath '${tmpExtractDir}'"`,
+      { timeout: 60_000, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] },
+    )
+
+    // Find the .exe inside extracted directory
+    const { readdirSync } = await import('node:fs')
+    const files = readdirSync(tmpExtractDir)
+    const exeFile = files.find(f => f.endsWith('.exe'))
+    if (!exeFile) {
+      const msg = `No .exe found in extracted zip (files: ${files.join(', ')})`
+      logger.error({ category: 'install' }, `[install-git] ${msg}`)
+      return { ok: false, stdout: '', stderr: msg, exitCode: 1 }
+    }
+
+    const exePath = resolve(tmpExtractDir, exeFile)
+    logger.info({ category: 'install' }, `[install-git] Running silent install: ${exePath}`)
+
+    // Run silent install (will trigger UAC)
+    let stdout = ''
+    let stderr = ''
+    let exitCode = 0
+    try {
+      stdout = execSync(`"${exePath}" /VERYSILENT /NORESTART /SP-`, {
+        encoding: 'utf-8',
+        timeout: 300_000,
+        windowsHide: true,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      })
+    } catch (err: any) {
+      stdout = err.stdout ?? ''
+      stderr = err.stderr ?? ''
+      exitCode = err.status ?? 1
+    }
+
+    // Clean up temp files
+    try {
+      const { rmSync } = await import('node:fs')
+      rmSync(tmpZip, { force: true })
+      rmSync(tmpExtractDir, { recursive: true, force: true })
+    } catch { /* ignore */ }
+
+    resetShellEnvCache()
+
+    if (exitCode === 0) {
+      logger.info({ category: 'install' }, `[install-git] Git installed successfully`)
+    } else {
+      logger.error({ category: 'install', exitCode, stderr }, `[install-git] Install failed`)
+    }
+
+    return { ok: exitCode === 0, stdout, stderr, exitCode }
+  } catch (err: any) {
+    const msg = err.message ?? String(err)
+    logger.error({ category: 'install' }, `[install-git] ${msg}`)
+    return { ok: false, stdout: '', stderr: msg, exitCode: 1 }
+  }
+}
+
 health.post('/install-tool', async (c) => {
   const body = await c.req.json()
   const parsed = installToolSchema.safeParse(body)
@@ -345,20 +440,24 @@ health.post('/install-tool', async (c) => {
   const isWindows = process.platform === 'win32'
   const isMac = process.platform === 'darwin'
 
-  // Bun: download from CDN and extract (no shell script dependency)
+  // Bun: download from CDN and extract
   if (tool === 'bun') {
     const result = await installBun()
     return c.json(result)
   }
 
-  // Git / Node.js: use platform commands
+  // Git on Windows: download from CDN and run silent install
+  if (tool === 'git' && isWindows) {
+    const result = await installGitWindows()
+    return c.json(result)
+  }
+
+  // Git on macOS / Node.js on Windows: use platform commands
   let command: string | null = null
   switch (tool) {
     case 'git':
       if (isMac) {
         command = 'xcode-select --install'
-      } else if (isWindows) {
-        command = 'winget install Git.Git --accept-package-agreements --accept-source-agreements --disable-interactivity'
       }
       break
     case 'node':
