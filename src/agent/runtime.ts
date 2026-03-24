@@ -15,6 +15,7 @@ import { resolveMcpServers } from './mcp-utils.ts'
 import { createBuiltinMcpServer } from './builtin-mcp.ts'
 import { createMessageMcpServer } from './message-mcp.ts'
 import { buildParsedDocumentsPrompt, createDocumentMcpServer, ingestDocumentAttachments } from './document-mcp.ts'
+import { createTaskMcpServer } from './task-mcp.ts'
 import { preprocessAttachments } from './document-converter.ts'
 import { abortRegistry } from './abort-registry.ts'
 import { getActiveModelConfig } from '../settings/manager.ts'
@@ -838,7 +839,7 @@ export class AgentRuntime {
       }
     }
 
-    // MCP servers: resolve env vars + inject built-in image analysis/document servers
+    // MCP servers: resolve env vars + inject built-in image analysis/document/task servers
     const mcpServers: Record<string, unknown> = {}
     if (this.config.mcpServers) {
       // Filter out legacy external minimax MCP (replaced by built-in)
@@ -860,6 +861,10 @@ export class AgentRuntime {
       })
       logBrowserToolRegistration(resolvedBrowserProfile.id)
     }
+    mcpServers['task'] = createTaskMcpServer({
+      agentId,
+      chatId,
+    })
     queryOptions.mcpServers = mcpServers as Record<string, import('@anthropic-ai/claude-agent-sdk').McpServerConfig>
 
     // Tool access control (ensure Skill tool is always included)

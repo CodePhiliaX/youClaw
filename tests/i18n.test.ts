@@ -82,6 +82,21 @@ describe('i18n — newly added tasks keys exist', () => {
     'selectTask',
     'schedule',
     'nextRun',
+    'cronDaily',
+    'cronWeekly',
+    'cronMonthly',
+    'cronCustom',
+    'weekday',
+    'dayOfMonth',
+    'cronPreview',
+    'cronCustomHelp',
+    'weekdayMonday',
+    'weekdayTuesday',
+    'weekdayWednesday',
+    'weekdayThursday',
+    'weekdayFriday',
+    'weekdaySaturday',
+    'weekdaySunday',
   ]
 
   for (const key of requiredTaskKeys) {
@@ -103,7 +118,8 @@ describe('i18n — original keys are not broken', () => {
     'pause', 'resume', 'prompt', 'taskId', 'created', 'lastRun',
     'recentRuns', 'noRuns', 'createTitle', 'agent', 'promptPlaceholder',
     'scheduleType', 'interval', 'cron', 'once', 'intervalMinutes',
-    'cronExpression', 'runAt', 'intervalPlaceholder', 'cronPlaceholder',
+    'cronExpression', 'runAt', 'hour', 'minute', 'day', 'week',
+    'intervalPlaceholder', 'cronPlaceholder',
     'cronHelp', 'allRequired', 'invalidInterval', 'invalidDate', 'creating',
   ]
 

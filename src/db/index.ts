@@ -187,6 +187,12 @@ export function initDatabase(): Database {
   // Migration: add delivery status column to run logs
   try { _db.exec('ALTER TABLE task_run_logs ADD COLUMN delivery_status TEXT') } catch {}
 
+  // Query indexes for task filtering and scheduler scans
+  _db.exec('CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_agent_created_at ON scheduled_tasks(agent_id, created_at DESC)')
+  _db.exec('CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_agent_chat_name ON scheduled_tasks(agent_id, chat_id, name)')
+  _db.exec('CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_status_next_run ON scheduled_tasks(status, next_run)')
+  _db.exec('CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_running_since ON scheduled_tasks(running_since)')
+
   // Migration: add attachments column
   try { _db.exec('ALTER TABLE messages ADD COLUMN attachments TEXT') } catch {}
 
@@ -392,7 +398,7 @@ export function updateTask(id: string, updates: Partial<{
   status: string
   nextRun: string | null
   lastRun: string
-  name: string
+  name: string | null
   description: string
   runningSince: string | null
   consecutiveFailures: number

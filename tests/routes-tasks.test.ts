@@ -21,6 +21,7 @@ import {
   getMessages,
   getChats,
   getTaskRunLogs,
+  updateTask,
 } from '../src/db/index.ts'
 import type { ScheduledTask } from '../src/db/index.ts'
 import { createTasksRoutes } from '../src/routes/tasks.ts'
@@ -201,6 +202,70 @@ describe('POST /tasks', () => {
     expect(body.next_run).not.toBeNull()
     expect(body.schedule_type).toBe('cron')
   })
+
+  test('duplicate name in the same chat returns 409', async () => {
+    const chatId = 'task:duplicate-name'
+    createTask({
+      id: 'post-dup-1',
+      agentId: 'agent-1',
+      chatId,
+      prompt: 'first',
+      scheduleType: 'interval',
+      scheduleValue: '60000',
+      nextRun: new Date().toISOString(),
+      name: 'Duplicate Name',
+    })
+
+    const res = await app.request('/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agentId: 'agent-1',
+        chatId,
+        prompt: 'second',
+        scheduleType: 'interval',
+        scheduleValue: '60000',
+        name: 'Duplicate Name',
+      }),
+    })
+
+    expect(res.status).toBe(409)
+    expect((await res.json() as any).error).toContain('Task already exists')
+  })
+
+  test('invalid cron expression returns 400', async () => {
+    const res = await app.request('/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agentId: 'agent-1',
+        chatId: 'task:bad-cron',
+        prompt: 'cron test',
+        scheduleType: 'cron',
+        scheduleValue: 'not a cron',
+      }),
+    })
+
+    expect(res.status).toBe(400)
+    expect((await res.json() as any).error).toContain('Invalid cron expression')
+  })
+
+  test('past once schedule returns 400', async () => {
+    const res = await app.request('/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agentId: 'agent-1',
+        chatId: 'task:past-once',
+        prompt: 'once test',
+        scheduleType: 'once',
+        scheduleValue: new Date(Date.now() - 60_000).toISOString(),
+      }),
+    })
+
+    expect(res.status).toBe(400)
+    expect((await res.json() as any).error).toContain('once must be a future ISO date')
+  })
 })
 
 // ===== PUT /tasks/:id =====
@@ -263,6 +328,106 @@ describe('PUT /tasks/:id', () => {
       body: JSON.stringify({ name: 'x' }),
     })
     expect(res.status).toBe(404)
+  })
+
+  test('renaming to an existing task name in the same chat returns 409', async () => {
+    createTask({
+      id: 'put-dup-2',
+      agentId: 'agent-1',
+      chatId: 'c',
+      prompt: 'other',
+      scheduleType: 'interval',
+      scheduleValue: '60000',
+      nextRun: new Date().toISOString(),
+      name: 'Taken Name',
+    })
+
+    const res = await app.request('/tasks/put-1', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Taken Name' }),
+    })
+
+    expect(res.status).toBe(409)
+    expect((await res.json() as any).error).toContain('Task already exists')
+  })
+
+  test('clearing deliveryTarget while deliveryMode remains push returns 400', async () => {
+    createTask({
+      id: 'put-delivery',
+      agentId: 'agent-1',
+      chatId: 'delivery-chat',
+      prompt: 'deliver me',
+      scheduleType: 'interval',
+      scheduleValue: '60000',
+      nextRun: new Date().toISOString(),
+      deliveryMode: 'push',
+      deliveryTarget: 'tg:123',
+    })
+
+    const res = await app.request('/tasks/put-delivery', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deliveryTarget: null }),
+    })
+
+    expect(res.status).toBe(400)
+    expect((await res.json() as any).error).toContain('deliveryTarget is required')
+  })
+
+  test('completed interval task can be reactivated and gets a nextRun again', async () => {
+    createTask({
+      id: 'put-reactivate',
+      agentId: 'agent-1',
+      chatId: 'reactivate-chat',
+      prompt: 'reactivate me',
+      scheduleType: 'interval',
+      scheduleValue: '60000',
+      nextRun: new Date().toISOString(),
+    })
+    updateTask('put-reactivate', {
+      status: 'completed',
+      nextRun: null,
+      lastRun: new Date(Date.now() - 60_000).toISOString(),
+    })
+
+    const res = await app.request('/tasks/put-reactivate', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'active' }),
+    })
+
+    expect(res.status).toBe(200)
+    const body = await res.json() as any
+    expect(body.status).toBe('active')
+    expect(body.next_run).not.toBeNull()
+  })
+
+  test('completed once task with past schedule cannot be reactivated without a new future schedule', async () => {
+    const pastIso = new Date(Date.now() - 60_000).toISOString()
+    createTask({
+      id: 'put-completed-once',
+      agentId: 'agent-1',
+      chatId: 'once-chat',
+      prompt: 'already ran',
+      scheduleType: 'once',
+      scheduleValue: pastIso,
+      nextRun: pastIso,
+    })
+    updateTask('put-completed-once', {
+      status: 'completed',
+      nextRun: null,
+      lastRun: pastIso,
+    })
+
+    const res = await app.request('/tasks/put-completed-once', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'active' }),
+    })
+
+    expect(res.status).toBe(400)
+    expect((await res.json() as any).error).toContain('once must be a future ISO date')
   })
 })
 

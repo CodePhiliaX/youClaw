@@ -74,13 +74,17 @@ export class AgentManager {
       writeFileSync(resolve(defaultDir, 'TOOLS.md'), DEFAULT_TOOLS_MD)
       writeFileSync(resolve(defaultDir, 'memory', 'MEMORY.md'), DEFAULT_MEMORY_MD)
     } else {
-      // Sync AGENT.md template if it exists but doesn't contain placeholder syntax
-      // This ensures template updates (e.g., IPC path placeholders) propagate to existing agents
+      // Sync AGENT.md when the checked-in default agent still uses legacy IPC task guidance.
       const agentMdPath = resolve(defaultDir, 'AGENT.md')
       if (existsSync(agentMdPath)) {
         try {
           const currentContent = readFileSync(agentMdPath, 'utf-8')
-          if (!currentContent.includes('{{ipcTasksDir}}') || !currentContent.includes('Do NOT use the built-in CronCreate')) {
+          if (
+            currentContent.includes('{{ipcTasksDir}}')
+            || currentContent.includes('{{ipcCurrentTasksPath}}')
+            || currentContent.includes('"type": "schedule_task"')
+            || currentContent.includes('current_tasks.json')
+          ) {
             writeFileSync(agentMdPath, DEFAULT_AGENT_MD)
             logger.info('Updated default agent AGENT.md with latest template')
           }

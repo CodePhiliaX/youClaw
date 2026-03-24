@@ -27,12 +27,12 @@ export function GlobalBubble() {
   const isSuccess = bubble.type === 'success'
 
   return createPortal(
-    <div className="pointer-events-none fixed inset-x-0 top-0 z-[90] flex justify-center p-4 sm:p-6">
+    <div className="pointer-events-none fixed inset-x-0 top-0 z-[90] flex justify-center px-4 pt-4 sm:px-6 sm:pt-6">
       <div
         role={isSuccess ? 'status' : 'alert'}
         aria-live={isSuccess ? 'polite' : 'assertive'}
         className={cn(
-          'pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-2xl border px-4 py-3 text-sm shadow-2xl backdrop-blur-md',
+          'pointer-events-auto inline-flex w-fit max-w-[min(calc(100vw-2rem),52rem)] items-start gap-3 rounded-2xl border px-4 py-3 text-sm shadow-2xl backdrop-blur-md sm:max-w-[min(calc(100vw-3rem),56rem)]',
           isSuccess
             ? 'border-green-500/30 bg-green-500/12 text-green-300'
             : 'border-red-500/30 bg-red-500/12 text-red-300',
@@ -43,7 +43,7 @@ export function GlobalBubble() {
         ) : (
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         )}
-        <span className="min-w-0 flex-1 break-words">{bubble.message}</span>
+        <span className="min-w-0 flex-1 break-words leading-6">{bubble.message}</span>
         <button
           type="button"
           onClick={dismissGlobalBubble}

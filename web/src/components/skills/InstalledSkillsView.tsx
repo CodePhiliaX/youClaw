@@ -14,7 +14,7 @@ import { useDragRegion } from '@/hooks/useDragRegion'
 import { cn } from '@/lib/utils'
 import {
   ChevronDown,
-  FolderGit2,
+  Github,
   Link2,
   Plus,
   Puzzle,
@@ -78,14 +78,14 @@ export function InstalledSkillsView({
             <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-56">
               <DropdownMenuItem className="cursor-pointer" onSelect={onCreateSkill}>
                 <Plus className="h-4 w-4" />
-                {t.skills.newSkill}
+                {t.skills.customSkill}
               </DropdownMenuItem>
               <DropdownMenuItem className="cursor-pointer" onSelect={() => onImportSkill('raw-url')}>
                 <Link2 className="h-4 w-4" />
                 {t.skills.importFromRawUrl}
               </DropdownMenuItem>
               <DropdownMenuItem className="cursor-pointer" onSelect={() => onImportSkill('github')}>
-                <FolderGit2 className="h-4 w-4" />
+                <Github className="h-4 w-4" />
                 {t.skills.importFromGitHub}
               </DropdownMenuItem>
             </DropdownMenuContent>

@@ -349,8 +349,21 @@ class GitHubImportProvider implements ImportProvider<GitHubImportInput> {
 
     const owner = segments[0]
     const repo = segments[1]
-    const ref = segments[2]
-    const pathSegments = segments.slice(3)
+    let refSegments: string[]
+    let pathSegments: string[]
+
+    if (segments[2] === 'refs' && (segments[3] === 'heads' || segments[3] === 'tags')) {
+      if (segments.length < 6) {
+        throw new Error('GitHub raw URLs must point to a SKILL.md file')
+      }
+      refSegments = [segments[4]!]
+      pathSegments = segments.slice(5)
+    } else {
+      refSegments = [segments[2]!]
+      pathSegments = segments.slice(3)
+    }
+
+    const ref = refSegments.join('/')
     if (!owner || !repo || !ref) {
       throw new Error('GitHub raw URLs must point to a SKILL.md file')
     }

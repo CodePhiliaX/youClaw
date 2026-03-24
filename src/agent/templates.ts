@@ -33,7 +33,7 @@ export const DEFAULT_AGENT_MD = `\
 
 ## Capabilities
 - Access to tools for reading, writing, and executing code
-- Can create, pause, resume, and cancel scheduled tasks via IPC
+- Can list, create, update, pause, resume, and delete scheduled tasks via task MCP tools
 - Can manage persistent memory files
 
 ## Memory Management
@@ -62,24 +62,27 @@ You have persistent memory files. Use Read/Write tools to manage them.
 
 ## Scheduled Tasks (Cron Jobs)
 
-**IMPORTANT**: Do NOT use the built-in CronCreate/CronDelete/CronList tools. Those create session-level tasks that expire when the process exits. Instead, ALWAYS use the IPC file method described below to create persistent scheduled tasks stored in the database.
+**IMPORTANT**: Do NOT use the built-in CronCreate/CronDelete/CronList tools. Those create session-level tasks that expire when the process exits.
 
-You can create, pause, resume, and cancel scheduled tasks by writing JSON files.
+Use the task MCP tools for persistent scheduled tasks:
 
-**Directory**: Write JSON files to \`{{ipcTasksDir}}\` (the directory will be created automatically if it doesn't exist).
+- \`mcp__task__list_tasks\` — read current tasks (always call this first before write operations)
+- \`mcp__task__update_task\` — write operations using \`action\`:
+  - \`create\`
+  - \`update\`
+  - \`pause\`
+  - \`resume\`
+  - \`delete\`
 
-**File naming**: Use \`{timestamp}-{random}.json\` format, e.g., \`1710000000000-abc123.json\`
-
-### Create a scheduled task
+### Create (action=create)
 \`\`\`json
 {
-  "type": "schedule_task",
+  "action": "create",
+  "name": "Daily summary",
   "prompt": "The prompt to execute on schedule",
   "schedule_type": "cron",
   "schedule_value": "0 9 * * *",
-  "chatId": "CURRENT_CHAT_ID",
-  "name": "Optional task name",
-  "description": "Optional task description"
+  "chat_id": "CURRENT_CHAT_ID"
 }
 \`\`\`
 
@@ -88,17 +91,15 @@ You can create, pause, resume, and cancel scheduled tasks by writing JSON files.
 - \`interval\`: Milliseconds between runs, e.g., \`60000\` (every minute), \`3600000\` (every hour)
 - \`once\`: ISO timestamp for one-time execution, e.g., \`2026-03-10T14:30:00.000Z\`
 
-### Pause/Resume/Cancel a task
+### Update/Pause/Resume/Delete
 \`\`\`json
-{ "type": "pause_task", "taskId": "task-xxx" }
-{ "type": "resume_task", "taskId": "task-xxx" }
-{ "type": "cancel_task", "taskId": "task-xxx" }
+{ "action": "update", "name": "Daily summary", "chat_id": "CURRENT_CHAT_ID", "prompt": "new prompt", "schedule_type": "cron", "schedule_value": "0 10 * * *" }
+{ "action": "pause", "name": "Daily summary", "chat_id": "CURRENT_CHAT_ID" }
+{ "action": "resume", "name": "Daily summary", "chat_id": "CURRENT_CHAT_ID" }
+{ "action": "delete", "name": "Daily summary", "chat_id": "CURRENT_CHAT_ID" }
 \`\`\`
 
-### Current tasks
-You can read \`{{ipcCurrentTasksPath}}\` to see existing scheduled tasks.
-
-**Important**: Replace \`CURRENT_CHAT_ID\` with the actual chatId from the current conversation context. The task result will be delivered to this chat.
+Always call \`mcp__task__list_tasks\` before any \`mcp__task__update_task\` write operation to avoid duplicate tasks.
 `
 
 export const DEFAULT_USER_MD = `\

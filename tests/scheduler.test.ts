@@ -1181,6 +1181,36 @@ describe('Scheduler.runManually', () => {
     expect(logs[0].status).toBe('error')
     expect(logs[0].error).toContain('[manual]')
   })
+
+  test('manual execution does not mutate scheduler state fields', async () => {
+    const nextRun = new Date(Date.now() + 60000).toISOString()
+    createTask({
+      id: 'manual-state',
+      agentId: 'agent-1',
+      chatId: 'task:manual-state',
+      prompt: 'manual execution',
+      scheduleType: 'interval',
+      scheduleValue: '60000',
+      nextRun,
+    })
+    updateTask('manual-state', {
+      status: 'paused',
+      consecutiveFailures: 3,
+      lastRun: new Date(Date.now() - 60000).toISOString(),
+    })
+
+    const before = getTask('manual-state')!
+    const mockQueue = { enqueue: mock(() => Promise.resolve('manual result')) } as any
+    const scheduler = new Scheduler(mockQueue, {} as any, mockEventBus)
+
+    const result = await scheduler.runManually(before)
+    expect(result.status).toBe('success')
+
+    const after = getTask('manual-state')!
+    expect(after.status).toBe('paused')
+    expect(after.next_run).toBe(nextRun)
+    expect(after.consecutive_failures).toBe(3)
+  })
 })
 
 // ===== Delivery =====

@@ -73,7 +73,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab }: SettingsDialo
                 )}
               >
                 <tab.icon size={16} />
-                <span>{tab.label}</span>
+                <span className="min-w-0 flex-1 truncate text-left">{tab.label}</span>
               </button>
             ))}
           </div>

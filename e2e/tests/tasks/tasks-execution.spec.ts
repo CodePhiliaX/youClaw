@@ -1,4 +1,4 @@
-import { test, expect, UNIQUE, API_BASE, createTaskViaAPI, cleanupE2ETasks, navigateToTasks, getFirstAgentId } from './helpers'
+import { test, expect, UNIQUE, API_BASE, createTaskViaAPI, cleanupE2ETasks, navigateToTasks, getFirstAgentId, reloadTasksPage } from './helpers'
 
 test.describe('真实执行', () => {
   test.beforeEach(async ({ page }) => {
@@ -22,12 +22,11 @@ test.describe('真实执行', () => {
       prompt: '请回复"OK"',
     })
 
-    await page.reload()
-    await page.waitForLoadState('networkidle')
+    await reloadTasksPage(page)
 
     // 点击任务
     await page.getByTestId('task-item').filter({ hasText: taskName }).click()
-    await expect(page.getByText('No runs yet')).toBeVisible()
+    await expect(page.getByText('暂无运行记录')).toBeVisible()
 
     // 点击"立即运行"
     const runResponsePromise = page.waitForResponse(
@@ -40,12 +39,11 @@ test.describe('真实执行', () => {
     expect(runResult.status).toBe('success')
 
     // reload 获取最新数据后重新点击
-    await page.reload()
-    await page.waitForLoadState('networkidle')
+    await reloadTasksPage(page)
     await page.getByTestId('task-item').filter({ hasText: taskName }).click()
 
     // 验证 "No runs yet" 消失
-    await expect(page.getByText('No runs yet')).not.toBeVisible()
+    await expect(page.getByText('暂无运行记录')).not.toBeVisible()
 
     // 验证至少出现 1 个 task-log-item
     await expect(page.getByTestId('task-log-item').first()).toBeVisible()

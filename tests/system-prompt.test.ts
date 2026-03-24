@@ -1,7 +1,5 @@
 /**
- * System Prompt IPC documentation tests
- *
- * Verify that prompts/system.md IPC documentation includes name/description field descriptions
+ * System Prompt scheduled task documentation tests
  */
 
 import { describe, test, expect } from 'bun:test'
@@ -16,17 +14,16 @@ const content = readFileSync(systemPromptPath, 'utf-8')
 
 loadEnv()
 
-describe('system.md — IPC documentation', () => {
-  test('contains schedule_task example', () => {
-    expect(content).toContain('"type": "schedule_task"')
+describe('system.md — task MCP documentation', () => {
+  test('contains list/update task MCP tool names', () => {
+    expect(content).toContain('mcp__task__list_tasks')
+    expect(content).toContain('mcp__task__update_task')
   })
 
-  test('contains name field', () => {
+  test('contains action create example with name', () => {
+    expect(content).toContain('"action": "create"')
     expect(content).toContain('"name"')
-  })
-
-  test('contains description field', () => {
-    expect(content).toContain('"description"')
+    expect(content).toContain('"chat_id"')
   })
 
   test('contains schedule_type option descriptions', () => {
@@ -35,23 +32,41 @@ describe('system.md — IPC documentation', () => {
     expect(content).toContain('once')
   })
 
-  test('contains pause/resume/cancel examples', () => {
-    expect(content).toContain('"pause_task"')
-    expect(content).toContain('"resume_task"')
-    expect(content).toContain('"cancel_task"')
+  test('contains update/pause/resume/delete action examples', () => {
+    expect(content).toContain('"action": "update"')
+    expect(content).toContain('"action": "pause"')
+    expect(content).toContain('"action": "resume"')
+    expect(content).toContain('"action": "delete"')
   })
 
-  test('contains current_tasks.json description', () => {
-    expect(content).toContain('current_tasks.json')
+  test('requires list before write operation', () => {
+    expect(content).toContain('Always call `mcp__task__list_tasks` before any `mcp__task__update_task` write operation')
   })
 
-  test('contains CURRENT_CHAT_ID replacement hint', () => {
-    expect(content).toContain('CURRENT_CHAT_ID')
+  test('does not contain legacy IPC task file guidance', () => {
+    expect(content).not.toContain('"type": "schedule_task"')
+    expect(content).not.toContain('current_tasks.json')
+    expect(content).not.toContain('./data/ipc/')
   })
+})
 
-  test('contains optional field annotations (Optional)', () => {
-    expect(content).toContain('Optional task name')
-    expect(content).toContain('Optional task description')
+describe('PromptBuilder channel context', () => {
+  test('injects wechat-personal media delivery hints for current recipient', () => {
+    const builder = new PromptBuilder(null, null)
+    const prompt = builder.build(
+      resolve(import.meta.dir, '..'),
+      { workspaceDir: resolve(import.meta.dir, '..') } as AgentConfig,
+      {
+        agentId: 'default',
+        chatId: 'wxp:wechat-personal-main:user123@im.wechat',
+      },
+    )
+
+    expect(prompt).toContain('Current channel: wechat-personal')
+    expect(prompt).toContain('Current recipient WeChat ID: user123@im.wechat')
+    expect(prompt).toContain('This channel supports sending text, images, and files back to the current user.')
+    expect(prompt).toContain('`mcp__message__send_to_current_chat`')
+    expect(prompt).toContain('do not claim that WeChat cannot send images or files')
   })
 })
 

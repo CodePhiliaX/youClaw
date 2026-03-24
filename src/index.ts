@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { loadEnv, getEnv } from './config/index.ts'
 import { initLogger, getLogger } from './logger/index.ts'
-import { initDatabase, createTask, updateTask, deleteTask, getTasks, getTask } from './db/index.ts'
+import { initDatabase } from './db/index.ts'
 import { EventBus } from './events/index.ts'
 import { AgentManager, AgentQueue, PromptBuilder, AgentCompiler, AgentRouter, HooksManager, SecretsManager } from './agent/index.ts'
 import { ensureBunRuntime } from './agent/runtime.ts'
@@ -16,9 +16,16 @@ import { registerChannelOutboundService } from './channel/outbound-service.ts'
 import { SkillsLoader, SkillsWatcher, RegistryManager } from './skills/index.ts'
 import { MemoryManager, MemoryIndexer } from './memory/index.ts'
 import { Scheduler } from './scheduler/index.ts'
-import { IpcWatcher, refreshTasksSnapshot } from './ipc/index.ts'
+import { IpcWatcher } from './ipc/index.ts'
 import { BrowserManager } from './browser/index.ts'
 import { createApp } from './routes/index.ts'
+import {
+  TaskServiceError,
+  createScheduledTask,
+  deleteScheduledTaskById,
+  pauseScheduledTaskById,
+  resumeScheduledTaskById,
+} from './task/index.ts'
 
 async function main() {
   // 1. Load environment variables
@@ -177,73 +184,60 @@ async function main() {
   const ipcWatcher = new IpcWatcher({
     onScheduleTask: (data) => {
       const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-      const nextRun = scheduler.calculateNextRun({
-        schedule_type: data.scheduleType,
-        schedule_value: data.scheduleValue,
-        last_run: null,
-      })
-
-      createTask({
+      createScheduledTask({
         id: taskId,
         agentId: data.agentId,
         chatId: data.chatId,
         prompt: data.prompt,
-        scheduleType: data.scheduleType,
+        scheduleType: data.scheduleType as 'cron' | 'interval' | 'once',
         scheduleValue: data.scheduleValue,
-        nextRun: nextRun ?? new Date().toISOString(),
         name: data.name,
         description: data.description,
-        deliveryMode: data.deliveryMode,
+        timezone: data.timezone,
+        deliveryMode: data.deliveryMode as 'push' | 'none' | undefined,
         deliveryTarget: data.deliveryTarget,
       })
-
-      // Write snapshot
-      refreshSnapshot(data.agentId)
       logger.info({ taskId, agentId: data.agentId, scheduleType: data.scheduleType }, 'IPC: scheduled task created')
     },
     onPauseTask: (taskId) => {
-      const task = getTask(taskId)
-      if (task) {
-        updateTask(taskId, { status: 'paused' })
-        refreshSnapshot(task.agent_id)
+      try {
+        pauseScheduledTaskById(taskId)
         logger.info({ taskId }, 'IPC: scheduled task paused')
-      } else {
-        logger.warn({ taskId }, 'IPC: pause failed, task not found')
+      } catch (err) {
+        if (err instanceof TaskServiceError && err.statusCode === 404) {
+          logger.warn({ taskId }, 'IPC: pause failed, task not found')
+          return
+        }
+        throw err
       }
     },
     onResumeTask: (taskId) => {
-      const task = getTask(taskId)
-      if (task) {
-        const nextRun = scheduler.calculateNextRun({
-          schedule_type: task.schedule_type,
-          schedule_value: task.schedule_value,
-          last_run: task.last_run,
-        })
-        updateTask(taskId, { status: 'active', nextRun: nextRun ?? new Date().toISOString() })
-        refreshSnapshot(task.agent_id)
+      try {
+        resumeScheduledTaskById(taskId)
         logger.info({ taskId }, 'IPC: scheduled task resumed')
-      } else {
-        logger.warn({ taskId }, 'IPC: resume failed, task not found')
+      } catch (err) {
+        if (err instanceof TaskServiceError && err.statusCode === 404) {
+          logger.warn({ taskId }, 'IPC: resume failed, task not found')
+          return
+        }
+        throw err
       }
     },
     onCancelTask: (taskId) => {
-      const task = getTask(taskId)
-      if (task) {
-        deleteTask(taskId)
-        refreshSnapshot(task.agent_id)
+      try {
+        deleteScheduledTaskById(taskId)
         logger.info({ taskId }, 'IPC: scheduled task cancelled')
-      } else {
-        logger.warn({ taskId }, 'IPC: cancel failed, task not found')
+      } catch (err) {
+        if (err instanceof TaskServiceError && err.statusCode === 404) {
+          logger.warn({ taskId }, 'IPC: cancel failed, task not found')
+          return
+        }
+        throw err
       }
     },
   })
   ipcWatcher.start()
   logger.info('IPC Watcher started')
-
-  /** Refresh task snapshot for the specified agent */
-  function refreshSnapshot(agentId: string) {
-    refreshTasksSnapshot(agentId, getTasks)
-  }
 
   // 16. Startup memory maintenance: log cleanup + snapshot restore
   for (const agentConfig of agentManager.getAgents()) {

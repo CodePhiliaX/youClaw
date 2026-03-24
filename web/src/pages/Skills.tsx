@@ -348,12 +348,13 @@ export function Skills() {
         <SkillImportPanel
           mode={installedWorkspace.provider}
           onImported={handleImportSuccess}
+          existingSkillNames={skills.map((skill) => skill.name)}
         />
       )
     }
 
     return undefined
-  }, [handleImportSuccess, installedWorkspace, refreshInstalledData])
+  }, [handleImportSuccess, installedWorkspace, refreshInstalledData, skills])
 
   return (
     <div className="flex h-full flex-col">

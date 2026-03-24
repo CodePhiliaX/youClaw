@@ -1,13 +1,14 @@
 /**
  * Frontend helper function tests
  *
- * Tests the pure function logic exported from Tasks.tsx
- * Since the component functions are module-internal, we copy the logic here for verification
+ * Tests pure task helper logic used by Tasks.tsx.
+ * UI-only helpers stay copied locally; shared interval helpers are imported from web/src/lib/task-interval.ts.
  */
 
 import { describe, test, expect } from 'bun:test'
+import { buildIntervalScheduleValue, formatIntervalLabel, parseIntervalScheduleValue } from '../web/src/lib/task-interval.ts'
 
-// Copied from Tasks.tsx pure functions (they are not exported, so we copy them here for testing)
+// Copied from Tasks.tsx UI-local helpers.
 
 function formatRelative(iso: string | null): string {
   if (!iso) return '-'
@@ -35,20 +36,9 @@ function formatDuration(ms: number): string {
 
 function scheduleLabel(type: string, value: string): string {
   if (type === 'cron') return `cron: ${value}`
-  if (type === 'interval') {
-    const ms = parseInt(value, 10)
-    if (ms < 60_000) return `every ${ms / 1000}s`
-    if (ms < 3_600_000) return `every ${ms / 60_000}m`
-    return `every ${ms / 3_600_000}h`
-  }
+  if (type === 'interval') return formatIntervalLabel(value)
   if (type === 'once') return `once: ${new Date(value).toLocaleString()}`
   return value
-}
-
-function msToMinutes(ms: string): string {
-  const n = parseInt(ms, 10)
-  if (isNaN(n)) return ms
-  return String(n / 60_000)
 }
 
 function isoToDatetimeLocal(iso: string): string {
@@ -148,6 +138,12 @@ describe('scheduleLabel', () => {
     expect(scheduleLabel('interval', '7200000')).toBe('every 2h')
   })
 
+  test('interval — day and week level', () => {
+    expect(scheduleLabel('interval', '86400000')).toBe('every 1d')
+    expect(scheduleLabel('interval', '604800000')).toBe('every 1w')
+    expect(scheduleLabel('interval', '1209600000')).toBe('every 2w')
+  })
+
   test('once type', () => {
     const result = scheduleLabel('once', '2026-03-10T14:30:00.000Z')
     expect(result.startsWith('once: ')).toBe(true)
@@ -158,22 +154,39 @@ describe('scheduleLabel', () => {
   })
 })
 
-// ===== msToMinutes =====
+// ===== interval helpers =====
 
-describe('msToMinutes', () => {
-  test('normal conversion', () => {
-    expect(msToMinutes('60000')).toBe('1')
-    expect(msToMinutes('1800000')).toBe('30')
-    expect(msToMinutes('3600000')).toBe('60')
+describe('parseIntervalScheduleValue', () => {
+  test('round-trips exact minute/hour/day/week values', () => {
+    expect(parseIntervalScheduleValue('60000')).toEqual({ value: '1', unit: 'minute' })
+    expect(parseIntervalScheduleValue('7200000')).toEqual({ value: '2', unit: 'hour' })
+    expect(parseIntervalScheduleValue('172800000')).toEqual({ value: '2', unit: 'day' })
+    expect(parseIntervalScheduleValue('1209600000')).toEqual({ value: '2', unit: 'week' })
   })
 
-  test('non-integer minutes', () => {
-    expect(msToMinutes('90000')).toBe('1.5')
+  test('falls back to minutes for non-exact higher units', () => {
+    expect(parseIntervalScheduleValue('90000')).toEqual({ value: '1.5', unit: 'minute' })
+    expect(parseIntervalScheduleValue('5400000')).toEqual({ value: '90', unit: 'minute' })
   })
 
-  test('NaN returns the original string', () => {
-    expect(msToMinutes('abc')).toBe('abc')
-    expect(msToMinutes('')).toBe('')
+  test('invalid values preserve the raw string', () => {
+    expect(parseIntervalScheduleValue('abc')).toEqual({ value: 'abc', unit: 'minute' })
+    expect(parseIntervalScheduleValue('')).toEqual({ value: '', unit: 'minute' })
+  })
+})
+
+describe('buildIntervalScheduleValue', () => {
+  test('converts value and unit into milliseconds', () => {
+    expect(buildIntervalScheduleValue('30', 'minute')).toBe('1800000')
+    expect(buildIntervalScheduleValue('2', 'hour')).toBe('7200000')
+    expect(buildIntervalScheduleValue('3', 'day')).toBe('259200000')
+    expect(buildIntervalScheduleValue('1.5', 'week')).toBe('907200000')
+  })
+
+  test('invalid values return null', () => {
+    expect(buildIntervalScheduleValue('', 'minute')).toBeNull()
+    expect(buildIntervalScheduleValue('0', 'hour')).toBeNull()
+    expect(buildIntervalScheduleValue('abc', 'day')).toBeNull()
   })
 })
 
@@ -266,28 +279,16 @@ describe('formatDuration — large values', () => {
 })
 
 describe('scheduleLabel — edge cases', () => {
-  test('interval NaN → "every NaNh"', () => {
-    // parseInt('not-a-number', 10) is NaN, all comparisons are false, falls through to return `every ${NaN / 3_600_000}h`
-    expect(scheduleLabel('interval', 'not-a-number')).toBe('every NaNh')
+  test('interval NaN keeps the raw value', () => {
+    expect(scheduleLabel('interval', 'not-a-number')).toBe('every not-a-number')
   })
 
   test('interval 0 → "every 0s"', () => {
-    // 0 < 60_000 is true, 0 / 1000 = 0
     expect(scheduleLabel('interval', '0')).toBe('every 0s')
   })
 
   test('cron empty value → "cron: "', () => {
     expect(scheduleLabel('cron', '')).toBe('cron: ')
-  })
-})
-
-describe('msToMinutes — edge cases', () => {
-  test('negative number → "-1"', () => {
-    expect(msToMinutes('-60000')).toBe('-1')
-  })
-
-  test('0 → "0"', () => {
-    expect(msToMinutes('0')).toBe('0')
   })
 })
 

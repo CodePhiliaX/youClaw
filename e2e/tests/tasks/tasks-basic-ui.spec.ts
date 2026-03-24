@@ -1,4 +1,4 @@
-import { test, expect, UNIQUE, createTaskViaAPI, cleanupE2ETasks, navigateToTasks } from './helpers'
+import { test, expect, UNIQUE, createTaskViaAPI, cleanupE2ETasks, navigateToTasks, reloadTasksPage } from './helpers'
 
 test.describe('Level 1: 页面加载与基本 UI', () => {
   test.beforeEach(async ({ page }) => {
@@ -11,8 +11,8 @@ test.describe('Level 1: 页面加载与基本 UI', () => {
 
   test('核心元素可见', async ({ page }) => {
     await expect(page.getByTestId('task-create-btn')).toBeVisible()
-    await expect(page.getByTestId('task-search')).toBeVisible()
     expect(page.url()).toContain('/cron')
+    await expect(page.getByText('选择一个任务查看详情')).toBeVisible()
   })
 
   test('列表数据与 API 一致', async ({ page, request }) => {
@@ -32,8 +32,7 @@ test.describe('Level 1: 页面加载与基本 UI', () => {
       scheduleValue: '0 9 * * *',
     })
 
-    await page.reload()
-    await page.waitForLoadState('networkidle')
+    await reloadTasksPage(page)
 
     // 验证这 2 个任务在列表中可见
     const itemInterval = page.getByTestId('task-item').filter({ hasText: nameInterval })
@@ -57,8 +56,7 @@ test.describe('Level 1: 页面加载与基本 UI', () => {
     await expect(page.getByTestId('task-input-prompt')).toBeVisible()
     await expect(page.getByTestId('task-submit-btn')).toBeVisible()
     await expect(page.getByTestId('task-cancel-btn')).toBeVisible()
-    // 标题为 "New Cron Job"
-    await expect(page.getByText('New Cron Job')).toBeVisible()
+    await expect(page.getByText('创建定时任务')).toBeVisible()
   })
 
   test('取消按钮关闭表单', async ({ page }) => {

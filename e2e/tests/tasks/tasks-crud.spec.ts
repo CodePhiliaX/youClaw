@@ -1,7 +1,7 @@
 import {
   test, expect, UNIQUE,
   createTaskViaAPI, cleanupE2ETasks,
-  navigateToTasks, fillAndSubmitTaskForm,
+  navigateToTasks, fillAndSubmitTaskForm, reloadTasksPage,
 } from './helpers'
 
 // ===== Level 2: 单个操作 =====
@@ -37,8 +37,7 @@ test.describe('Level 2: 单个操作', () => {
       prompt: 'E2E detail prompt',
     })
 
-    await page.reload()
-    await page.waitForLoadState('networkidle')
+    await reloadTasksPage(page)
 
     // 点击任务
     await page.getByTestId('task-item').filter({ hasText: taskName }).click()
@@ -57,7 +56,7 @@ test.describe('Level 2: 单个操作', () => {
     await expect(page.getByTestId('task-run-btn')).toBeVisible()
 
     // 暂无运行记录
-    await expect(page.getByText('No runs yet')).toBeVisible()
+    await expect(page.getByText('暂无运行记录')).toBeVisible()
   })
 
   test('UI 编辑任务', async ({ page, request }) => {
@@ -67,8 +66,7 @@ test.describe('Level 2: 单个操作', () => {
       prompt: 'original prompt',
     })
 
-    await page.reload()
-    await page.waitForLoadState('networkidle')
+    await reloadTasksPage(page)
 
     // 点击任务 → 编辑
     await page.getByTestId('task-item').filter({ hasText: taskName }).click()
@@ -100,18 +98,15 @@ test.describe('Level 2: 单个操作', () => {
     const taskName = UNIQUE()
     await createTaskViaAPI(request, { name: taskName })
 
-    await page.reload()
-    await page.waitForLoadState('networkidle')
+    await reloadTasksPage(page)
 
     await page.getByTestId('task-item').filter({ hasText: taskName }).click()
-
-    // 提前注册 dialog accept
-    page.on('dialog', (d) => d.accept())
 
     const deleteResponsePromise = page.waitForResponse(
       (r) => r.url().includes('/api/tasks/') && r.request().method() === 'DELETE'
     )
     await page.getByTestId('task-delete-btn').click()
+    await page.getByRole('button', { name: '删除' }).click()
     await deleteResponsePromise
 
     // 验证从列表消失
@@ -122,15 +117,12 @@ test.describe('Level 2: 单个操作', () => {
     const taskName = UNIQUE()
     await createTaskViaAPI(request, { name: taskName })
 
-    await page.reload()
-    await page.waitForLoadState('networkidle')
+    await reloadTasksPage(page)
 
     await page.getByTestId('task-item').filter({ hasText: taskName }).click()
 
-    // 注册 dialog dismiss
-    page.on('dialog', (d) => d.dismiss())
-
     await page.getByTestId('task-delete-btn').click()
+    await page.getByRole('button', { name: '取消' }).click()
 
     // 任务仍在列表
     await expect(page.getByTestId('task-item').filter({ hasText: taskName })).toBeVisible()
@@ -232,12 +224,11 @@ test.describe('Level 3: 串行 CRUD 全流程', () => {
     await navigateToTasks(page)
     await page.getByTestId('task-item').filter({ hasText: taskName }).click()
 
-    page.on('dialog', (d) => d.accept())
-
     const deleteResponsePromise = page.waitForResponse(
       (r) => r.url().includes('/api/tasks/') && r.request().method() === 'DELETE'
     )
     await page.getByTestId('task-delete-btn').click()
+    await page.getByRole('alertdialog').getByRole('button', { name: '删除' }).click()
     await deleteResponsePromise
 
     await expect(page.getByTestId('task-item').filter({ hasText: taskName })).not.toBeVisible()
