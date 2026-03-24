@@ -499,6 +499,8 @@ export const en = {
     editModel: 'Edit Model',
     setDefault: 'Set Default',
     currentSelection: 'Active',
+    modelProvider: 'Provider',
+    modelProviderPlaceholder: 'Select a provider',
     modelName: 'Name',
     modelId: 'Model ID',
     activeModel: 'Active Model',

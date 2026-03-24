@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { openExternal } from "@/api/transport"
 import { useI18n } from "@/i18n"
 import { getOfficialDocsUrl } from "@/lib/external-links"
@@ -22,6 +23,14 @@ const BUILTIN_MODELS = [
 ] as const
 
 const CUSTOM_MODEL_DOCS_URL = getOfficialDocsUrl('custom-models')
+const CUSTOM_MODEL_PROVIDER_OPTIONS: Array<{ value: CustomModelDTO['provider']; label: string }> = [
+  { value: 'anthropic', label: 'Anthropic' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'gemini', label: 'Google Gemini' },
+  { value: 'minimax', label: 'MiniMax' },
+  { value: 'minimax-cn', label: 'MiniMax CN' },
+  { value: 'custom', label: 'Custom' },
+]
 
 interface ActiveModel {
   provider: "builtin" | "custom" | "cloud"
@@ -42,6 +51,7 @@ export function ModelsPanel() {
   const [formModelId, setFormModelId] = useState("")
   const [formApiKey, setFormApiKey] = useState("")
   const [formBaseUrl, setFormBaseUrl] = useState("")
+  const [formProvider, setFormProvider] = useState<CustomModelDTO['provider']>("anthropic")
   // Delete confirmation
   const [deleteModelId, setDeleteModelId] = useState<string | null>(null)
   // Form validation errors (shown only after field is touched)
@@ -137,6 +147,7 @@ export function ModelsPanel() {
     setFormModelId("")
     setFormApiKey("")
     setFormBaseUrl("")
+    setFormProvider("anthropic")
     setTouched({})
     setDialogOpen(true)
   }
@@ -148,6 +159,7 @@ export function ModelsPanel() {
     setFormModelId(model.modelId)
     setFormApiKey("")
     setFormBaseUrl(model.baseUrl)
+    setFormProvider(model.provider)
     setTouched({})
     setDialogOpen(true)
   }
@@ -167,7 +179,7 @@ export function ModelsPanel() {
               name: formName,
               modelId: formModelId,
               baseUrl: formBaseUrl,
-              provider: 'anthropic' as const,
+              provider: formProvider,
               ...(formApiKey.trim() ? { apiKey: formApiKey } : {}),
             }
           : m
@@ -176,7 +188,7 @@ export function ModelsPanel() {
       const newModel: CustomModelDTO = {
         id: crypto.randomUUID(),
         name: formName,
-        provider: 'anthropic',
+        provider: formProvider,
         modelId: formModelId,
         apiKey: formApiKey,
         baseUrl: formBaseUrl,
@@ -455,6 +467,21 @@ export function ModelsPanel() {
             </Button>
           </div>
           <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>{t.settings.modelProvider ?? 'Provider'}</Label>
+              <Select value={formProvider} onValueChange={(value) => setFormProvider(value as CustomModelDTO['provider'])}>
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue placeholder={t.settings.modelProviderPlaceholder ?? 'Select a provider'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {CUSTOM_MODEL_PROVIDER_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1.5">
               <Label>{t.settings.modelName}</Label>
               <Input

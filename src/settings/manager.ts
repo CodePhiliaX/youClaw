@@ -17,12 +17,12 @@ export function getSettings(): Settings {
   const db = getDatabase()
   const row = db.query("SELECT value FROM kv_state WHERE key = ?").get(SETTINGS_KEY) as { value: string } | null
   if (!row) {
-    return SettingsSchema.parse({})
+    return normalizeSettings(SettingsSchema.parse({}))
   }
   try {
-    return SettingsSchema.parse(JSON.parse(row.value))
+    return normalizeSettings(SettingsSchema.parse(JSON.parse(row.value)))
   } catch {
-    return SettingsSchema.parse({})
+    return normalizeSettings(SettingsSchema.parse({}))
   }
 }
 
@@ -52,7 +52,7 @@ export function updateSettings(partial: Partial<Settings>): Settings {
   }
 
   // Validate and write
-  const validated = SettingsSchema.parse(merged)
+  const validated = normalizeSettings(SettingsSchema.parse(merged))
   db.run(
     "INSERT OR REPLACE INTO kv_state (key, value) VALUES (?, ?)",
     [SETTINGS_KEY, JSON.stringify(validated)]
@@ -110,6 +110,43 @@ export function getActiveModelConfig(): { apiKey: string; baseUrl: string; model
 
   // Custom model not found, returning null to fall back to env vars
   return null
+}
+
+function normalizeSettings(settings: Settings): Settings {
+  return {
+    ...settings,
+    customModels: settings.customModels.map(normalizeCustomModel),
+  }
+}
+
+function normalizeCustomModel(model: CustomModel): CustomModel {
+  const inferredProvider = inferCustomModelProvider(model)
+  if (inferredProvider === model.provider) {
+    return model
+  }
+
+  return {
+    ...model,
+    provider: inferredProvider,
+  }
+}
+
+function inferCustomModelProvider(model: CustomModel): CustomModel['provider'] {
+  const modelId = model.modelId.trim()
+  const lowerModelId = modelId.toLowerCase()
+  const lowerBaseUrl = model.baseUrl.trim().toLowerCase()
+
+  if (lowerModelId.startsWith('minimax-cn/')) return 'minimax-cn'
+  if (lowerModelId.startsWith('minimax/') || lowerModelId.startsWith('minimax-')) return 'minimax'
+  if (modelId.startsWith('MiniMax-')) return 'minimax'
+
+  if (model.provider === 'anthropic' || model.provider === 'custom') {
+    if (lowerBaseUrl.includes('minimax')) {
+      return lowerBaseUrl.includes('/cn') ? 'minimax-cn' : 'minimax'
+    }
+  }
+
+  return model.provider
 }
 
 /**

@@ -125,4 +125,59 @@ describe('settings routes', () => {
     expect(parsed.registrySources.clawhub.token).toBe('persist-me')
     expect(parsed.registrySources.tencent.enabled).toBe(false)
   })
+
+  test('GET /settings normalizes MiniMax custom models away from anthropic provider', async () => {
+    const db = getDatabase()
+    db.run(
+      'INSERT INTO kv_state (key, value) VALUES (?, ?)',
+      ['settings', JSON.stringify({
+        activeModel: { provider: 'custom', id: 'm1' },
+        customModels: [{
+          id: 'm1',
+          name: 'MiniMax',
+          provider: 'anthropic',
+          apiKey: 'secret-key',
+          baseUrl: 'https://proxy.example.com',
+          modelId: 'MiniMax-M2.5-highspeed',
+        }],
+      })],
+    )
+
+    const app = createSettingsRoutes()
+    const res = await app.request('/settings')
+    const body = await res.json() as {
+      customModels: Array<{ provider: string; apiKey: string; modelId: string }>
+    }
+
+    expect(res.status).toBe(200)
+    expect(body.customModels[0]?.provider).toBe('minimax')
+    expect(body.customModels[0]?.apiKey).toBe('****-key')
+  })
+
+  test('GET /settings/active-model normalizes MiniMax custom provider for runtime', async () => {
+    const db = getDatabase()
+    db.run(
+      'INSERT INTO kv_state (key, value) VALUES (?, ?)',
+      ['settings', JSON.stringify({
+        activeModel: { provider: 'custom', id: 'm1' },
+        customModels: [{
+          id: 'm1',
+          name: 'MiniMax',
+          provider: 'anthropic',
+          apiKey: 'secret-key',
+          baseUrl: 'https://proxy.example.com',
+          modelId: 'MiniMax-M2.5-highspeed',
+        }],
+      })],
+    )
+
+    const app = createSettingsRoutes()
+    const res = await app.request('/settings/active-model')
+    const body = await res.json() as { provider: string; modelId: string; baseUrl: string }
+
+    expect(res.status).toBe(200)
+    expect(body.provider).toBe('minimax')
+    expect(body.modelId).toBe('MiniMax-M2.5-highspeed')
+    expect(body.baseUrl).toBe('https://proxy.example.com')
+  })
 })

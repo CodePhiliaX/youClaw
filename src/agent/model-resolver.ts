@@ -40,16 +40,13 @@ export interface ModelConfig {
 export function resolvePiModel(config: ModelConfig): Model<Api> {
   const logger = getLogger()
   const piProvider = PROVIDER_MAP[config.provider] ?? config.provider
+  const qualifiedModel = parseQualifiedModelId(config.modelId)
 
   // Try resolving from pi-ai's built-in registry
   try {
     const model = getModel(piProvider as any, config.modelId as any)
     if (model) {
-      // Override baseUrl if custom one provided
-      if (config.baseUrl) {
-        return { ...model, baseUrl: config.baseUrl }
-      }
-      return model
+      return applyBaseUrlOverride(model, config.baseUrl, config.modelId, false)
     }
   } catch {
     // Model not in registry, fall back to manual construction
@@ -57,34 +54,32 @@ export function resolvePiModel(config: ModelConfig): Model<Api> {
 
   // For provider/modelId combos that include a slash (e.g., "minimax/MiniMax-M2.5-highspeed"),
   // try splitting and resolving
-  if (config.modelId.includes('/')) {
-    const [providerPart, modelPart] = config.modelId.split('/', 2)
-    const mappedProvider = PROVIDER_MAP[providerPart!] ?? providerPart
+  if (qualifiedModel) {
     try {
-      const model = getModel(mappedProvider as any, modelPart as any)
+      const model = getModel(qualifiedModel.provider as any, qualifiedModel.modelId as any)
       if (model) {
-        if (config.baseUrl) {
-          return { ...model, baseUrl: config.baseUrl }
-        }
-        return model
+        // For proxy/custom base URLs, preserve the original qualified model id so
+        // the upstream router can still see `provider/model` instead of the
+        // stripped provider-specific registry id.
+        return applyBaseUrlOverride(model, config.baseUrl, config.modelId, true)
       }
     } catch {
       // continue to manual construction
     }
   }
 
-  logger.info({ provider: piProvider, modelId: config.modelId }, 'Model not in pi-ai registry, constructing manually')
+  const manualProvider = qualifiedModel?.provider ?? piProvider
+  logger.info({ provider: manualProvider, modelId: config.modelId }, 'Model not in pi-ai registry, constructing manually')
 
   // Manual construction for custom/unknown models
-  // Use anthropic-messages API as default since most proxies are Anthropic-compatible
-  const api = resolveApi(piProvider)
+  const api = resolveApi(manualProvider)
 
   return {
     id: config.modelId,
     name: config.modelId,
     api,
-    provider: piProvider,
-    baseUrl: config.baseUrl || resolveDefaultBaseUrl(piProvider),
+    provider: manualProvider,
+    baseUrl: config.baseUrl || resolveDefaultBaseUrl(manualProvider),
     reasoning: false,
     input: ['text', 'image'],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -99,6 +94,8 @@ export function resolvePiModel(config: ModelConfig): Model<Api> {
 function resolveApi(provider: string): Api {
   switch (provider) {
     case 'anthropic':
+    case 'minimax':
+    case 'minimax-cn':
       return 'anthropic-messages'
     case 'openai':
       return 'openai-responses'
@@ -119,6 +116,8 @@ function resolveDefaultBaseUrl(provider: string): string {
   switch (provider) {
     case 'anthropic':
       return 'https://api.anthropic.com'
+    case 'minimax':
+      return 'https://api.minimax.io/anthropic'
     case 'openai':
       return 'https://api.openai.com'
     case 'google':
@@ -128,4 +127,36 @@ function resolveDefaultBaseUrl(provider: string): string {
     default:
       return ''
   }
+}
+
+function parseQualifiedModelId(modelId: string): { provider: string; modelId: string } | null {
+  if (!modelId.includes('/')) return null
+  const [providerPart, rawModelId] = modelId.split('/', 2)
+  if (!providerPart || !rawModelId) return null
+  return {
+    provider: PROVIDER_MAP[providerPart] ?? providerPart,
+    modelId: rawModelId,
+  }
+}
+
+function applyBaseUrlOverride<T extends Model<Api>>(
+  model: T,
+  baseUrl: string,
+  originalModelId: string,
+  preserveQualifiedModelId: boolean,
+): T {
+  if (!baseUrl) {
+    return model
+  }
+
+  if (!preserveQualifiedModelId) {
+    return { ...model, baseUrl } as T
+  }
+
+  return {
+    ...model,
+    id: originalModelId,
+    name: originalModelId,
+    baseUrl,
+  } as T
 }

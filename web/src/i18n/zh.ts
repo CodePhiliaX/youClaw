@@ -501,6 +501,8 @@ export const zh: Translations = {
     editModel: '编辑模型',
     setDefault: '设为默认',
     currentSelection: '当前选择',
+    modelProvider: '供应者',
+    modelProviderPlaceholder: '选择供应者',
     modelName: '名称',
     modelId: '模型 ID',
     activeModel: '当前模型',

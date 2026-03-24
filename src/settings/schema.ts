@@ -3,10 +3,19 @@ import { z } from 'zod/v4'
 export const RegistrySourceSettingSchema = z.enum(['clawhub', 'tencent'])
 export type RegistrySourceSetting = z.infer<typeof RegistrySourceSettingSchema>
 
+export const CustomModelProviderSchema = z.enum([
+  'anthropic',
+  'openai',
+  'gemini',
+  'custom',
+  'minimax',
+  'minimax-cn',
+])
+
 export const CustomModelSchema = z.object({
   id: z.string(),
   name: z.string(),
-  provider: z.enum(['anthropic', 'openai', 'gemini', 'custom']).default('anthropic'),
+  provider: CustomModelProviderSchema.default('anthropic'),
   apiKey: z.string(),
   baseUrl: z.string().default(''),
   modelId: z.string(),
