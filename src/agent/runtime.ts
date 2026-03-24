@@ -1,6 +1,7 @@
 import { createAgentSession, createCodingTools, SessionManager, AuthStorage } from '@mariozechner/pi-coding-agent'
 import type { AgentSession, AgentSessionEvent } from '@mariozechner/pi-coding-agent'
 import type { SessionEntry } from '@mariozechner/pi-coding-agent'
+import type { ToolDefinition } from '@mariozechner/pi-coding-agent'
 import { mkdirSync, existsSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getEnv } from '../config/index.ts'
@@ -10,6 +11,9 @@ import type { EventBus } from '../events/index.ts'
 import { ErrorCode } from '../events/types.ts'
 import type { PromptBuilder } from './prompt-builder.ts'
 import type { HooksManager } from './hooks.ts'
+import { createBuiltinImageTool } from './builtin-mcp.ts'
+import { createMessageTool } from './message-mcp.ts'
+import { buildParsedDocumentsPrompt, createDocumentTools, ingestDocumentAttachments } from './document-mcp.ts'
 import { preprocessAttachments } from './document-converter.ts'
 import { abortRegistry } from './abort-registry.ts'
 import { getActiveModelConfig } from '../settings/manager.ts'
@@ -39,6 +43,8 @@ type AssistantSessionMessage = {
   errorMessage?: string
   content?: Array<{ type?: string; text?: string }>
 }
+
+type RuntimeAttachment = { filename: string; mediaType: string; filePath?: string; data?: string; size?: number }
 
 export class AgentRuntime {
   private config: AgentConfig
@@ -251,11 +257,8 @@ export class AgentRuntime {
       ? SessionManager.open(existingSessionFile, sessionsDir)
       : SessionManager.create(cwd, sessionsDir)
 
-    const tools = createCodingTools(cwd)
-    const customTools = []
-    if (this.skillsLoader) {
-      customTools.push(createSkillTool(this.skillsLoader))
-    }
+    const tools = this.filterConfiguredTools(createCodingTools(cwd))
+    const customTools = this.filterConfiguredTools(this.buildCustomTools(chatId))
 
     logger.info({
       agentId,
@@ -300,10 +303,20 @@ export class AgentRuntime {
           mediaType: attachment.mediaType,
           filePath: attachment.filePath!,
         })) ?? []
-      const processedAttachments = fileAttachments.length > 0
-        ? await preprocessAttachments(fileAttachments)
+      const { parsedDocuments, remainingAttachments } = await ingestDocumentAttachments(
+        chatId,
+        fileAttachments,
+        (event) => this.emitDocumentStatus(agentId, chatId, event.documentId, event.filename, event.status, event.error),
+      )
+      const promptWithDocuments = parsedDocuments.length > 0
+        ? `${promptWithFallback}\n\n${buildParsedDocumentsPrompt(parsedDocuments)}`.trim()
+        : promptWithFallback
+      const processedAttachments = remainingAttachments.length > 0
+        ? await preprocessAttachments(remainingAttachments)
         : []
-      const promptWithAttachments = this.appendAttachmentInstructions(promptWithFallback, processedAttachments)
+      const promptWithAttachments = this.appendAttachmentInstructions(promptWithDocuments, processedAttachments)
+      const remainingAttachmentPaths = new Set(remainingAttachments.map((attachment) => attachment.filePath).filter(Boolean))
+      const promptImages = this.collectPromptImages(attachments, remainingAttachmentPaths)
 
       abortController.signal.addEventListener('abort', () => {
         session.abort().catch(() => {})
@@ -311,16 +324,8 @@ export class AgentRuntime {
 
       try {
         try {
-          if (attachments && attachments.length > 0) {
-            const images = attachments
-              .filter((attachment) => attachment.mediaType.startsWith('image/') && typeof attachment.data === 'string')
-              .map((attachment) => ({
-                type: 'image' as const,
-                data: attachment.data!,
-                mimeType: attachment.mediaType,
-              }))
-
-            await session.prompt(promptWithAttachments, { images: images.length > 0 ? images : undefined })
+          if (promptImages.length > 0) {
+            await session.prompt(promptWithAttachments, { images: promptImages })
           } else {
             await session.prompt(promptWithAttachments)
           }
@@ -564,6 +569,66 @@ export class AgentRuntime {
     }
 
     return `${prompt}\n\n${parts.join('\n\n')}`.trim()
+  }
+
+  private buildCustomTools(chatId: string): ToolDefinition[] {
+    const customTools: ToolDefinition[] = [
+      createBuiltinImageTool(),
+      createMessageTool(chatId),
+      ...createDocumentTools(chatId),
+    ]
+    if (this.skillsLoader) {
+      customTools.push(createSkillTool(this.skillsLoader))
+    }
+    return customTools
+  }
+
+  private filterConfiguredTools<T extends { name: string }>(tools: T[]): T[] {
+    const allowedTools = this.config.allowedTools
+      ? new Set(this.config.allowedTools.map((name) => this.normalizeToolName(name)))
+      : null
+    const disallowedTools = new Set((this.config.disallowedTools ?? []).map((name) => this.normalizeToolName(name)))
+
+    if (allowedTools) {
+      allowedTools.add(this.normalizeToolName('Skill'))
+    }
+
+    return tools.filter((tool) => {
+      const normalized = this.normalizeToolName(tool.name)
+      if (disallowedTools.has(normalized)) {
+        return false
+      }
+      if (allowedTools && !allowedTools.has(normalized)) {
+        return false
+      }
+      return true
+    })
+  }
+
+  private normalizeToolName(name: string): string {
+    return name.trim().toLowerCase()
+  }
+
+  private collectPromptImages(
+    attachments: RuntimeAttachment[] | undefined,
+    remainingAttachmentPaths: Set<string>,
+  ): Array<{ type: 'image'; data: string; mimeType: string }> {
+    if (!attachments || attachments.length === 0) {
+      return []
+    }
+
+    return attachments
+      .filter((attachment) => {
+        if (!attachment.mediaType.startsWith('image/')) return false
+        if (typeof attachment.data !== 'string' || attachment.data.length === 0) return false
+        if (!attachment.filePath) return true
+        return remainingAttachmentPaths.has(attachment.filePath)
+      })
+      .map((attachment) => ({
+        type: 'image' as const,
+        data: attachment.data!,
+        mimeType: attachment.mediaType,
+      }))
   }
 
   private emitProcessing(agentId: string, chatId: string, isProcessing: boolean): void {

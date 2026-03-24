@@ -10,6 +10,7 @@ import { initDatabase, createTask, updateTask, deleteTask, getTasks, getTask } f
 import { EventBus } from './events/index.ts'
 import { AgentManager, AgentQueue, PromptBuilder, AgentRouter, HooksManager, SecretsManager } from './agent/index.ts'
 import { MessageRouter, ChannelManager } from './channel/index.ts'
+import { registerChannelOutboundService } from './channel/outbound-service.ts'
 import { SkillsLoader, SkillsWatcher, RegistryManager } from './skills/index.ts'
 import { MemoryManager, MemoryIndexer } from './memory/index.ts'
 import { Scheduler } from './scheduler/index.ts'
@@ -146,6 +147,7 @@ async function main() {
     channelManager = new ChannelManager(router, (msg) => router.handleInbound(msg), eventBus)
     await channelManager.seedFromEnv(env)     // Migrate from env on first launch
     await channelManager.loadFromDatabase()   // Load and connect all enabled channels
+    registerChannelOutboundService(channelManager)
     logger.info('Channels loaded')
   } catch (err) {
     logger.error({ err }, '[STARTUP] Step 13 failed: init channel manager')

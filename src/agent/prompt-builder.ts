@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getPaths } from '../config/index.ts'
+import { inferChannelType } from '../channel/config-schema.ts'
 import { getLogger } from '../logger/index.ts'
 import { getBrowserProfile } from '../db/index.ts'
 import { detectChromePath } from '../utils/chrome.ts'
@@ -83,6 +84,11 @@ export class PromptBuilder {
     const envContext = this.buildEnvContext()
     if (envContext) {
       parts.push(envContext)
+    }
+
+    const channelContext = this.buildChannelContext(context?.chatId)
+    if (channelContext) {
+      parts.push(channelContext)
     }
 
     // Inject image tool usage rule (built-in minimax MCP is always available)
@@ -195,6 +201,37 @@ export class PromptBuilder {
       `- If headed mode still fails, drop \`--headed\` and use headless mode (keep --profile and --session).`,
       `- Do NOT retry the same failing command more than 2 times. Inform the user if it cannot be resolved.`,
     ].join('\n')
+  }
+
+  private buildChannelContext(chatId?: string): string | null {
+    if (!chatId) return null
+
+    const channel = inferChannelType(chatId)
+    if (channel !== 'wechat-personal') return null
+
+    const recipientId = this.parseWechatPersonalPeerId(chatId)
+    if (!recipientId) return null
+
+    return [
+      '## Channel Context',
+      '',
+      '- Current channel: wechat-personal',
+      `- Current recipient WeChat ID: ${recipientId}`,
+      '- This channel supports sending text, images, and files back to the current user.',
+      '- To send an image or file, use the `mcp__message__send_to_current_chat` tool and set `media` to an absolute local file path or an HTTPS URL.',
+      '- To send plain text back to the user without media, use the `mcp__message__send_to_current_chat` tool with `text`.',
+      '- For the current conversation, do not claim that WeChat cannot send images or files. Send them directly with `mcp__message__send_to_current_chat` instead.',
+      '- You normally do not need to set `to` manually for the current conversation recipient.',
+      '- If you generate or save a file before sending it, always use an absolute path such as `/tmp/example.png`.',
+    ].join('\n')
+  }
+
+  private parseWechatPersonalPeerId(chatId: string): string | null {
+    if (!chatId.startsWith('wxp:')) return null
+    const rest = chatId.slice(4)
+    const firstColon = rest.indexOf(':')
+    if (firstColon <= 0 || firstColon === rest.length - 1) return null
+    return rest.slice(firstColon + 1)
   }
 
 }

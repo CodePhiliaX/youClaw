@@ -37,6 +37,7 @@ export interface Channel {
   name: string
   connect(): Promise<void>
   sendMessage(chatId: string, text: string): Promise<void>
+  sendMedia?(chatId: string, text: string, mediaUrl: string): Promise<void>
   isConnected(): boolean
   ownsChatId(chatId: string): boolean
   disconnect(): Promise<void>

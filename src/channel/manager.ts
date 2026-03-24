@@ -395,6 +395,16 @@ export class ChannelManager {
     return this.managed.get(id)?.instance ?? null
   }
 
+  getChannelForChat(chatId: string): Channel | null {
+    for (const managed of this.managed.values()) {
+      const instance = managed.instance
+      if (instance?.ownsChatId(chatId)) {
+        return instance
+      }
+    }
+    return null
+  }
+
   /**
    * Disconnect all channels
    */
