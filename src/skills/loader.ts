@@ -1,6 +1,7 @@
-import { readdirSync, readFileSync, existsSync, statSync, mkdirSync, rmSync, symlinkSync, lstatSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { homedir } from 'node:os'
+import { formatSkillsForPrompt, type Skill as PiAgentSkill } from '@mariozechner/pi-coding-agent'
 import { getPaths } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
 import { parseFrontmatter } from './frontmatter.ts'
@@ -174,6 +175,21 @@ export class SkillsLoader {
     return { available, enabled, eligible }
   }
 
+  buildPromptSnapshot(agentConfig: AgentConfig, requestedSkills?: string[]): {
+    prompt: string
+    skills: Skill[]
+  } {
+    const requested = requestedSkills
+      ? new Set(requestedSkills.map((name) => name.trim()).filter(Boolean))
+      : null
+    const enabledSkills = this.loadSkillsForAgent(agentConfig)
+      .filter((skill) => skill.usable)
+      .filter((skill) => !requested || requested.has(skill.name))
+    const limited = this.applyPromptLimits(enabledSkills)
+    const prompt = formatSkillsForPrompt(limited.map((skill) => this.toPiSkill(skill)))
+    return { prompt, skills: limited }
+  }
+
   /**
    * Clear cache and reload all skills.
    */
@@ -181,6 +197,17 @@ export class SkillsLoader {
     this.cache.clear()
     this.lastLoadTime = 0
     return this.loadAllSkills(true)
+  }
+
+  private toPiSkill(skill: Skill): PiAgentSkill {
+    return {
+      name: skill.name,
+      description: skill.frontmatter.description,
+      filePath: skill.path,
+      baseDir: dirname(skill.path),
+      source: skill.source,
+      disableModelInvocation: false,
+    }
   }
 
   /**
@@ -253,55 +280,6 @@ export class SkillsLoader {
     }
 
     return [...limitedCritical, ...limitedRest]
-  }
-
-  /**
-   * Sync .claude/skills/ directory for an agent.
-   * Creates symlinks pointing to actual skill source directories,
-   * so Claude Agent SDK can discover skills from <cwd>/.claude/skills/.
-   */
-  syncAgentClaudeSkills(agentConfig: AgentConfig, agentDir: string): void {
-    const logger = getLogger()
-    const claudeSkillsDir = resolve(agentDir, '.claude', 'skills')
-
-    // 1. Ensure .claude/skills/ directory exists
-    mkdirSync(claudeSkillsDir, { recursive: true })
-
-    // 2. Get skills that should be present (based on agent config)
-    const enabledSkills = this.loadSkillsForAgent(agentConfig)
-    const enabledNames = new Set(enabledSkills.map(s => s.name))
-
-    // 3. Remove stale symlinks (skills no longer in config)
-    for (const entry of readdirSync(claudeSkillsDir)) {
-      if (entry === '.DS_Store') continue
-      const fullPath = resolve(claudeSkillsDir, entry)
-      if (!enabledNames.has(entry)) {
-        rmSync(fullPath, { recursive: true, force: true })
-      }
-    }
-
-    // 4. Create missing symlinks (use lstatSync to detect broken symlinks too)
-    for (const skill of enabledSkills) {
-      const linkPath = resolve(claudeSkillsDir, skill.name)
-      const targetDir = resolve(skill.path, '..')  // skill.path is SKILL.md, parent is the skill dir
-
-      let linkExists = false
-      try {
-        lstatSync(linkPath)
-        linkExists = true
-      } catch {
-        // Does not exist
-      }
-
-      if (linkExists) continue
-
-      try {
-        symlinkSync(targetDir, linkPath)
-        logger.debug({ skill: skill.name, target: targetDir }, 'Created skill symlink')
-      } catch (err) {
-        logger.warn({ skill: skill.name, error: err instanceof Error ? err.message : String(err) }, 'Failed to create skill symlink')
-      }
-    }
   }
 
   /**

@@ -2,9 +2,12 @@ import { z } from 'zod/v4'
 
 // MCP server config schema
 export const McpServerSchema = z.object({
-  command: z.string(),
+  command: z.string().optional(),
   args: z.array(z.string()).optional(),
   env: z.record(z.string(), z.string()).optional(),
+  cwd: z.string().optional(),
+  workingDirectory: z.string().optional(),
+  url: z.string().optional(),
 })
 
 // Sub-agent inline definition schema

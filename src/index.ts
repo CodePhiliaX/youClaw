@@ -83,7 +83,6 @@ async function main() {
   const skillsWatcher = new SkillsWatcher(skillsLoader, {
     onReload: (skills) => {
       logger.info({ count: skills.length }, 'Skills hot-reloaded')
-      agentManagerRef?.syncAllAgentSkills()
     },
   })
   skillsWatcher.start()
@@ -105,6 +104,7 @@ async function main() {
     memoryIndexer = new MemoryIndexer()
     memoryIndexer.initTable()
     memoryIndexer.rebuildIndex()
+    memoryManager.attachIndexer(memoryIndexer)
     logger.info('Memory search index built')
   } catch (err) {
     logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'FTS5 index init failed, search unavailable')

@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import './setup.ts'
 import { getPaths } from '../src/config/index.ts'
 import { MemoryManager } from '../src/memory/manager.ts'
+import { MemoryIndexer } from '../src/memory/indexer.ts'
 import type { MemoryExtractionRunner } from '../src/memory/extractor.ts'
 
 const memoryManager = new MemoryManager()
@@ -209,5 +210,35 @@ describe('MemoryManager', () => {
     expect(result.curatedUpdates).toEqual([])
     const note = readFileSync(resolve(getAgentMemoryDir(agentId), `${today}.md`), 'utf-8')
     expect(note.match(/The user is a programmer\./g)?.length).toBe(1)
+  })
+
+  test('getMemoryContext includes relevant memory hits for the current query when indexer is attached', () => {
+    const agentId = createAgentId('memory-query')
+    const indexer = new MemoryIndexer()
+    indexer.initTable()
+    memoryManager.attachIndexer(indexer)
+
+    memoryManager.updateMemory(agentId, [
+      '# Long-term Memory',
+      '',
+      '## Projects',
+      '',
+      '- `stack`: TypeScript backend',
+      '',
+      '## Notes',
+      '',
+      '- `focus`: MCP integration work',
+      '',
+    ].join('\n'))
+    memoryManager.appendDailyLog(agentId, 'web:chat-1', 'Tell me about TypeScript plans', 'We are using TypeScript')
+
+    const context = memoryManager.getMemoryContext(agentId, {
+      query: 'TypeScript',
+      recentDays: 2,
+      maxContextChars: 8000,
+    })
+
+    expect(context).toContain('<relevant_memory_hits>')
+    expect(context).toContain('TypeScript')
   })
 })

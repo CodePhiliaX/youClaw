@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { readdirSync, readFileSync, existsSync, mkdirSync, writeFileSync, cpSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { getPaths } from '../config/index.ts'
@@ -58,6 +58,7 @@ export class AgentManager {
   ensureDefaultAgent(): void {
     const logger = getLogger()
     const paths = getPaths()
+    this.migrateLegacyAgentWorkspaces()
     const defaultDir = resolve(paths.agents, 'default')
     const globalDir = resolve(paths.agents, '_global')
 
@@ -75,6 +76,63 @@ export class AgentManager {
     if (!existsSync(resolve(globalDir, 'memory', 'MEMORY.md'))) {
       mkdirSync(resolve(globalDir, 'memory'), { recursive: true })
       writeFileSync(resolve(globalDir, 'memory', 'MEMORY.md'), GLOBAL_MEMORY_MD)
+    }
+  }
+
+  private migrateLegacyAgentWorkspaces(): void {
+    const logger = getLogger()
+    const paths = getPaths()
+    const candidates = [
+      resolve(paths.data, 'agents'),
+      resolve(paths.root, 'agents'),
+    ]
+      .filter((dir, index, all) => all.indexOf(dir) === index)
+      .filter((dir) => dir !== paths.agents && existsSync(dir))
+
+    if (candidates.length === 0) return
+
+    mkdirSync(paths.agents, { recursive: true })
+    const migrated: string[] = []
+
+    for (const candidate of candidates) {
+      let entries: string[]
+      try {
+        entries = readdirSync(candidate)
+      } catch {
+        continue
+      }
+
+      for (const entry of entries) {
+        const sourceDir = resolve(candidate, entry)
+        const targetDir = resolve(paths.agents, entry)
+
+        try {
+          if (!statSync(sourceDir).isDirectory()) continue
+        } catch {
+          continue
+        }
+
+        if (existsSync(targetDir)) continue
+
+        const hasAgentConfig = existsSync(resolve(sourceDir, 'agent.yaml'))
+        const isGlobalMemory = entry === '_global' && existsSync(resolve(sourceDir, 'memory', 'MEMORY.md'))
+        if (!hasAgentConfig && !isGlobalMemory) continue
+
+        try {
+          cpSync(sourceDir, targetDir, { recursive: true, force: false })
+          migrated.push(entry)
+        } catch (err) {
+          logger.warn({
+            sourceDir,
+            targetDir,
+            error: err instanceof Error ? err.message : String(err),
+          }, 'Failed to migrate legacy agent workspace')
+        }
+      }
+    }
+
+    if (migrated.length > 0) {
+      logger.info({ agents: migrated, target: paths.agents }, 'Migrated legacy agent workspaces to .youclaw workspace')
     }
   }
 
@@ -127,6 +185,7 @@ export class AgentManager {
         const config: AgentConfig = {
           ...result.data,
           workspaceDir: agentDir,
+          hasExplicitModel: typeof parsed.model === 'string' && parsed.model.trim().length > 0,
         }
 
         if (this.skillsLoader) {
@@ -173,6 +232,7 @@ export class AgentManager {
           this.skillsLoader ?? undefined,
           this.memoryManager ?? undefined,
           this.browserManager ?? undefined,
+          this.secretsManager ?? undefined,
         )
 
         this.agents.set(config.id, {
@@ -188,15 +248,6 @@ export class AgentManager {
             queueDepth: 0,
           },
         })
-
-        // Sync .claude/skills/ symlinks for SDK discovery
-        if (this.skillsLoader) {
-          try {
-            this.skillsLoader.syncAgentClaudeSkills(config, agentDir)
-          } catch (err) {
-            logger.warn({ agentId: config.id, error: err instanceof Error ? err.message : String(err) }, 'Failed to sync .claude/skills/')
-          }
-        }
 
         logger.info({ agentId: config.id, name: config.name }, 'Agent loaded')
       } catch (err) {
@@ -287,21 +338,4 @@ export class AgentManager {
     return this.agents
   }
 
-  /**
-   * Re-sync .claude/skills/ symlinks for all loaded agents.
-   * Called after skills hot-reload so new/removed skills are reflected.
-   */
-  syncAllAgentSkills(): void {
-    if (!this.skillsLoader) return
-    const logger = getLogger()
-    const paths = getPaths()
-    for (const managed of this.agents.values()) {
-      const agentDir = resolve(paths.agents, managed.config.id)
-      try {
-        this.skillsLoader.syncAgentClaudeSkills(managed.config, agentDir)
-      } catch (err) {
-        logger.warn({ agentId: managed.config.id, error: err instanceof Error ? err.message : String(err) }, 'Failed to sync .claude/skills/ on reload')
-      }
-    }
-  }
 }

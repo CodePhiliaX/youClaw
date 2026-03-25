@@ -41,6 +41,8 @@ export class PromptBuilder {
       agentId: string
       chatId: string
       requestedSkills?: string[]
+      skillsPrompt?: string
+      memoryContext?: string
       browserProfileId?: string
       browserProfile?: {
         id: string
@@ -122,7 +124,13 @@ export class PromptBuilder {
     }
 
     // Inject memory context
-    if (this.memoryManager && context && config.memory?.enabled !== false) {
+    if (context?.skillsPrompt) {
+      parts.push(context.skillsPrompt)
+    }
+
+    if (context?.memoryContext) {
+      parts.push(context.memoryContext)
+    } else if (this.memoryManager && context && config.memory?.enabled !== false) {
       const memoryConfig = config.memory
       const memoryContext = this.memoryManager.getMemoryContext(context.agentId, {
         recentDays: memoryConfig?.recentDays,

@@ -224,7 +224,7 @@ export function createAgentsRoutes(agentManager: AgentManager) {
     // Write back agent.yaml
     writeFileSync(configPath, stringifyYaml(merged))
 
-    // Reload agents (also syncs .claude/skills/ via AgentManager.loadAgents)
+    // Reload agents so updated configuration takes effect.
     await agentManager.reloadAgents()
 
     const updated = agentManager.getAgent(id)

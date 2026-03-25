@@ -1,6 +1,6 @@
 import { resolve, dirname } from 'node:path'
 import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { getEnv } from './env.ts'
 
@@ -16,6 +16,7 @@ export const ROOT_DIR = isBunCompiled
   : resolve(__dirname, '../..')
 
 let _resolvedDataDir: string | null = null
+let _resolvedWorkspaceRoot: string | null = null
 
 function getBundledDefaultDataDir(): string {
   const home = process.env.HOME || process.env.USERPROFILE
@@ -74,11 +75,43 @@ function resolveDataDir(envDataDir: string): string {
   return fallback
 }
 
+function getDefaultWorkspaceRoot(): string {
+  const home = homedir()
+  if (!home) return resolve(tmpdir(), 'youclaw-workspace')
+  return resolve(home, '.youclaw', 'workspace')
+}
+
+function resolveWorkspaceRoot(dataDir: string): string {
+  if (_resolvedWorkspaceRoot) return _resolvedWorkspaceRoot
+
+  const candidates: string[] = []
+  if (process.env.WORKSPACE_DIR?.trim()) {
+    candidates.push(resolve(process.env.WORKSPACE_DIR))
+  }
+  candidates.push(getDefaultWorkspaceRoot())
+  candidates.push(resolve(dataDir, 'workspace'))
+
+  const visited = new Set<string>()
+  for (const candidate of candidates) {
+    if (visited.has(candidate)) continue
+    visited.add(candidate)
+    if (isWritableDir(candidate)) {
+      _resolvedWorkspaceRoot = candidate
+      return candidate
+    }
+  }
+
+  const fallback = resolve(dataDir, 'workspace')
+  _resolvedWorkspaceRoot = fallback
+  return fallback
+}
+
 export function getPaths() {
   const env = getEnv()
 
   // DATA_DIR: writable data directory (database, logs, browser profiles, etc.)
   const dataDir = resolveDataDir(env.DATA_DIR)
+  const workspaceRoot = resolveWorkspaceRoot(dataDir)
 
   // RESOURCES_DIR: read-only resource directory from Tauri bundle (agents/skills/prompts templates)
   // In dev mode, falls back to project root
@@ -86,15 +119,13 @@ export function getPaths() {
     ? resolve(process.env.RESOURCES_DIR)
     : ROOT_DIR
 
-  // agents directory must be writable (creating agents, writing memory, etc.), stored under DATA_DIR
-  // On first launch, AgentManager copies default templates from resourcesDir
-  const agentsDir = isBunCompiled
-    ? resolve(dataDir, 'agents')
-    : resolve(ROOT_DIR, 'agents')
+  // Agent workspaces live under the user workspace root, independent from repo checkout.
+  const agentsDir = resolve(workspaceRoot, 'agents')
 
   return {
     root: ROOT_DIR,
     data: dataDir,
+    workspace: workspaceRoot,
     db: resolve(dataDir, 'youclaw.db'),
     agents: agentsDir,
     skills: resolveResourceSubdir(resourcesDir, isBunCompiled, 'skills'),

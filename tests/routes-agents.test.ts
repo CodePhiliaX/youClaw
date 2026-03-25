@@ -254,7 +254,6 @@ describe('agents routes', () => {
         skills: skills?.map((skill) => skill === 'self-improving-agent' ? 'self-improvement' : skill),
         changed: Boolean(skills?.includes('self-improving-agent')),
       }),
-      syncAgentClaudeSkills: () => {},
     }
     const manager = await createRealManager(skillsLoader)
     const app = createAgentsRoutes(manager)

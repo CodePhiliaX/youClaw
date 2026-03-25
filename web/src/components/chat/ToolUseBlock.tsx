@@ -14,6 +14,7 @@ import type { ToolUseItem } from '@/hooks/useChat'
 import { useI18n } from '@/i18n'
 
 type ToolMeta = { icon: LucideIcon; color: string }
+type Summary = { text: string; title?: string; link?: { url: string; label: string } }
 
 const TOOL_META: Record<string, ToolMeta> = {
   WebFetch:  { icon: Globe, color: 'text-emerald-500' },
@@ -28,6 +29,18 @@ const TOOL_META: Record<string, ToolMeta> = {
 }
 
 const DEFAULT_META: ToolMeta = { icon: Wrench, color: 'text-muted-foreground' }
+
+const TOOL_NAME_ALIASES: Record<string, string> = {
+  webfetch: 'WebFetch',
+  websearch: 'WebSearch',
+  read: 'Read',
+  glob: 'Glob',
+  grep: 'Grep',
+  write: 'Write',
+  edit: 'Edit',
+  bash: 'Bash',
+  skill: 'Skill',
+}
 
 /** Resolve meta for MCP tools (mcp__<server>__<action>) by action keyword */
 function getMcpMeta(action: string): ToolMeta {
@@ -60,79 +73,80 @@ function extractFromTruncated(s: string): Record<string, unknown> | null {
   return Object.keys(result).length > 0 ? result : null
 }
 
-function truncate(s: string, n: number) {
-  return s.length > n ? s.slice(0, n) + '...' : s
+function normalizeToolName(name: string) {
+  if (name.startsWith('mcp__')) return name
+  return TOOL_NAME_ALIASES[name.trim().toLowerCase()] ?? name
 }
 
-function shortPath(p: string) {
-  const parts = p.split('/')
-  return parts.length <= 3 ? p : '.../' + parts.slice(-2).join('/')
+function summarizeText(text: string, fallback: string): Summary {
+  const trimmed = text.trim()
+  return { text: trimmed || fallback, title: trimmed || fallback }
 }
 
 function hostname(url: string) {
   try { return new URL(url).hostname } catch { return undefined }
 }
 
-type Summary = { text: string; link?: { url: string; label: string } }
-
 function getSummary(name: string, input?: string, isZh = false): Summary {
+  const normalizedName = normalizeToolName(name)
   const p = tryParseJson(input)
 
-  switch (name) {
+  switch (normalizedName) {
     case 'WebFetch': {
       const url = p?.url as string | undefined
       const prompt = p?.prompt as string | undefined
       const host = url ? hostname(url) : undefined
       const link = url && host ? { url, label: host } : undefined
-      if (prompt) return { text: truncate(prompt, 60), link }
-      return { text: host ? (isZh ? `访问 ${host}` : `Fetch ${host}`) : (isZh ? '访问网页' : 'Fetch web page'), link: undefined }
+      if (prompt) return { ...summarizeText(prompt, isZh ? '访问网页' : 'Fetch web page'), link }
+      return { text: host ? (isZh ? `访问 ${host}` : `Fetch ${host}`) : (isZh ? '访问网页' : 'Fetch web page'), title: url, link: undefined }
     }
     case 'WebSearch': {
       const q = p?.query as string | undefined
-      return { text: q ? truncate(q, 60) : (isZh ? '搜索网页' : 'Web search') }
+      return q ? summarizeText(q, isZh ? '搜索网页' : 'Web search') : { text: isZh ? '搜索网页' : 'Web search' }
     }
     case 'Read': {
       const path = p?.file_path as string | undefined
-      return { text: path ? shortPath(path) : (isZh ? '读取文件' : 'Read file') }
+      return path ? summarizeText(path, isZh ? '读取文件' : 'Read file') : { text: isZh ? '读取文件' : 'Read file' }
     }
     case 'Write': {
       const path = p?.file_path as string | undefined
-      return { text: path ? shortPath(path) : (isZh ? '写入文件' : 'Write file') }
+      return path ? summarizeText(path, isZh ? '写入文件' : 'Write file') : { text: isZh ? '写入文件' : 'Write file' }
     }
     case 'Edit': {
       const path = p?.file_path as string | undefined
-      return { text: path ? shortPath(path) : (isZh ? '编辑文件' : 'Edit file') }
+      return path ? summarizeText(path, isZh ? '编辑文件' : 'Edit file') : { text: isZh ? '编辑文件' : 'Edit file' }
     }
     case 'Bash': {
       const desc = p?.description as string | undefined
-      if (desc) return { text: truncate(desc, 60) }
+      if (desc) return summarizeText(desc, isZh ? '执行命令' : 'Run command')
       const cmd = p?.command as string | undefined
-      return { text: cmd ? truncate(cmd, 60) : (isZh ? '执行命令' : 'Run command') }
+      return cmd ? summarizeText(cmd, isZh ? '执行命令' : 'Run command') : { text: isZh ? '执行命令' : 'Run command' }
     }
     case 'Glob': {
       const pattern = p?.pattern as string | undefined
-      return { text: pattern ? truncate(pattern, 50) : (isZh ? '查找文件' : 'Find files') }
+      return pattern ? summarizeText(pattern, isZh ? '查找文件' : 'Find files') : { text: isZh ? '查找文件' : 'Find files' }
     }
     case 'Grep': {
       const pattern = p?.pattern as string | undefined
-      return { text: pattern ? truncate(pattern, 50) : (isZh ? '搜索内容' : 'Search contents') }
+      return pattern ? summarizeText(pattern, isZh ? '搜索内容' : 'Search contents') : { text: isZh ? '搜索内容' : 'Search contents' }
     }
     case 'Skill': {
       const args = p?.args as string | undefined
       const skill = p?.skill as string | undefined
-      if (args) return { text: truncate(args, 60) }
-      return { text: skill ?? (isZh ? '调用技能' : 'Run skill') }
+      if (args) return summarizeText(args, isZh ? '调用技能' : 'Run skill')
+      return skill ? summarizeText(skill, isZh ? '调用技能' : 'Run skill') : { text: isZh ? '调用技能' : 'Run skill' }
     }
     default: {
       // MCP tools: mcp__<server>__<action>
-      if (name.startsWith('mcp__')) {
+      if (normalizedName.startsWith('mcp__')) {
         const semantic = p?.query ?? p?.prompt ?? p?.description ?? p?.args ?? p?.input
-        if (typeof semantic === 'string') return { text: truncate(semantic, 60) }
-        const parts = name.split('__')
+        if (typeof semantic === 'string') return summarizeText(semantic, normalizedName)
+        const parts = normalizedName.split('__')
         const action = parts[parts.length - 1].replace(/_/g, ' ')
         return { text: action }
       }
-      return { text: input ? `${name}: ${truncate(input, 40)}` : name }
+      if (input) return summarizeText(`${normalizedName}: ${input}`, normalizedName)
+      return { text: normalizedName }
     }
   }
 }
@@ -146,8 +160,9 @@ export function ToolUseBlock({ items }: { items: ToolUseItem[] }) {
   return (
     <div className="space-y-0.5 my-1 border-l-2 border-muted-foreground/25 pl-2.5">
       {items.map(item => {
-        const meta = TOOL_META[item.name]
-          ?? (item.name.startsWith('mcp__') ? getMcpMeta(item.name.split('__').pop() ?? '') : DEFAULT_META)
+        const normalizedName = normalizeToolName(item.name)
+        const meta = TOOL_META[normalizedName]
+          ?? (normalizedName.startsWith('mcp__') ? getMcpMeta(normalizedName.split('__').pop() ?? '') : DEFAULT_META)
         const Icon = meta.icon
         const isRunning = item.status === 'running'
 
@@ -160,7 +175,9 @@ export function ToolUseBlock({ items }: { items: ToolUseItem[] }) {
             ) : (
               <Icon className={`h-3.5 w-3.5 shrink-0 ${meta.color}`} />
             )}
-            <span className="truncate min-w-0">{summary.text}</span>
+            <span className="min-w-0 flex-1 truncate" title={summary.title ?? summary.text}>
+              {summary.text}
+            </span>
             {summary.link && (
               <a
                 href={summary.link.url}

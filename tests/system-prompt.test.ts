@@ -78,6 +78,25 @@ describe('PromptBuilder channel context', () => {
     expect(prompt).toContain('`mcp__message__send_to_current_chat`')
     expect(prompt).toContain('do not claim that WeChat cannot send images or files')
   })
+
+  test('injects provided skills prompt and memory context overrides', () => {
+    const builder = new PromptBuilder(null, null)
+    const prompt = builder.build(
+      resolve(import.meta.dir, '..'),
+      { workspaceDir: resolve(import.meta.dir, '..') } as AgentConfig,
+      {
+        agentId: 'default',
+        chatId: 'web:chat-1',
+        skillsPrompt: '<skills>\nskill-body\n</skills>',
+        memoryContext: '<memory>\nretrieved hit\n</memory>',
+      },
+    )
+
+    expect(prompt).toContain('<skills>')
+    expect(prompt).toContain('skill-body')
+    expect(prompt).toContain('<memory>')
+    expect(prompt).toContain('retrieved hit')
+  })
 })
 
 describe('PromptBuilder bootstrap snapshots', () => {

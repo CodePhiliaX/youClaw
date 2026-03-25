@@ -74,12 +74,12 @@ function readJsonDirect(url: URL): Promise<unknown> {
     socket.on('connect', () => {
       socket.write(`GET ${path || '/'} HTTP/1.1\r\nHost: ${url.host}\r\nConnection: close\r\n\r\n`)
     })
-    socket.on('data', (chunk) => {
+    socket.on('data', (chunk: Buffer | string) => {
       chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
       finalize()
     })
     socket.on('end', finalize)
-    socket.on('error', (err) => {
+    socket.on('error', (err: Error) => {
       if (!resolved) {
         reject(err)
       }

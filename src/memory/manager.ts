@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFile
 import { resolve } from 'node:path'
 import { getPaths } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
+import type { MemoryIndexer } from './indexer.ts'
 import {
   MemoryExtractor,
   type CuratedMemoryUpdate,
@@ -19,6 +20,7 @@ type StructuredMemoryStore = Record<MemorySection, Map<string, string>>
 export interface MemoryContextOptions {
   recentDays?: number
   maxContextChars?: number
+  query?: string
 }
 
 export interface ArchivedConversation {
@@ -33,7 +35,13 @@ export interface SavedSessionSummary {
 }
 
 export class MemoryManager {
+  private indexer: MemoryIndexer | null = null
+
   constructor(private extractor: MemoryExtractionRunner | null = new MemoryExtractor()) {}
+
+  attachIndexer(indexer: MemoryIndexer | null): void {
+    this.indexer = indexer
+  }
 
   private getRootMemoryFilePath(agentId: string): string {
     const agentsDir = getPaths().agents
@@ -204,6 +212,7 @@ export class MemoryManager {
       '',
     ]
     writeFileSync(filePath, existing + entryLines.join('\n'), 'utf-8')
+    this.indexFile(agentId, 'note', filePath)
   }
 
   private applyCuratedMemoryUpdates(agentId: string, updates: CuratedMemoryUpdate[]): CuratedMemoryUpdate[] {
@@ -241,6 +250,22 @@ export class MemoryManager {
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true })
     }
+  }
+
+  private indexFile(agentId: string, fileType: string, filePath: string): void {
+    if (!this.indexer || !existsSync(filePath)) return
+
+    const content = readFileSync(filePath, 'utf-8')
+    if (!content.trim()) {
+      this.indexer.removeFile(filePath)
+      return
+    }
+
+    this.indexer.indexFile(agentId, fileType, filePath, content)
+  }
+
+  private removeIndexedFile(filePath: string): void {
+    this.indexer?.removeFile(filePath)
   }
 
   // ===== Global Memory =====
@@ -281,6 +306,7 @@ export class MemoryManager {
     this.ensureMemoryDir(agentId)
     const filePath = this.getMemoryFilePath(agentId)
     writeFileSync(filePath, content, 'utf-8')
+    this.indexFile(agentId, 'memory', filePath)
     getLogger().info({ agentId }, 'MEMORY.md updated')
   }
 
@@ -348,6 +374,7 @@ export class MemoryManager {
     }
 
     writeFileSync(logPath, existing + entry, 'utf-8')
+    this.indexFile(agentId, 'log', logPath)
     getLogger().debug({ agentId, date }, 'daily log appended')
   }
 
@@ -397,7 +424,9 @@ export class MemoryManager {
     for (const file of files) {
       const date = file.replace('.md', '')
       if (date < cutoffStr) {
-        unlinkSync(resolve(logsDir, file))
+        const filePath = resolve(logsDir, file)
+        unlinkSync(filePath)
+        this.removeIndexedFile(filePath)
         deleted++
       }
     }
@@ -415,6 +444,7 @@ export class MemoryManager {
   getMemoryContext(agentId: string, options?: MemoryContextOptions): string {
     const recentDays = options?.recentDays ?? 2
     const maxContextChars = options?.maxContextChars ?? 10000
+    const query = options?.query?.trim()
 
     const globalMemory = this.getGlobalMemory()
     const longTermMemory = this.getMemory(agentId)
@@ -423,11 +453,28 @@ export class MemoryManager {
     const dates = this.getDailyLogDates(agentId)
     const recentDates = dates.slice(0, recentDays)
     const summaryFiles = this.getSessionSummaryFiles(agentId).slice(0, recentDays)
+    const relevantHits = query && this.indexer
+      ? this.indexer.search(query, { agentId, limit: 6 })
+      : []
 
     let recentLogs = ''
     let recentNotes = ''
     let recentSummaries = ''
     let totalChars = globalMemory.length + longTermMemory.length
+    let relevantMemoryHits = ''
+
+    for (const hit of relevantHits) {
+      const snippet = hit.snippet.trim()
+      if (!snippet) continue
+
+      const block = `- [${hit.fileType}] ${hit.filePath}\n${snippet}\n`
+      if (totalChars + block.length > maxContextChars) {
+        break
+      }
+
+      totalChars += block.length
+      relevantMemoryHits += block
+    }
 
     for (const date of recentNoteDates) {
       const note = this.getDailyMemoryNote(agentId, date)
@@ -491,6 +538,9 @@ export class MemoryManager {
       parts.push(`<recent_notes>\n${recentNotes.trimEnd()}\n</recent_notes>`)
     }
     parts.push(`<long_term>\n${longTermMemory}\n</long_term>`)
+    if (relevantMemoryHits.trim()) {
+      parts.push(`<relevant_memory_hits>\n${relevantMemoryHits.trimEnd()}\n</relevant_memory_hits>`)
+    }
     parts.push(`<recent_logs>\n${recentLogs.trimEnd()}\n</recent_logs>`)
     if (recentSummaries.trim()) {
       parts.push(`<session_summaries>\n${recentSummaries.trimEnd()}\n</session_summaries>`)
@@ -539,6 +589,7 @@ export class MemoryManager {
     this.ensureConversationsDir(agentId)
     const filePath = resolve(this.getConversationsDir(agentId), filename)
     writeFileSync(filePath, content, 'utf-8')
+    this.indexFile(agentId, 'conversation', filePath)
     getLogger().info({ agentId, filename }, 'conversation archive saved')
   }
 
@@ -642,6 +693,7 @@ export class MemoryManager {
 
     const header = `# Conversation Archive\n- Session: ${sessionId}\n- Chat: ${chatId}\n- Date: ${date}\n\n---\n\n`
     writeFileSync(filePath, header + content, 'utf-8')
+    this.indexFile(agentId, 'conversation', filePath)
 
     logger.info({ agentId, chatId, sessionId }, 'conversation archived')
   }
@@ -744,6 +796,7 @@ export class MemoryManager {
     ].filter(Boolean).join('\n')
 
     writeFileSync(filePath, content, 'utf-8')
+    this.indexFile(agentId, 'summary', filePath)
     getLogger().info({ agentId, chatId, sessionId, filename }, 'session summary saved')
     return { filename, filePath }
   }

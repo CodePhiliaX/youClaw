@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getDatabase } from '../db/index.ts'
 import { getPaths } from '../config/index.ts'
@@ -100,12 +100,44 @@ export class MemoryIndexer {
     // Index conversations/
     const convDir = resolve(memoryDir, 'conversations')
     if (existsSync(convDir)) {
-      const convFiles = readdirSync(convDir).filter((f) => f.endsWith('.md'))
-      for (const file of convFiles) {
-        const filePath = resolve(convDir, file)
+      const entries = readdirSync(convDir)
+      for (const entry of entries) {
+        const entryPath = resolve(convDir, entry)
+        try {
+          if (statSync(entryPath).isDirectory()) {
+            const nestedFiles = readdirSync(entryPath).filter((f) => f.endsWith('.md'))
+            for (const file of nestedFiles) {
+              const filePath = resolve(entryPath, file)
+              const content = readFileSync(filePath, 'utf-8')
+              if (content.trim()) {
+                this.indexFile(agentId, 'conversation', filePath, content)
+                count++
+              }
+            }
+            continue
+          }
+        } catch {
+          continue
+        }
+
+        if (entry.endsWith('.md')) {
+          const content = readFileSync(entryPath, 'utf-8')
+          if (content.trim()) {
+            this.indexFile(agentId, 'conversation', entryPath, content)
+            count++
+          }
+        }
+      }
+    }
+
+    const summariesDir = resolve(memoryDir, 'summaries')
+    if (existsSync(summariesDir)) {
+      const summaryFiles = readdirSync(summariesDir).filter((f) => f.endsWith('.md'))
+      for (const file of summaryFiles) {
+        const filePath = resolve(summariesDir, file)
         const content = readFileSync(filePath, 'utf-8')
         if (content.trim()) {
-          this.indexFile(agentId, 'conversation', filePath, content)
+          this.indexFile(agentId, 'summary', filePath, content)
           count++
         }
       }

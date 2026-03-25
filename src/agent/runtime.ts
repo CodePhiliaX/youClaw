@@ -16,7 +16,6 @@ import { createMessageTool } from './message-mcp.ts'
 import { buildParsedDocumentsPrompt, createDocumentTools, ingestDocumentAttachments } from './document-mcp.ts'
 import { preprocessAttachments } from './document-converter.ts'
 import { abortRegistry } from './abort-registry.ts'
-import { getActiveModelConfig } from '../settings/manager.ts'
 import { getAuthToken } from '../routes/auth.ts'
 import { resolvePiModel } from './model-resolver.ts'
 import type { BrowserManager } from '../browser/index.ts'
@@ -27,6 +26,9 @@ import { buildRecoveredConversationPrompt, resolveStoredSessionFile, type Stored
 import { createSkillTool } from './tools/skill-tool.ts'
 import type { AgentConfig, ProcessParams } from './types.ts'
 import { clearBootstrapSnapshotOnSessionRollover } from './bootstrap-cache.ts'
+import type { SecretsManager } from './secrets.ts'
+import { createExternalMcpToolRuntime } from './mcp-tools.ts'
+import { resolveRuntimeModelConfig } from './runtime-model.ts'
 
 const COMPACTION_MEMORY_INSTRUCTIONS = [
   'Focus on durable context for future turns.',
@@ -57,6 +59,7 @@ export class AgentRuntime {
   private skillsLoader: SkillsLoader | null
   private memoryManager: MemoryManager | null
   private browserManager: BrowserManager | null
+  private secretsManager: SecretsManager | null
 
   constructor(
     config: AgentConfig,
@@ -66,6 +69,7 @@ export class AgentRuntime {
     skillsLoader?: SkillsLoader,
     memoryManager?: MemoryManager,
     browserManager?: BrowserManager,
+    secretsManager?: SecretsManager,
   ) {
     this.config = config
     this.eventBus = eventBus
@@ -74,6 +78,7 @@ export class AgentRuntime {
     this.skillsLoader = skillsLoader ?? null
     this.memoryManager = memoryManager ?? null
     this.browserManager = browserManager ?? null
+    this.secretsManager = secretsManager ?? null
   }
 
   /**
@@ -121,9 +126,12 @@ export class AgentRuntime {
         }
       }
 
-      const modelConfig = getActiveModelConfig()
+      const resolvedModel = resolveRuntimeModelConfig({
+        agentModel: this.config.hasExplicitModel ? this.config.model : undefined,
+      })
+      const modelConfig = resolvedModel.config
       if (!modelConfig) {
-        throw new Error('No model config available. Please configure a model in Settings.')
+        throw new Error(resolvedModel.error ?? 'No model config available. Please configure a model in Settings.')
       }
 
       if (modelConfig.provider === 'builtin') {
@@ -244,6 +252,16 @@ export class AgentRuntime {
       ? this.browserManager.resolveProfileSelection(browserProfileId, this.config.browser?.defaultProfile ?? this.config.browserProfile)
       : null
     const effectiveBrowserProfileId = resolvedBrowserProfile?.id
+    const skillsPrompt = this.skillsLoader
+      ? this.skillsLoader.buildPromptSnapshot(this.config, requestedSkills).prompt
+      : ''
+    const memoryContext = this.memoryManager && this.config.memory?.enabled !== false
+      ? this.memoryManager.getMemoryContext(agentId, {
+          recentDays: this.config.memory?.recentDays,
+          maxContextChars: this.config.memory?.maxContextChars,
+          query: prompt,
+        })
+      : undefined
 
     let fullText = ''
 
@@ -254,6 +272,8 @@ export class AgentRuntime {
         agentId,
         chatId,
         requestedSkills,
+        skillsPrompt,
+        memoryContext,
         browserProfileId: effectiveBrowserProfileId,
         browserProfile: resolvedBrowserProfile
           ? {
@@ -287,7 +307,13 @@ export class AgentRuntime {
       : SessionManager.create(cwd, sessionsDir)
 
     const tools = this.filterConfiguredTools(createCodingTools(cwd))
-    const customTools = this.filterConfiguredTools(this.buildCustomTools(chatId, agentId, effectiveBrowserProfileId))
+    const customToolRuntime = await this.buildCustomTools(
+      chatId,
+      agentId,
+      effectiveBrowserProfileId,
+      tools.map((tool) => tool.name),
+    )
+    const customTools = this.filterConfiguredTools(customToolRuntime.tools)
 
     logger.info({
       agentId,
@@ -395,6 +421,7 @@ export class AgentRuntime {
 
       return { fullText, sessionId: finalSessionId, sessionFile: finalSessionFile }
     } finally {
+      await customToolRuntime.dispose()
       abortRegistry.unregister(chatId)
     }
   }
@@ -601,29 +628,55 @@ export class AgentRuntime {
     return `${prompt}\n\n${parts.join('\n\n')}`.trim()
   }
 
-  private buildCustomTools(chatId: string, agentId: string, browserProfileId?: string): ToolDefinition[] {
+  private async buildCustomTools(
+    chatId: string,
+    agentId: string,
+    browserProfileId?: string,
+    reservedToolNames?: string[],
+  ): Promise<{
+    tools: ToolDefinition[]
+    dispose: () => Promise<void>
+  }> {
     const customTools: ToolDefinition[] = [
       createBuiltinImageTool(),
       createMessageTool(chatId),
       ...createDocumentTools(chatId),
     ]
-    const mcpServers: Record<string, ToolDefinition[]> = {}
+    let externalMcpDispose: (() => Promise<void>) | undefined
 
     if (this.browserManager && browserProfileId) {
-      mcpServers['browser'] = createBrowserMcpServer({
+      const browserTools = createBrowserMcpServer({
         browserManager: this.browserManager,
         chatId,
         agentId,
         profileId: browserProfileId,
       })
-      customTools.push(...mcpServers['browser'])
+      customTools.push(...browserTools)
       logBrowserToolRegistration(browserProfileId)
     }
 
     if (this.skillsLoader) {
       customTools.push(createSkillTool(this.skillsLoader))
     }
-    return customTools
+
+    if (this.config.mcpServers) {
+      const resolvedServers = this.secretsManager
+        ? this.secretsManager.injectToMcpEnv(agentId, this.config.mcpServers)
+        : this.config.mcpServers
+      const mcpRuntime = await createExternalMcpToolRuntime({
+        servers: resolvedServers,
+        reservedToolNames: [...(reservedToolNames ?? []), ...customTools.map((tool) => tool.name)],
+      })
+      customTools.push(...mcpRuntime.tools)
+      externalMcpDispose = mcpRuntime.dispose
+    }
+
+    return {
+      tools: customTools,
+      dispose: async () => {
+        await externalMcpDispose?.()
+      },
+    }
   }
 
   private filterConfiguredTools<T extends { name: string }>(tools: T[]): T[] {

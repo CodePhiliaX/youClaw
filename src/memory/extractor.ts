@@ -1,8 +1,8 @@
 import { complete, type AssistantMessage, type Context } from '@mariozechner/pi-ai'
 import { getLogger } from '../logger/index.ts'
-import { getActiveModelConfig } from '../settings/manager.ts'
 import { resolvePiModel } from '../agent/model-resolver.ts'
 import { getAuthToken } from '../routes/auth.ts'
+import { resolveRuntimeModelConfigByAgentId } from '../agent/runtime-model.ts'
 
 export type DailyMemoryItem = {
   text: string
@@ -104,7 +104,8 @@ export class MemoryExtractor implements MemoryExtractionRunner {
     assistantReply: string
   }): Promise<MemoryExtractionResult> {
     const logger = getLogger()
-    const modelConfig = getActiveModelConfig()
+    const resolvedModel = resolveRuntimeModelConfigByAgentId(params.agentId)
+    const modelConfig = resolvedModel.config
     if (!modelConfig) {
       logger.warn({ agentId: params.agentId }, 'Skipping memory extraction: no active model config')
       return { dailyMemories: [], curatedUpdates: [] }

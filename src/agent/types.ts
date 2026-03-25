@@ -4,6 +4,7 @@ import type { AgentConfig as SchemaAgentConfig } from './schema.ts'
 // Extend schema config with runtime fields
 export interface AgentConfig extends SchemaAgentConfig {
   workspaceDir: string
+  hasExplicitModel?: boolean
 }
 
 export interface AgentState {
