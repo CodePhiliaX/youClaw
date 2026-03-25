@@ -47,6 +47,7 @@
     "react-day-picker": "^9.11.1",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1",
+    "react-virtuoso": "^4.14.1",
     "shiki": "^4.0.2",
     "streamdown": "^2.4.0",
     "tailwind-merge": "^3.5.0",

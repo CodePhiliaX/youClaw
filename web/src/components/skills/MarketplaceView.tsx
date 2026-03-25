@@ -1,19 +1,24 @@
-import type { RefObject } from 'react'
+import { useMemo } from 'react'
+import type { MarketplaceCardViewModel, MarketplaceResultsViewModel } from '@/lib/marketplace-view-model'
 import type { MarketplaceSort, RegistrySelectableSource, RegistrySourceInfo } from '@/api/client'
+import type { MarketplaceChangeEvent } from '@/lib/marketplace-updates'
+import type { MarketplaceFeedStatus } from '@/hooks/useMarketplaceFeed'
 import { MarketplaceCard } from '@/components/MarketplaceCard'
 import { MarketplaceDisclaimer } from '@/components/MarketplaceDisclaimer'
 import { RegistrySourceSelect } from '@/components/RegistrySourceSelect'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { MarketplaceVirtualList } from '@/components/skills/MarketplaceVirtualList'
 import { Loader2, Search, Store } from 'lucide-react'
 import { useI18n } from '@/i18n'
-import type { MarketplaceResultsViewModel } from '@/lib/marketplace-view-model'
-import type { MarketplaceChangeEvent } from '@/lib/marketplace-updates'
+
+type MarketplaceViewRow =
+  | { key: string; type: 'header'; label: string }
+  | { key: string; type: 'card'; viewModel: MarketplaceCardViewModel }
 
 interface MarketplaceViewProps {
   resultsViewModel: MarketplaceResultsViewModel
-  marketplaceStatus: 'idle' | 'loading' | 'refreshing' | 'loading-more' | 'error'
+  marketplaceStatus: MarketplaceFeedStatus
   marketplaceError: string
   marketplaceAppendError: string
   marketplaceSort: MarketplaceSort
@@ -26,8 +31,7 @@ interface MarketplaceViewProps {
   onChanged: (change?: MarketplaceChangeEvent) => void
   onLoadMore: () => void
   onRetryLoadMore: () => void
-  marketplaceScrollRef: RefObject<HTMLDivElement | null>
-  marketplaceLoadMoreRef: RefObject<HTMLDivElement | null>
+  listKey: string
 }
 
 export function MarketplaceView({
@@ -45,22 +49,56 @@ export function MarketplaceView({
   onChanged,
   onLoadMore,
   onRetryLoadMore,
-  marketplaceScrollRef,
-  marketplaceLoadMoreRef,
+  listKey,
 }: MarketplaceViewProps) {
   const { t } = useI18n()
   const selectedSourceInfo = registrySources.find((source) => source.id === registrySource) ?? null
   const supportedSorts = selectedSourceInfo?.capabilities.sorts ?? ['trending', 'updated', 'downloads', 'stars', 'installsCurrent', 'installsAllTime']
 
+  const rows = useMemo<MarketplaceViewRow[]>(() => {
+    if (resultsViewModel.isSearching) {
+      return resultsViewModel.flatItems.map((viewModel) => ({
+        key: `card:${viewModel.slug}`,
+        type: 'card',
+        viewModel,
+      }))
+    }
+
+    return resultsViewModel.groupedItems.flatMap((group) => ([
+      {
+        key: `header:${group.category}`,
+        type: 'header' as const,
+        label: group.label,
+      },
+      ...group.items.map((viewModel) => ({
+        key: `card:${viewModel.slug}`,
+        type: 'card' as const,
+        viewModel,
+      })),
+    ]))
+  }, [resultsViewModel])
+
+  const listHeader = (
+    <div className="space-y-6 pb-6">
+      <MarketplaceDisclaimer />
+
+      {!resultsViewModel.isSearching && (
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-medium">{t.skills.recommended}</h3>
+        </div>
+      )}
+    </div>
+  )
+
   return (
-    <div ref={marketplaceScrollRef} className="flex-1 overflow-y-auto p-6">
-      <div className="max-w-3xl mx-auto space-y-6">
+    <div className="flex min-h-0 flex-1 flex-col p-6">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="relative min-w-0 flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               data-testid="marketplace-search-input"
-              defaultValue={searchQuery}
+              value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
               placeholder={t.skills.marketplaceSearchPlaceholder}
               className="pl-9"
@@ -99,98 +137,59 @@ export function MarketplaceView({
             )}
           </div>
         </div>
+      </div>
 
-        <MarketplaceDisclaimer />
+      <div className="mx-auto mt-6 flex min-h-0 w-full max-w-3xl flex-1">
+        <MarketplaceVirtualList
+          rows={rows}
+          listKey={listKey}
+          rowKey={(row) => row.key}
+          renderRow={(row) => {
+            if (row.type === 'header') {
+              return (
+                <div className="pb-3 pt-2">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                      {row.label}
+                    </Badge>
+                  </div>
+                </div>
+              )
+            }
 
-        {!resultsViewModel.isSearching && (
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-medium">{t.skills.recommended}</h3>
-          </div>
-        )}
-
-        {marketplaceStatus === 'loading' && (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        )}
-
-        {marketplaceStatus === 'error' && (
-          <div className="text-center text-muted-foreground text-sm py-12">
-            <Store className="h-12 w-12 mx-auto mb-4 opacity-20" />
-            <p>{marketplaceError || t.skills.marketplaceLoadFailed}</p>
-          </div>
-        )}
-
-        {marketplaceStatus !== 'loading' && marketplaceStatus !== 'error' && !resultsViewModel.hasItems && !resultsViewModel.canLoadMore && (
-          <div className="text-center text-muted-foreground text-sm py-12">
-            <Store className="h-12 w-12 mx-auto mb-4 opacity-20" />
-            <p>{resultsViewModel.isSearching ? t.skills.noMarketplaceSkills : t.skills.noSkills}</p>
-          </div>
-        )}
-
-        {marketplaceStatus !== 'loading' && resultsViewModel.hasItems && (
-          resultsViewModel.isSearching ? (
-            <div className="grid gap-3">
-              {resultsViewModel.flatItems.map((viewModel) => (
+            return (
+              <div className="pb-3">
                 <MarketplaceCard
-                  key={viewModel.slug}
-                  viewModel={viewModel}
+                  viewModel={row.viewModel}
                   onChanged={onChanged}
                   registrySource={registrySource}
                   hideCategoryBadge
                 />
-              ))}
+              </div>
+            )
+          }}
+          status={marketplaceStatus}
+          hasMore={resultsViewModel.canLoadMore}
+          appendError={marketplaceAppendError}
+          loadingLabel={t.common.loading}
+          retryLabel={t.common.retry}
+          emptyState={(
+            <div className="flex h-full flex-col items-center justify-center py-12 text-center text-muted-foreground text-sm">
+              <Store className="mb-4 h-12 w-12 opacity-20" />
+              <p>{resultsViewModel.isSearching ? t.skills.noMarketplaceSkills : t.skills.noSkills}</p>
             </div>
-          ) : (
-            <div className="space-y-5">
-              {resultsViewModel.groupedItems.map((group) => (
-                <section key={group.category} className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
-                      {group.label}
-                    </Badge>
-                  </div>
-                  <div className="grid gap-3">
-                    {group.items.map((viewModel) => (
-                      <MarketplaceCard
-                        key={viewModel.slug}
-                        viewModel={viewModel}
-                        onChanged={onChanged}
-                        registrySource={registrySource}
-                        hideCategoryBadge
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
+          )}
+          errorState={(
+            <div className="flex h-full flex-col items-center justify-center py-12 text-center text-muted-foreground text-sm">
+              <Store className="mb-4 h-12 w-12 opacity-20" />
+              <p>{marketplaceError || t.skills.marketplaceLoadFailed}</p>
             </div>
-          )
-        )}
-
-        {resultsViewModel.canLoadMore && (
-          <div className="space-y-3">
-            <div ref={marketplaceLoadMoreRef} className="h-1" aria-hidden="true" />
-            {marketplaceStatus === 'loading-more' && (
-              <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>{t.common.loading}</span>
-              </div>
-            )}
-            {marketplaceAppendError && (
-              <div className="flex flex-col items-center gap-2 py-2 text-sm text-muted-foreground">
-                <p>{marketplaceAppendError}</p>
-                <Button data-testid="marketplace-load-more-retry" variant="secondary" onClick={onRetryLoadMore}>
-                  {t.common.retry}
-                </Button>
-              </div>
-            )}
-            {!marketplaceAppendError && marketplaceStatus === 'idle' && (
-              <div className="flex justify-center">
-                <Button variant="outline" onClick={onLoadMore}>{t.skills.marketplaceLoadMore}</Button>
-              </div>
-            )}
-          </div>
-        )}
+          )}
+          onLoadMore={onLoadMore}
+          onRetryLoadMore={onRetryLoadMore}
+          header={listHeader}
+          scrollerClassName="pr-1"
+        />
       </div>
     </div>
   )

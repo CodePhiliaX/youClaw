@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { getAgents, getAgentDocs, updateAgentDoc, createAgent, deleteAgent, getAgentConfig, updateAgentConfig, getSkills, getMarketplaceSkills, getMarketplaceSkill, installRecommendedSkill } from '../api/client'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { getAgents, getAgentDocs, updateAgentDoc, createAgent, deleteAgent, getAgentConfig, updateAgentConfig, getSkills, getMarketplaceSkill, installRecommendedSkill } from '../api/client'
 import type { BrowserProfileDTO, Skill, MarketplaceSkill, MarketplaceSkillDetail } from '../api/client'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -23,6 +23,8 @@ import { MarketplaceCard } from '@/components/MarketplaceCard'
 import { MarketplaceDisclaimer } from '@/components/MarketplaceDisclaimer'
 import { MarketplaceInstallDialog } from '@/components/MarketplaceInstallDialog'
 import { RegistrySourceSelect } from '@/components/RegistrySourceSelect'
+import { MarketplaceVirtualList } from '@/components/skills/MarketplaceVirtualList'
+import { useMarketplaceFeed } from '@/hooks/useMarketplaceFeed'
 import { toMarketplaceCardViewModel, toMarketplaceInstallDialogViewModel } from '@/lib/marketplace-view-model'
 import { useAppStore } from '@/stores/app'
 import { useDragRegion } from "@/hooks/useDragRegion"
@@ -834,18 +836,24 @@ function AgentSkillsSection({
   // Marketplace dialog state
   const [marketplaceOpen, setMarketplaceOpen] = useState(false)
   const [marketplaceQuery, setMarketplaceQuery] = useState('')
-  const [marketplaceResults, setMarketplaceResults] = useState<MarketplaceSkill[]>([])
-  const [marketplaceLoading, setMarketplaceLoading] = useState(false)
   const [installingSlug, setInstallingSlug] = useState<string | null>(null)
   const [loadingConfirmSlug, setLoadingConfirmSlug] = useState<string | null>(null)
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
-  const [marketplaceError, setMarketplaceError] = useState<string | null>(null)
-  const [marketplaceAppendError, setMarketplaceAppendError] = useState<string | null>(null)
   const [confirmDetail, setConfirmDetail] = useState<MarketplaceSkillDetail | null>(null)
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const marketplaceScrollRef = useRef<HTMLDivElement | null>(null)
-  const marketplaceLoadMoreRef = useRef<HTMLDivElement | null>(null)
-  const marketplacePendingCursorRef = useRef<string | null>(null)
+  const marketplaceFeed = useMarketplaceFeed({
+    enabled: marketplaceOpen,
+    query: marketplaceQuery,
+    source: registrySource,
+    loadFailedMessage: t.agents.marketplaceError,
+  })
+  const {
+    appendError: marketplaceAppendError,
+    error: marketplaceError,
+    listKey: marketplaceListKey,
+    loadMore: loadMoreMarketplace,
+    page: marketplacePage,
+    status: marketplaceStatus,
+    updateItems: updateMarketplaceItems,
+  } = marketplaceFeed
   const bindingsModel = useMemo(
     () => createAgentSkillBindingsModel(allSkills, agentSkills),
     [allSkills, agentSkills],
@@ -892,67 +900,6 @@ function AgentSkillsSection({
   const [expanded, setExpanded] = useState(false)
   const selectedCount = isWildcard ? installedSkillNames.length : boundSkillNames.size
 
-  // Load recommended skills initially, search marketplace on query change
-  useEffect(() => {
-    if (!marketplaceOpen) return
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
-
-    if (!marketplaceQuery.trim()) {
-      setMarketplaceLoading(true)
-      setMarketplaceError(null)
-      setMarketplaceAppendError(null)
-      marketplacePendingCursorRef.current = null
-      getMarketplaceSkills({ source: registrySource, query: '' })
-        .then((page) => {
-          setMarketplaceResults(page.items)
-          setNextCursor(page.nextCursor)
-        })
-        .catch(() => {
-          setMarketplaceResults([])
-          setMarketplaceError(t.agents.marketplaceError)
-        })
-        .finally(() => setMarketplaceLoading(false))
-      return
-    }
-
-    searchTimerRef.current = setTimeout(() => {
-      setMarketplaceLoading(true)
-      setMarketplaceError(null)
-      setMarketplaceAppendError(null)
-      marketplacePendingCursorRef.current = null
-      getMarketplaceSkills({ source: registrySource, query: marketplaceQuery })
-        .then((page) => {
-          setMarketplaceResults(page.items)
-          setNextCursor(page.nextCursor)
-        })
-        .catch(() => {
-          setMarketplaceResults([])
-          setMarketplaceError(t.agents.marketplaceError)
-        })
-        .finally(() => setMarketplaceLoading(false))
-    }, 300)
-
-    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current) }
-  }, [marketplaceOpen, marketplaceQuery, registrySource, t.agents.marketplaceError])
-
-  const handleLoadMore = useCallback(() => {
-    if (!nextCursor || marketplaceLoading || marketplacePendingCursorRef.current === nextCursor) return
-    marketplacePendingCursorRef.current = nextCursor
-    setMarketplaceAppendError(null)
-    setMarketplaceLoading(true)
-    getMarketplaceSkills({ source: registrySource, query: marketplaceQuery, cursor: nextCursor })
-      .then((page) => {
-        setMarketplaceResults((prev) => [...prev, ...page.items])
-        setNextCursor(page.nextCursor)
-        marketplacePendingCursorRef.current = null
-      })
-      .catch(() => {
-        marketplacePendingCursorRef.current = null
-        setMarketplaceAppendError(t.agents.marketplaceError)
-      })
-      .finally(() => setMarketplaceLoading(false))
-  }, [marketplaceLoading, marketplaceQuery, nextCursor, registrySource, t.agents.marketplaceError])
-
   const handleOpenMarketplace = () => {
     setMarketplaceQuery('')
     setMarketplaceOpen(true)
@@ -961,15 +908,11 @@ function AgentSkillsSection({
   const handleCloseMarketplace = () => {
     setMarketplaceOpen(false)
     setMarketplaceQuery('')
-    setMarketplaceResults([])
-    setNextCursor(null)
-    setMarketplaceError(null)
-    setMarketplaceAppendError(null)
-    marketplacePendingCursorRef.current = null
+    setConfirmDetail(null)
   }
 
   const markMarketplaceSkillInstalled = useCallback((slug: string, installedSkillName?: string) => {
-    setMarketplaceResults((prev) => prev.map((item) => (
+    updateMarketplaceItems((items) => items.map((item) => (
       item.slug === slug
         ? {
             ...item,
@@ -979,7 +922,7 @@ function AgentSkillsSection({
           }
         : item
     )))
-  }, [])
+  }, [updateMarketplaceItems])
 
   const installAndBindSkill = async (skill: Pick<MarketplaceSkill, 'slug' | 'displayName'>) => {
     setInstallingSlug(skill.slug)
@@ -1043,31 +986,21 @@ function AgentSkillsSection({
   }
 
   const visibleMarketplaceResults = useMemo(
-    () => marketplaceResults.filter((skill) => getAgentMarketplaceSkillState(skill, bindingsModel) !== AgentMarketplaceSkillState.HiddenBound),
-    [marketplaceResults, bindingsModel],
+    () => marketplacePage.items.filter((skill) => getAgentMarketplaceSkillState(skill, bindingsModel) !== AgentMarketplaceSkillState.HiddenBound),
+    [bindingsModel, marketplacePage.items],
   )
 
-  useEffect(() => {
-    const container = marketplaceScrollRef.current
-    const sentinel = marketplaceLoadMoreRef.current
-    if (!container || !sentinel || !marketplaceOpen || !nextCursor || marketplaceLoading || marketplaceAppendError) return
+  const marketplaceRows = useMemo(
+    () => visibleMarketplaceResults.map((skill) => ({
+      key: `skill:${skill.slug}`,
+      skill,
+    })),
+    [visibleMarketplaceResults],
+  )
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          handleLoadMore()
-        }
-      },
-      {
-        root: container,
-        threshold: 0,
-        rootMargin: '0px 0px 240px 0px',
-      },
-    )
-
-    observer.observe(sentinel)
-    return () => observer.disconnect()
-  }, [handleLoadMore, marketplaceAppendError, marketplaceLoading, marketplaceOpen, nextCursor])
+  const handleLoadMore = useCallback(() => {
+    void loadMoreMarketplace()
+  }, [loadMoreMarketplace])
 
   return (
     <div className="space-y-3">
@@ -1174,113 +1107,94 @@ function AgentSkillsSection({
             />
           </div>
 
-          <div ref={marketplaceScrollRef} className="mt-4 space-y-1 flex-1 overflow-y-auto pr-1">
+          <div className="mt-4 flex min-h-0 flex-1 flex-col">
             <MarketplaceDisclaimer compact className="mb-3" />
+            <MarketplaceVirtualList
+              rows={marketplaceRows}
+              listKey={marketplaceListKey}
+              rowKey={(row) => row.key}
+              renderRow={(row) => {
+                const marketplaceState = getAgentMarketplaceSkillState(row.skill, bindingsModel)
+                const bindingName = resolveMarketplaceLocalSkillName(row.skill, bindingsModel)
 
-            {/* Error */}
-            {marketplaceError && !marketplaceLoading && (
-              <p className="text-xs text-red-400 py-2">{marketplaceError}</p>
-            )}
-
-            {/* Loading */}
-            {marketplaceLoading && marketplaceResults.length === 0 && (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            )}
-
-            {/* Results */}
-            {visibleMarketplaceResults.map((skill) => {
-              const marketplaceState = getAgentMarketplaceSkillState(skill, bindingsModel)
-              const bindingName = resolveMarketplaceLocalSkillName(skill, bindingsModel)
-              return (
-                <MarketplaceCard
-                  key={skill.slug}
-                  viewModel={toMarketplaceCardViewModel(skill, t)}
-                  onChanged={onUpdate}
-                  registrySource={registrySource}
-                  hideInstalledBadge={marketplaceState === AgentMarketplaceSkillState.Bind}
-                  onOpenInstallDialog={
-                    marketplaceState === AgentMarketplaceSkillState.InstallAndBind
-                      ? () => handleConfirmInstallAndBind(skill)
-                      : undefined
-                  }
-                  openInstallDialogDisabled={loadingConfirmSlug === skill.slug || installingSlug === skill.slug}
-                  statusBadges={
-                    marketplaceState === AgentMarketplaceSkillState.Bind ? (
-                      <Badge variant="secondary">
-                        {t.agents.skillInstalledUnbound}
-                      </Badge>
-                    ) : undefined
-                  }
-                  extraActions={
-                    installingSlug === skill.slug ? (
-                      <Button size="sm" variant="secondary" className="h-7 text-xs" disabled>
-                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                        {t.agents.installingSkill}
-                      </Button>
-                    ) : marketplaceState === AgentMarketplaceSkillState.Bind ? (
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="h-7 text-xs"
-                        onClick={() => { if (bindingName) void handleBindSkill(bindingName) }}
-                        disabled={!bindingName}
-                      >
-                        {t.agents.bindSkill}
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="h-7 text-xs"
-                        onClick={() => handleConfirmInstallAndBind(skill)}
-                        disabled={loadingConfirmSlug === skill.slug}
-                      >
-                        {loadingConfirmSlug === skill.slug ? (
-                          <><Loader2 className="h-3 w-3 animate-spin mr-1" />{t.common.loading}</>
+                return (
+                  <div className="pb-3">
+                    <MarketplaceCard
+                      viewModel={toMarketplaceCardViewModel(row.skill, t)}
+                      onChanged={onUpdate}
+                      registrySource={registrySource}
+                      hideInstalledBadge={marketplaceState === AgentMarketplaceSkillState.Bind}
+                      onOpenInstallDialog={
+                        marketplaceState === AgentMarketplaceSkillState.InstallAndBind
+                          ? () => handleConfirmInstallAndBind(row.skill)
+                          : undefined
+                      }
+                      openInstallDialogDisabled={loadingConfirmSlug === row.skill.slug || installingSlug === row.skill.slug}
+                      statusBadges={
+                        marketplaceState === AgentMarketplaceSkillState.Bind ? (
+                          <Badge variant="secondary">
+                            {t.agents.skillInstalledUnbound}
+                          </Badge>
+                        ) : undefined
+                      }
+                      extraActions={
+                        installingSlug === row.skill.slug ? (
+                          <Button size="sm" variant="secondary" className="h-7 text-xs" disabled>
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                            {t.agents.installingSkill}
+                          </Button>
+                        ) : marketplaceState === AgentMarketplaceSkillState.Bind ? (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="h-7 text-xs"
+                            onClick={() => { if (bindingName) void handleBindSkill(bindingName) }}
+                            disabled={!bindingName}
+                          >
+                            {t.agents.bindSkill}
+                          </Button>
                         ) : (
-                          t.agents.installAndBind
-                        )}
-                      </Button>
-                    )
-                  }
-                />
-              )
-            })}
-
-            {/* Empty */}
-            {!marketplaceLoading && !marketplaceError && visibleMarketplaceResults.length === 0 && !nextCursor && (
-              <p className="text-xs text-muted-foreground py-6 text-center">{t.agents.noSkillsAvailable}</p>
-            )}
-
-            {nextCursor && (
-              <div className="space-y-3 pt-1">
-                <div ref={marketplaceLoadMoreRef} className="h-1" aria-hidden="true" />
-                {marketplaceLoading && marketplaceResults.length > 0 && (
-                  <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>{t.common.loading}</span>
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="h-7 text-xs"
+                            onClick={() => handleConfirmInstallAndBind(row.skill)}
+                            disabled={loadingConfirmSlug === row.skill.slug}
+                          >
+                            {loadingConfirmSlug === row.skill.slug ? (
+                              <><Loader2 className="mr-1 h-3 w-3 animate-spin" />{t.common.loading}</>
+                            ) : (
+                              t.agents.installAndBind
+                            )}
+                          </Button>
+                        )
+                      }
+                    />
                   </div>
-                )}
-                {marketplaceAppendError && (
-                  <div className="flex flex-col items-center gap-2 py-2 text-sm text-muted-foreground">
-                    <p>{marketplaceAppendError}</p>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="text-xs"
-                      onClick={() => {
-                        setMarketplaceAppendError(null)
-                        handleLoadMore()
-                      }}
-                    >
-                      {t.common.retry}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
+                )
+              }}
+              status={marketplaceStatus}
+              hasMore={Boolean(marketplacePage.nextCursor)}
+              appendError={marketplaceAppendError}
+              loadingLabel={t.common.loading}
+              retryLabel={t.common.retry}
+              emptyState={(
+                <div className="flex h-full items-center justify-center py-6 text-center text-xs text-muted-foreground">
+                  {t.agents.noSkillsAvailable}
+                </div>
+              )}
+              errorState={(
+                <div className="flex h-full items-center justify-center py-6 text-center text-xs text-red-400">
+                  {marketplaceError || t.agents.marketplaceError}
+                </div>
+              )}
+              onLoadMore={handleLoadMore}
+              onRetryLoadMore={() => {
+                void loadMoreMarketplace()
+              }}
+              header={<div className="pb-3"><MarketplaceDisclaimer compact /></div>}
+              scrollerClassName="pr-1"
+            />
           </div>
 
           <MarketplaceInstallDialog

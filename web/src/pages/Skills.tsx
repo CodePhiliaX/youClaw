@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   deleteSkill,
-  getMarketplaceSkills,
   getMySkills,
   getSkillAgents,
   getSkills,
   toggleSkill,
   type ManagedSkill,
-  type MarketplacePage,
   type MarketplaceSort,
   type Skill,
 } from '@/api/client'
@@ -18,7 +16,7 @@ import { InstalledSkillsView } from '@/components/skills/InstalledSkillsView'
 import { MarketplaceView } from '@/components/skills/MarketplaceView'
 import { getExternalSkillSourceLabel } from '@/components/skills/shared-utils'
 import { compareByNewestThenName, type InstalledSkillListItem } from '@/components/skills/skills-view-types'
-import { applyMarketplaceChangeToPage, type MarketplaceChangeEvent } from '@/lib/marketplace-updates'
+import { type MarketplaceChangeEvent } from '@/lib/marketplace-updates'
 import { toMarketplaceResultsViewModel } from '@/lib/marketplace-view-model'
 import {
   AlertDialog,
@@ -30,12 +28,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { useMarketplaceFeed } from '@/hooks/useMarketplaceFeed'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/i18n'
 import { useAppStore } from '@/stores/app'
 
 type TabType = 'installed' | 'marketplace'
-type MarketplaceLoadMode = 'replace' | 'refresh' | 'append'
 type InstalledWorkspace =
   | { kind: 'detail'; skillName: string | null }
   | { kind: 'create' }
@@ -57,24 +55,29 @@ export function Skills() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleteAffectedAgents, setDeleteAffectedAgents] = useState<Array<{ id: string; name: string }>>([])
 
-  const [marketplace, setMarketplace] = useState<MarketplacePage>({
-    items: [],
-    nextCursor: null,
-    source: 'fallback',
-    query: '',
-    sort: 'trending',
-  })
-  const [marketplaceStatus, setMarketplaceStatus] = useState<'idle' | 'loading' | 'refreshing' | 'loading-more' | 'error'>('idle')
-  const [marketplaceError, setMarketplaceError] = useState('')
-  const [marketplaceAppendError, setMarketplaceAppendError] = useState('')
   const [marketplaceSort, setMarketplaceSort] = useState<MarketplaceSort>('trending')
   const [searchQuery, setSearchQuery] = useState('')
 
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const marketplaceScrollRef = useRef<HTMLDivElement | null>(null)
-  const marketplaceLoadMoreRef = useRef<HTMLDivElement | null>(null)
-  const marketplacePendingCursorRef = useRef<string | null>(null)
   const listScrollRef = useRef<HTMLDivElement | null>(null)
+
+  const marketplaceFeed = useMarketplaceFeed({
+    enabled: tab === 'marketplace',
+    query: searchQuery,
+    sort: marketplaceSort,
+    source: registrySource,
+    loadFailedMessage: t.skills.marketplaceLoadFailed,
+  })
+  const {
+    activeQuery: marketplaceActiveQuery,
+    appendError: marketplaceAppendError,
+    applyChange: applyMarketplaceChange,
+    error: marketplaceError,
+    listKey: marketplaceListKey,
+    loadMore: loadMoreMarketplace,
+    page: marketplacePage,
+    refresh: refreshMarketplace,
+    status: marketplaceStatus,
+  } = marketplaceFeed
 
   const sourceLabels = useMemo<Record<Skill['source'], string>>(() => ({
     workspace: t.skills.workspace,
@@ -93,78 +96,14 @@ export function Skills() {
     return { nextSkills, nextMySkills }
   }, [])
 
-  const loadMarketplace = useCallback(
-    (options?: { mode?: MarketplaceLoadMode; cursor?: string | null; query?: string; sort?: MarketplaceSort; source?: typeof registrySource }) => {
-      const mode = options?.mode ?? 'replace'
-      const append = mode === 'append'
-      const query = (options?.query ?? searchQuery).trim()
-      const sort = options?.sort ?? marketplaceSort
-      const source = options?.source ?? registrySource
-      const cursor = append ? (options?.cursor ?? marketplace.nextCursor) : null
-
-      if (append) {
-        if (!cursor || marketplacePendingCursorRef.current === cursor) return
-        marketplacePendingCursorRef.current = cursor
-        setMarketplaceAppendError('')
-      } else {
-        marketplacePendingCursorRef.current = null
-        setMarketplaceAppendError('')
-      }
-
-      if (append) {
-        setMarketplaceStatus('loading-more')
-      } else if (mode === 'refresh') {
-        setMarketplaceStatus('refreshing')
-      } else {
-        setMarketplaceStatus('loading')
-      }
-      if (mode !== 'refresh') {
-        setMarketplaceError('')
-      }
-
-      getMarketplaceSkills({ source, query, sort, cursor, limit: 24 })
-        .then((page) => {
-          setMarketplace((current) => ({
-            ...page,
-            items: append ? [...current.items, ...page.items] : page.items,
-          }))
-          setMarketplaceStatus('idle')
-          if (append) {
-            marketplacePendingCursorRef.current = null
-          }
-        })
-        .catch((error) => {
-          if (!append) {
-            marketplacePendingCursorRef.current = null
-            if (mode === 'refresh') {
-              setMarketplaceStatus('idle')
-              return
-            }
-            setMarketplace((current) => ({ ...current, items: [], nextCursor: null }))
-            setMarketplaceStatus('error')
-            setMarketplaceError(error instanceof Error ? error.message : t.skills.marketplaceLoadFailed)
-            return
-          }
-          marketplacePendingCursorRef.current = null
-          setMarketplaceStatus('idle')
-          setMarketplaceAppendError(error instanceof Error ? error.message : t.skills.marketplaceLoadFailed)
-        })
-    },
-    [marketplace.nextCursor, marketplaceSort, registrySource, searchQuery, t.skills.marketplaceLoadFailed],
-  )
-
   useEffect(() => {
-    refreshInstalledData().catch(() => {})
-    void refreshRegistrySources()
-  }, [refreshInstalledData, refreshRegistrySources])
-
-  useEffect(() => {
-    if (tab !== 'marketplace') return
     const timer = window.setTimeout(() => {
-      loadMarketplace({ mode: 'replace', query: searchQuery, source: registrySource })
+      refreshInstalledData().catch(() => {})
+      void refreshRegistrySources()
     }, 0)
+
     return () => window.clearTimeout(timer)
-  }, [loadMarketplace, marketplaceSort, registrySource, searchQuery, tab])
+  }, [refreshInstalledData, refreshRegistrySources])
 
   useEffect(() => {
     if (!deleteTarget) return
@@ -172,10 +111,6 @@ export function Skills() {
       .then((res) => setDeleteAffectedAgents(res.agents))
       .catch(() => setDeleteAffectedAgents([]))
   }, [deleteTarget])
-
-  useEffect(() => () => {
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
-  }, [])
 
   const selectedSkillName = installedWorkspace.kind === 'detail' ? installedWorkspace.skillName : null
   const selectedSkill = skills.find((skill) => skill.name === selectedSkillName)
@@ -212,7 +147,7 @@ export function Skills() {
         skill,
         sortTimestamp: skill.sortTimestamp,
       }))
-  ), [editableSkillNames, skills, t, t.skills.skillDescriptionFallback])
+  ), [editableSkillNames, skills, t])
 
   const builtinSkillItems = useMemo<InstalledSkillListItem[]>(() => (
     skills
@@ -228,10 +163,14 @@ export function Skills() {
       }))
   ), [editableSkillNames, skills, sourceLabels, t.skills.skillDescriptionFallback])
 
-  const canAutoLoadMore = Boolean(searchQuery.trim()) && Boolean(marketplace.nextCursor) && !marketplaceAppendError
   const marketplaceResultsViewModel = useMemo(
-    () => toMarketplaceResultsViewModel(marketplace, searchQuery, marketplaceAppendError, t),
-    [marketplace, marketplaceAppendError, searchQuery, t],
+    () => toMarketplaceResultsViewModel(
+      marketplacePage,
+      marketplaceActiveQuery,
+      marketplaceAppendError,
+      t,
+    ),
+    [marketplaceActiveQuery, marketplaceAppendError, marketplacePage, t],
   )
 
   const openSkillBuilder = useCallback((skillName: string) => {
@@ -239,45 +178,19 @@ export function Skills() {
   }, [])
 
   const handleMarketplaceLoadMore = useCallback(() => {
-    if (!canAutoLoadMore || marketplaceStatus !== 'idle') return
-    loadMarketplace({ mode: 'append', source: registrySource })
-  }, [canAutoLoadMore, loadMarketplace, marketplaceStatus, registrySource])
+    void loadMoreMarketplace()
+  }, [loadMoreMarketplace])
 
   const handleMarketplaceChanged = useCallback((change?: MarketplaceChangeEvent) => {
-    if (change) {
-      setMarketplace((current) => applyMarketplaceChangeToPage(current, change))
-    }
+    applyMarketplaceChange(change)
     refreshInstalledData().catch(() => {})
     if (tab === 'marketplace') {
-      loadMarketplace({ mode: 'refresh', query: searchQuery, source: registrySource })
+      void refreshMarketplace()
     }
-  }, [loadMarketplace, refreshInstalledData, registrySource, searchQuery, tab])
-
-  useEffect(() => {
-    const container = marketplaceScrollRef.current
-    const sentinel = marketplaceLoadMoreRef.current
-    if (!container || !sentinel || !canAutoLoadMore) return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          handleMarketplaceLoadMore()
-        }
-      },
-      {
-        root: container,
-        threshold: 0,
-        rootMargin: '0px 0px 240px 0px',
-      },
-    )
-
-    observer.observe(sentinel)
-    return () => observer.disconnect()
-  }, [canAutoLoadMore, handleMarketplaceLoadMore])
+  }, [applyMarketplaceChange, refreshInstalledData, refreshMarketplace, tab])
 
   const handleSearchChange = useCallback((value: string) => {
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
-    searchTimerRef.current = setTimeout(() => setSearchQuery(value), 300)
+    setSearchQuery(value)
   }, [])
 
   const handleImportSuccess = useCallback(async () => {
@@ -451,11 +364,9 @@ export function Skills() {
           onChanged={handleMarketplaceChanged}
           onLoadMore={handleMarketplaceLoadMore}
           onRetryLoadMore={() => {
-            setMarketplaceAppendError('')
-            loadMarketplace({ mode: 'append', source: registrySource })
+            void loadMoreMarketplace()
           }}
-          marketplaceScrollRef={marketplaceScrollRef}
-          marketplaceLoadMoreRef={marketplaceLoadMoreRef}
+          listKey={marketplaceListKey}
         />
       )}
 

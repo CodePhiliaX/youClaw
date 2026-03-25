@@ -47,7 +47,7 @@ export function SkillDetailView({
 }: SkillDetailViewProps) {
   const { t } = useI18n()
   const showEditButton = Boolean(managedSkill?.editable && onEditSkill)
-  const showDeleteButton = !managedSkill?.editable && skill.source !== 'workspace'
+  const showDeleteButton = skill.source !== 'workspace'
 
   return (
     <div className="max-w-2xl space-y-6">

@@ -7,12 +7,16 @@ import {
 } from './helpers'
 
 test.describe('Skills marketplace', () => {
-  test('loads marketplace items and paginates', async ({ page }) => {
+  test('loads marketplace items and auto-loads the next page on scroll', async ({ page }) => {
+    let searchPageTwoRequests = 0
+
     await page.route('**/api/registry/marketplace**', async (route) => {
       const url = new URL(route.request().url())
+      const query = url.searchParams.get('q') ?? ''
       const cursor = url.searchParams.get('cursor')
 
-      if (cursor === 'page-2') {
+      if (query === 'browser' && cursor === 'page-2') {
+        searchPageTwoRequests += 1
         await fulfillJson(route, {
           items: [
             createMarketplaceSkill({
@@ -23,7 +27,24 @@ test.describe('Skills marketplace', () => {
           ],
           nextCursor: null,
           source: 'clawhub',
-          query: '',
+          query: 'browser',
+          sort: 'trending',
+        })
+        return
+      }
+
+      if (query === 'browser') {
+        await fulfillJson(route, {
+          items: [
+            createMarketplaceSkill({
+              slug: 'agent-browser',
+              displayName: 'Agent Browser',
+              tags: ['browser'],
+            }),
+          ],
+          nextCursor: 'page-2',
+          source: 'clawhub',
+          query: 'browser',
           sort: 'trending',
         })
         return
@@ -31,7 +52,7 @@ test.describe('Skills marketplace', () => {
 
       await fulfillJson(route, {
         items: [createMarketplaceSkill({ slug: 'coding', displayName: 'Coding' })],
-        nextCursor: 'page-2',
+        nextCursor: null,
         source: 'clawhub',
         query: '',
         sort: 'trending',
@@ -41,13 +62,44 @@ test.describe('Skills marketplace', () => {
     await openMarketplace(page)
 
     await expect(page.getByTestId('marketplace-card-coding')).toBeVisible()
-    await expect(page.getByTestId('marketplace-latest-version-coding')).toContainText('1.2.0')
+    await expect(page.getByTestId('marketplace-disclaimer')).toBeVisible()
 
-    await page.getByTestId('marketplace-load-more').click()
+    const searchResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url())
+      return response.url().includes('/api/registry/marketplace')
+        && response.request().method() === 'GET'
+        && (url.searchParams.get('q') ?? '') === 'browser'
+        && !url.searchParams.get('cursor')
+    })
+
+    await page.getByTestId('marketplace-search-input').fill('browser')
+    await searchResponsePromise
+
+    await expect(page.getByTestId('marketplace-card-agent-browser')).toBeVisible()
+    await expect(page.getByTestId('marketplace-card-coding')).toHaveCount(0)
+
+    const scroller = page.getByTestId('marketplace-results-scroller')
+    await expect(scroller).toBeVisible()
+
+    const secondPageResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url())
+      return response.url().includes('/api/registry/marketplace')
+        && response.request().method() === 'GET'
+        && (url.searchParams.get('q') ?? '') === 'browser'
+        && url.searchParams.get('cursor') === 'page-2'
+    })
+
+    await scroller.evaluate((node) => {
+      node.scrollTop = node.scrollHeight
+      node.dispatchEvent(new Event('scroll'))
+    })
+
+    await secondPageResponsePromise
     await expect(page.getByTestId('marketplace-card-browser-automation')).toBeVisible()
+    await expect.poll(() => searchPageTwoRequests).toBe(1)
   })
 
-  test('searches marketplace results', async ({ page }) => {
+  test('searches marketplace results without a submit button', async ({ page }) => {
     await page.route('**/api/registry/marketplace**', async (route) => {
       const url = new URL(route.request().url())
       const query = url.searchParams.get('q') ?? ''
@@ -81,11 +133,77 @@ test.describe('Skills marketplace', () => {
     await openMarketplace(page)
     await expect(page.getByTestId('marketplace-card-coding')).toBeVisible()
 
+    const searchResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url())
+      return response.url().includes('/api/registry/marketplace')
+        && response.request().method() === 'GET'
+        && (url.searchParams.get('q') ?? '') === 'browser'
+        && !url.searchParams.get('cursor')
+    })
+
     await page.getByTestId('marketplace-search-input').fill('browser')
-    await page.getByTestId('marketplace-search-submit').click()
+    await searchResponsePromise
 
     await expect(page.getByTestId('marketplace-card-agent-browser')).toBeVisible()
     await expect(page.getByTestId('marketplace-card-coding')).toHaveCount(0)
+  })
+
+  test('keeps the disclaimer in the content flow while scrolling', async ({ page }) => {
+    await page.route('**/api/registry/marketplace**', async (route) => {
+      const url = new URL(route.request().url())
+      const query = url.searchParams.get('q') ?? ''
+
+      if (query === 'browser') {
+        await fulfillJson(route, {
+          items: Array.from({ length: 18 }, (_, index) => (
+            createMarketplaceSkill({
+              slug: `browser-${index + 1}`,
+              displayName: `Browser ${index + 1}`,
+              tags: ['browser'],
+            })
+          )),
+          nextCursor: null,
+          source: 'clawhub',
+          query: 'browser',
+          sort: 'trending',
+        })
+        return
+      }
+
+      await fulfillJson(route, {
+        items: [createMarketplaceSkill({ slug: 'coding', displayName: 'Coding' })],
+        nextCursor: null,
+        source: 'clawhub',
+        query: '',
+        sort: 'trending',
+      })
+    })
+
+    await openMarketplace(page)
+    await expect(page.getByTestId('marketplace-disclaimer')).toBeVisible()
+
+    const searchResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url())
+      return response.url().includes('/api/registry/marketplace')
+        && response.request().method() === 'GET'
+        && (url.searchParams.get('q') ?? '') === 'browser'
+        && !url.searchParams.get('cursor')
+    })
+
+    await page.getByTestId('marketplace-search-input').fill('browser')
+    await searchResponsePromise
+
+    const disclaimer = page.getByTestId('marketplace-disclaimer')
+    const scroller = page.getByTestId('marketplace-results-scroller')
+
+    await expect(disclaimer).toBeVisible()
+
+    await scroller.evaluate((node) => {
+      node.scrollTop = Math.max(0, node.scrollHeight / 2)
+      node.dispatchEvent(new Event('scroll'))
+    })
+
+    await expect(disclaimer).not.toBeInViewport()
   })
 
   test('installs and uninstalls a marketplace skill', async ({ page }) => {

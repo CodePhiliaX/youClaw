@@ -55,8 +55,7 @@ export async function fulfillJson(route: Route, body: unknown, status = 200) {
 }
 
 export async function navigateToSkills(page: Page) {
-  await page.getByRole('button', { name: /settings/i }).click()
-  await page.getByRole('button', { name: /skills/i }).click()
+  await page.getByTestId('nav-skills').click()
   await expect(page.getByTestId('skills-marketplace-tab')).toBeVisible()
 }
 

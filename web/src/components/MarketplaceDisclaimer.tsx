@@ -13,6 +13,7 @@ export function MarketplaceDisclaimer({
 
   return (
     <div
+      data-testid="marketplace-disclaimer"
       className={cn(
         'rounded-xl border border-yellow-500/30 bg-yellow-500/10',
         compact ? 'p-3' : 'p-4',
