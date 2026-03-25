@@ -95,7 +95,7 @@ web/src/
 
 ## Release & Changelog
 
-When creating a new release (tag + GitHub Release), follow this format:
+Use `/release` or `/release beta` command (defined in `.claude/commands/release.md`) to automate the full release workflow.
 
 ### Tag naming
 - Stable: `v0.0.X` (triggers CI build + OSS upload + updater)
@@ -103,7 +103,7 @@ When creating a new release (tag + GitHub Release), follow this format:
 
 ### Changelog format (Chinese, with emoji section headers)
 ```markdown
-> One-line summary of the release
+> One-line English summary of the release
 
 ## ✨ New Features
 - **Feature name**：Description of what it does and why it matters
@@ -116,15 +116,17 @@ When creating a new release (tag + GitHub Release), follow this format:
 
 ## 🔧 CI/CD
 - Description of CI/CD changes
-
-## 👥 Contributors
-- @github-username (get from `git log --format="%an <%ae>" | sort -u`, map to GitHub usernames)
-- Claude Opus 4.6 (AI pair programmer) — only if Co-Authored-By commits exist
 ```
+
+Note: Do NOT include a Contributors section — GitHub automatically shows contributor avatars below the release notes.
 
 ### Rules
 - Summarize by feature/topic, do NOT list every commit
 - Use Chinese for descriptions
-- Get real contributors from `git log vPREV..vNEW --format="%an" | sort -u`, map emails to GitHub usernames
 - Always include the one-line English summary at the top (blockquote)
+- Omit empty sections
 - Use `gh release edit` if CI already created the release, `gh release create` otherwise
+
+### Claude Code commands
+- Team commands: `.claude/commands/*.md` (committed to git, shared with team)
+- Personal commands: `.claude/commands/local-*.md` (gitignored, local only)

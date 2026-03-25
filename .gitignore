@@ -55,5 +55,7 @@ src-tauri/target/
 src-tauri/bin/youclaw-server*
 src-tauri/resources/bun-runtime/
 
-# Claude Code
-.claude/
+# Claude Code — track team commands, ignore local settings and personal commands
+.claude/*
+!.claude/commands/
+.claude/commands/local-*
