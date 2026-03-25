@@ -238,7 +238,7 @@ describe('RegistryManager', () => {
                 {
                   slug: 'browser',
                   displayName: 'Browser',
-                  summary: 'Browse the web',
+                  summary: 'Browse the web.\n使用无头浏览器访问网页。',
                   version: '1.0.0',
                 },
               ],
@@ -255,9 +255,39 @@ describe('RegistryManager', () => {
       expect(result.items[0]).toMatchObject({
         slug: 'browser',
         displayName: 'Browser',
+        summary: '使用无头浏览器访问网页。',
         latestVersion: '1.0.0',
         source: 'tencent',
       })
+    })
+
+    test('keeps the original Tencent summary when no Chinese text is available', async () => {
+      const { loader } = createMockLoader()
+      const manager = new RegistryManager(loader, {
+        userSkillsDir: testUserSkillsDir,
+        tencentEnabled: true,
+        tencentSearchUrl: 'https://tencent.test/search',
+        fetchImpl: async (url) => {
+          if (String(url) === 'https://tencent.test/search?q=mysql&limit=50') {
+            return Response.json({
+              results: [
+                {
+                  slug: 'mysql',
+                  displayName: 'MySQL',
+                  summary: 'Write correct MySQL queries.',
+                  version: '1.0.0',
+                },
+              ],
+            })
+          }
+          return new Response('not found', { status: 404 })
+        },
+        sleep: async () => {},
+      })
+
+      const result = await manager.listMarketplace({ source: 'tencent', query: 'mysql' })
+
+      expect(result.items[0]?.summary).toBe('Write correct MySQL queries.')
     })
   })
 
@@ -344,7 +374,7 @@ describe('RegistryManager', () => {
                 {
                   slug: 'find-skills',
                   name: 'Find Skills',
-                  description: 'Find useful skills',
+                  description: 'Find useful skills.\n帮助用户发现并安装合适的技能。',
                   version: '1.0.0',
                   homepage: 'https://clawhub.ai/find-skills',
                   categories: ['其他'],
@@ -359,6 +389,7 @@ describe('RegistryManager', () => {
 
       const detail = await manager.getMarketplaceSkill('find-skills', 'tencent')
 
+      expect(detail.summary).toBe('帮助用户发现并安装合适的技能。')
       expect(detail.detailUrl).toBeNull()
       expect(detail.homepageUrl).toBeNull()
       expect(detail.category).toBe('other')
@@ -424,7 +455,7 @@ describe('RegistryManager', () => {
                 {
                   slug: 'find-skills-2',
                   displayName: 'Find Skills 2',
-                  summary: 'Search-only skill',
+                  summary: 'Search-only skill.\n仅搜索返回的技能。',
                   version: '0.1.0',
                   updatedAt: 42,
                 },
@@ -441,7 +472,7 @@ describe('RegistryManager', () => {
       expect(detail).toMatchObject({
         slug: 'find-skills-2',
         displayName: 'Find Skills 2',
-        summary: 'Search-only skill',
+        summary: '仅搜索返回的技能。',
         latestVersion: '0.1.0',
         updatedAt: 42,
         source: 'tencent',

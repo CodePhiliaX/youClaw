@@ -742,7 +742,7 @@ class TencentAdapterLayer implements MarketplaceSourceAdapterLayer<TencentSearch
     return buildNormalizedMarketplaceSkill({
       slug: item.slug,
       displayName: item.displayName,
-      summary: item.summary,
+      summary: normalizeTencentMarketplaceSummary(item.summary),
       score: item.score,
       installedState,
       latestVersion: item.version ?? null,
@@ -763,7 +763,7 @@ class TencentAdapterLayer implements MarketplaceSourceAdapterLayer<TencentSearch
     return buildNormalizedMarketplaceDetail({
       slug: normalizedSlug,
       displayName: payload.displayName || normalizedSlug,
-      summary: payload.summary ?? '',
+      summary: normalizeTencentMarketplaceSummary(payload.summary ?? ''),
       score: payload.score,
       installedState,
       latestVersion: payload.version ?? null,
@@ -1360,6 +1360,51 @@ function buildNormalizedMarketplaceDetail(input: NormalizedMarketplaceDetailInpu
     ownerImage: input.ownerImage ?? null,
     moderation: input.moderation ?? null,
   }
+}
+
+function normalizeTencentMarketplaceSummary(summary: string): string {
+  const normalized = summary.replace(/\r\n/g, '\n').trim()
+  if (!normalized || !/\p{Script=Han}/u.test(normalized)) {
+    return normalized
+  }
+
+  const lines = normalized
+    .split('\n')
+    .map((line) => extractTencentChineseLine(line))
+    .filter((line) => line.length > 0)
+
+  const deduped = dedupeTencentSummaryLines(lines)
+  return deduped.length > 0 ? deduped.join('\n') : normalized
+}
+
+function extractTencentChineseLine(line: string): string {
+  const trimmed = line.trim()
+  if (!trimmed || !/\p{Script=Han}/u.test(trimmed)) {
+    return ''
+  }
+
+  const matches = trimmed.match(/[^.!?。！？；;\n]*\p{Script=Han}[^.!?。！？；;\n]*[.!?。！？；;]?/gu) ?? []
+  if (matches.length === 0) {
+    return trimmed
+  }
+
+  return matches.map((segment) => segment.trim()).filter((segment) => segment.length > 0).join('')
+}
+
+function dedupeTencentSummaryLines(lines: string[]): string[] {
+  const seen = new Set<string>()
+  const deduped: string[] = []
+
+  for (const line of lines) {
+    const key = line.replace(/\s+/g, ' ').replace(/[.!?。！？；;]+$/u, '').trim()
+    if (!key || seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    deduped.push(line)
+  }
+
+  return deduped
 }
 
 function parseOffsetCursor(cursor: string | null, prefix: string): number {
