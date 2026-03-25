@@ -48,7 +48,9 @@
       "../agents/**/*",
       "../skills/**/*",
       "../prompts/**/*",
-      "../node_modules/@anthropic-ai/claude-agent-sdk/cli.js"
+      "../src/browser/playwright-runner.js",
+      "../node_modules/@anthropic-ai/claude-agent-sdk/cli.js",
+      "../node_modules/playwright-core/**/*"
     ],
     "macOS": {
       "minimumSystemVersion": "10.15"

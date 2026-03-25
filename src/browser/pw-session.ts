@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getLogger } from '../logger/index.ts'
 import { getPaths } from '../config/index.ts'
@@ -43,10 +44,32 @@ function findNodeExecutable(): string {
   return 'node'
 }
 
+function resolvePlaywrightRunnerScriptPath(): string {
+  const rootCandidate = resolve(getPaths().root, 'src', 'browser', 'playwright-runner.js')
+  if (existsSync(rootCandidate)) {
+    return rootCandidate
+  }
+
+  const resourcesDir = process.env.RESOURCES_DIR?.trim()
+  if (resourcesDir) {
+    const bundledCandidates = [
+      resolve(resourcesDir, '_up_', 'src', 'browser', 'playwright-runner.js'),
+      resolve(resourcesDir, 'src', 'browser', 'playwright-runner.js'),
+    ]
+    for (const candidate of bundledCandidates) {
+      if (existsSync(candidate)) {
+        return candidate
+      }
+    }
+  }
+
+  throw new Error('Bundled browser helper script not found')
+}
+
 async function runNodePlaywrightAction(payload: NodePayload): Promise<NodeResult> {
   const logger = getLogger()
   const nodePath = findNodeExecutable()
-  const scriptPath = resolve(getPaths().root, 'src', 'browser', 'playwright-runner.js')
+  const scriptPath = resolvePlaywrightRunnerScriptPath()
 
   return withNoProxyForCdpUrl(payload.endpoint, async () =>
     new Promise<NodeResult>((resolvePromise, rejectPromise) => {
@@ -65,6 +88,10 @@ async function runNodePlaywrightAction(payload: NodePayload): Promise<NodeResult
         stderr += String(chunk)
       })
       child.on('error', (err) => {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+          rejectPromise(new Error(`Node.js executable not found: ${nodePath}. Browser helper requires Node.js 18+ in PATH`))
+          return
+        }
         rejectPromise(err)
       })
       child.on('close', (code) => {
