@@ -304,25 +304,13 @@ export const useChatStore = create<ChatStore>((set) => ({
           toolUse: toolUse.length > 0 ? toolUse : undefined,
           sessionId,
         }
-        const hasLiveAssistantText = chat.streamingText.trim().length > 0
-        const timelineItems = chat.timelineItems.map((item) =>
-          item.kind === 'tool_use' && item.status === 'running'
-            ? { ...item, status: 'done' as const }
-            : item,
-        )
-
-        if (!hasLiveAssistantText && fullText.trim()) {
-          timelineItems.push({
-            id: `assistant_stream:${timestamp}:${crypto.randomUUID()}`,
-            kind: 'assistant_stream',
-            content: fullText,
-            timestamp,
-          })
-        }
+        const messages = [...chat.messages, nextMessage]
 
         return {
-          messages: [...chat.messages, nextMessage],
-          timelineItems,
+          messages,
+          // Switch completed turns to the canonical persisted message form so the
+          // live view matches a refreshed chat and avoids incomplete stream artifacts.
+          timelineItems: buildTimelineFromMessages(messages),
           streamingText: '',
           pendingToolUse: [],
         }
