@@ -1,7 +1,5 @@
 import { watch, existsSync } from 'node:fs'
 import type { FSWatcher } from 'node:fs'
-import { resolve } from 'node:path'
-import { homedir } from 'node:os'
 import { getPaths } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
 import type { SkillsLoader } from './loader.ts'
@@ -31,8 +29,8 @@ export class SkillsWatcher {
     const paths = getPaths()
 
     const dirsToWatch = [
-      paths.skills,                               // Project-level skills/
-      resolve(homedir(), '.youclaw', 'skills'),   // User-level
+      paths.skills,      // Project-level skills/
+      paths.userSkills,  // User-level
     ]
 
     // Also watch skills subdirectories under agents

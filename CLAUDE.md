@@ -88,7 +88,7 @@ web/src/
 - Commit messages follow Conventional Commits (English)
 - All code comments must be written in English
 - Agent config uses YAML format (`agent.yaml`), validated with Zod schema
-- Skills use Markdown + YAML frontmatter format (`SKILL.md`), 3-tier loading priority: Agent workspace > project `skills/` > `~/.youclaw/skills/`
+- Skills use Markdown + YAML frontmatter format (`SKILL.md`), 3-tier loading priority: Agent workspace > project `skills/` > app data `skills/`
 - Database migrations use try/catch ALTER TABLE pattern (no dedicated migration tool)
 - API routes mounted under `/api` prefix
 - Tauri Store for desktop settings persistence (API Key, Base URL, port, theme)

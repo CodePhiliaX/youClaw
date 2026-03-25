@@ -1,8 +1,7 @@
-import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs'
+import { cpSync, mkdirSync, readdirSync, readFileSync, existsSync, statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { homedir } from 'node:os'
 import { formatSkillsForPrompt, type Skill as PiAgentSkill } from '@mariozechner/pi-coding-agent'
-import { getPaths } from '../config/index.ts'
+import { getLegacyUserSkillsDir, getPaths } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
 import { parseFrontmatter } from './frontmatter.ts'
 import { checkEligibility } from './eligibility.ts'
@@ -15,6 +14,7 @@ export class SkillsLoader {
   private cache: Map<string, Skill> = new Map()
   private lastLoadTime: number = 0
   private config: SkillsConfig
+  private legacyUserSkillsChecked = false
 
   constructor(config?: Partial<SkillsConfig>) {
     this.config = { ...DEFAULT_SKILLS_CONFIG, ...config }
@@ -24,7 +24,7 @@ export class SkillsLoader {
    * Load all available skills with three-tier priority override (higher priority overrides lower for same name).
    * 1. Agent workspace: agents/<id>/skills/
    * 2. Project-level: skills/
-   * 3. User-level: ~/.youclaw/skills/
+   * 3. User-level: <app-data>/skills/
    *
    * Supports caching; pass forceReload=true to force reload.
    */
@@ -39,7 +39,8 @@ export class SkillsLoader {
     const skillMap = new Map<string, Skill>()
 
     // 3. User-level (lowest priority, loaded first)
-    const userSkillsDir = resolve(homedir(), '.youclaw', 'skills')
+    const userSkillsDir = paths.userSkills
+    this.migrateLegacyUserSkillsDir(userSkillsDir)
     this.loadSkillsFromDir(userSkillsDir, 'user', skillMap)
 
     // 2. Project-level (builtin)
@@ -218,6 +219,41 @@ export class SkillsLoader {
       skillCount: this.cache.size,
       lastLoadTime: this.lastLoadTime,
       cached: this.cache.size > 0,
+    }
+  }
+
+  private migrateLegacyUserSkillsDir(userSkillsDir: string): void {
+    if (this.legacyUserSkillsChecked) return
+    this.legacyUserSkillsChecked = true
+
+    const legacyUserSkillsDir = getLegacyUserSkillsDir()
+    if (legacyUserSkillsDir === userSkillsDir || !existsSync(legacyUserSkillsDir)) {
+      return
+    }
+
+    const logger = getLogger()
+    mkdirSync(userSkillsDir, { recursive: true })
+    const migrated: string[] = []
+
+    for (const entry of readdirSync(legacyUserSkillsDir)) {
+      const sourcePath = resolve(legacyUserSkillsDir, entry)
+      const targetPath = resolve(userSkillsDir, entry)
+      if (existsSync(targetPath)) continue
+
+      try {
+        cpSync(sourcePath, targetPath, { recursive: true, force: false })
+        migrated.push(entry)
+      } catch (err) {
+        logger.warn({
+          sourcePath,
+          targetPath,
+          error: err instanceof Error ? err.message : String(err),
+        }, 'Failed to migrate legacy user skill')
+      }
+    }
+
+    if (migrated.length > 0) {
+      logger.info({ migrated, target: userSkillsDir }, 'Migrated legacy user skills to app data directory')
     }
   }
 

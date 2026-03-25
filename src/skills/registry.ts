@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { resolve } from 'node:path'
-import { homedir } from 'node:os'
+import { getPaths } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
 import { getSettings } from '../settings/manager.ts'
 import { parseFrontmatter } from './frontmatter.ts'
@@ -1245,7 +1245,7 @@ export class RegistryManager {
   }
 
   private resolveUserSkillsDir(): string {
-    return this.options.userSkillsDir ?? resolve(homedir(), '.youclaw', 'skills')
+    return this.options.userSkillsDir ?? getPaths().userSkills
   }
 
   private loadRecommendedList(): void {

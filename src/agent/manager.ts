@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, existsSync, mkdirSync, writeFileSync, cpSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
-import { getPaths } from '../config/index.ts'
+import { getLegacyWorkspaceRoot, getPaths } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
 import { inferChannelType } from '../channel/config-schema.ts'
 import type { EventBus } from '../events/index.ts'
@@ -84,6 +84,7 @@ export class AgentManager {
     const paths = getPaths()
     const candidates = [
       resolve(paths.data, 'agents'),
+      resolve(getLegacyWorkspaceRoot(), 'agents'),
       resolve(paths.root, 'agents'),
     ]
       .filter((dir, index, all) => all.indexOf(dir) === index)
@@ -132,7 +133,7 @@ export class AgentManager {
     }
 
     if (migrated.length > 0) {
-      logger.info({ agents: migrated, target: paths.agents }, 'Migrated legacy agent workspaces to .youclaw workspace')
+      logger.info({ agents: migrated, target: paths.agents }, 'Migrated legacy agent workspaces to app data workspace')
     }
   }
 

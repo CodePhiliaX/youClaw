@@ -1,6 +1,7 @@
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { basename, posix as posixPath, resolve } from 'node:path'
+import { getPaths } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
 import { parseFrontmatter } from './frontmatter.ts'
 import { SkillsInstaller } from './installer.ts'
@@ -662,5 +663,5 @@ function resolveImportTarget(targetDir?: string): string {
   if (targetDir?.trim()) {
     return resolve(targetDir)
   }
-  return resolve(homedir(), '.youclaw', 'skills')
+  return getPaths().userSkills
 }

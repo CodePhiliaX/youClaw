@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import './setup.ts'
+import { getPaths } from '../src/config/index.ts'
 import { ImportManager } from '../src/skills/import-manager.ts'
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {
@@ -57,7 +58,7 @@ describe('ImportManager', () => {
       url: 'https://example.com/SKILL.md',
     })
 
-    expect(capturedTargetDir).toBe(resolve(homedir(), '.youclaw', 'skills'))
+    expect(capturedTargetDir).toBe(getPaths().userSkills)
   })
 
   test('probes a GitHub blob SKILL.md URL as a single file target', async () => {

@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { basename, resolve } from 'node:path'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import type { AgentManager } from '../agent/index.ts'
 import type { AgentConfig } from '../agent/types.ts'
+import { getPaths } from '../config/index.ts'
 import { parseFrontmatter } from './frontmatter.ts'
 import type {
   Skill,
@@ -50,7 +50,7 @@ export class SkillProjectService {
   constructor(
     private readonly skillsLoader: SkillsLoader,
     private readonly agentManager: AgentManager,
-    private readonly userSkillsDir: string = resolve(homedir(), '.youclaw', 'skills'),
+    private readonly userSkillsDir: string = getPaths().userSkills,
   ) {}
 
   listProjects(): SkillProject[] {

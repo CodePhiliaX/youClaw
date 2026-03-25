@@ -1,6 +1,6 @@
 import { resolve, dirname } from 'node:path'
 import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { getEnv } from './env.ts'
 
@@ -75,8 +75,8 @@ function resolveDataDir(envDataDir: string): string {
   return fallback
 }
 
-function getDefaultWorkspaceRoot(): string {
-  const home = homedir()
+export function getLegacyWorkspaceRoot(): string {
+  const home = process.env.HOME || process.env.USERPROFILE
   if (!home) return resolve(tmpdir(), 'youclaw-workspace')
   return resolve(home, '.youclaw', 'workspace')
 }
@@ -88,7 +88,6 @@ function resolveWorkspaceRoot(dataDir: string): string {
   if (process.env.WORKSPACE_DIR?.trim()) {
     candidates.push(resolve(process.env.WORKSPACE_DIR))
   }
-  candidates.push(getDefaultWorkspaceRoot())
   candidates.push(resolve(dataDir, 'workspace'))
 
   const visited = new Set<string>()
@@ -104,6 +103,17 @@ function resolveWorkspaceRoot(dataDir: string): string {
   const fallback = resolve(dataDir, 'workspace')
   _resolvedWorkspaceRoot = fallback
   return fallback
+}
+
+export function getLegacyUserSkillsDir(): string {
+  const home = process.env.HOME || process.env.USERPROFILE
+  if (!home) return resolve(tmpdir(), 'youclaw-skills')
+  return resolve(home, '.youclaw', 'skills')
+}
+
+export function resetPathsCache(): void {
+  _resolvedDataDir = null
+  _resolvedWorkspaceRoot = null
 }
 
 export function getPaths() {
@@ -132,6 +142,7 @@ export function getPaths() {
     prompts: resolveResourceSubdir(resourcesDir, isBunCompiled, 'prompts'),
     browserProfiles: resolve(dataDir, 'browser-profiles'),
     logs: resolve(dataDir, 'logs'),
+    userSkills: resolve(dataDir, 'skills'),
   }
 }
 
