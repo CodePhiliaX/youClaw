@@ -25,7 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { FolderOpen, Globe, Link, Play, Plus, RotateCw, Square, Trash2 } from 'lucide-react'
+import { AlertTriangle, FolderOpen, Globe, Link, Play, Plus, RotateCw, Square, Trash2 } from 'lucide-react'
 import { useDragRegion } from '@/hooks/useDragRegion'
 
 type Notice = { type: 'success' | 'error'; text: string } | null
@@ -167,11 +167,8 @@ export function BrowserProfiles() {
             onDelete={() => setDeleteId(selectedProfile.id)}
           />
         ) : (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            <div className="text-center">
-              <Globe className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p className="text-sm">{t.browser.selectProfile}</p>
-            </div>
+          <div className="p-6">
+            <BrowserGuideCard />
           </div>
         )}
       </div>
@@ -196,6 +193,65 @@ export function BrowserProfiles() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  )
+}
+
+function BrowserGuideCard() {
+  const { t } = useI18n()
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-border bg-background/70 p-5">
+        <h2 className="text-lg font-semibold">{t.browser.guideTitle}</h2>
+        <p className="mt-2 text-sm text-muted-foreground leading-6">{t.browser.guideSummary}</p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <DriverGuideCard title={t.browser.managedTitle} body={t.browser.managedBody} recommended />
+        <DriverGuideCard title={t.browser.remoteTitle} body={t.browser.remoteBody} />
+        <DriverGuideCard title={t.browser.relayTitle} body={t.browser.relayBody} advanced />
+      </div>
+
+      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/8 p-4 text-sm">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          <div className="space-y-1.5">
+            <p className="font-medium text-foreground">{t.browser.relayStepsTitle}</p>
+            <p className="text-muted-foreground">{t.browser.relayStep1}</p>
+            <p className="text-muted-foreground">{t.browser.relayStep2}</p>
+            <p className="text-muted-foreground">{t.browser.relayStep3}</p>
+            <p className="text-amber-600 dark:text-amber-400">{t.browser.relayWarning}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DriverGuideCard({
+  title,
+  body,
+  recommended = false,
+  advanced = false,
+}: {
+  title: string
+  body: string
+  recommended?: boolean
+  advanced?: boolean
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-background/70 p-4">
+      <div className="flex items-center gap-2">
+        <div className="text-sm font-semibold">{title}</div>
+        {recommended && (
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">Recommended</span>
+        )}
+        {advanced && (
+          <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">Advanced</span>
+        )}
+      </div>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">{body}</p>
     </div>
   )
 }
@@ -473,9 +529,10 @@ function ProfileDetail({
         {isExtensionRelay ? (
           <>
             <p>1. Keep the browser you want to attach running on this machine.</p>
-            <p>2. Attach the loopback CDP URL above using the relay token for authentication.</p>
-            <p>3. Once attached, browser MCP tools will reuse that existing browser session.</p>
-            <p>4. Disconnect or rotate the token to invalidate the relay.</p>
+            <p>2. The browser must expose a loopback CDP URL, such as `http://127.0.0.1:9222`.</p>
+            <p>3. Attach the loopback CDP URL above using the relay token for authentication.</p>
+            <p>4. Once attached, browser MCP tools will reuse that existing browser session.</p>
+            <p>5. Disconnect or rotate the token to invalidate the relay.</p>
           </>
         ) : (
           <>
@@ -536,6 +593,9 @@ function CreateProfileForm({
   return (
     <div className="p-6">
       <h2 className="text-xl font-bold mb-6">{t.browser.createTitle}</h2>
+      <div className="mb-6">
+        <BrowserGuideCard />
+      </div>
       <form onSubmit={handleSubmit} className="space-y-5 max-w-lg">
         <div>
           <label className="block text-xs font-medium mb-1.5">{t.browser.profileName}</label>

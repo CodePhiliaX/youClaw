@@ -66,6 +66,19 @@
 - **Web UI**：基于 React + shadcn/ui，支持 SSE 流式响应与中英文界面
 - **轻量桌面应用**：Tauri 2 安装包约 27 MB（对比 Electron 约 338 MB），支持原生系统托盘
 
+## 浏览器 Profile
+
+YouClaw 当前支持三种浏览器 Profile 驱动：
+
+- `Managed Chromium`：适合大多数用户，默认推荐
+- `Remote CDP`：适合已经有自动化环境的高级用法
+- `Extension Relay`：高级本机附着模式，要求浏览器已经暴露本机 loopback CDP 端点
+
+详细说明：
+
+- English: [docs/browser-profiles.md](./docs/browser-profiles.md)
+- 简体中文: [docs/browser-profiles.zh.md](./docs/browser-profiles.zh.md)
+
 ## 技术栈
 
 | 层级 | 选型 |

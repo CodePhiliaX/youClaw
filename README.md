@@ -66,6 +66,19 @@ Download the `.exe` installer from [Releases](https://github.com/CodePhiliaX/you
 - **Web UI** — React + shadcn/ui with SSE streaming, i18n (中文 / English)
 - **Lightweight Desktop App** — Tauri 2 bundle ~27 MB (vs ~338 MB Electron), native system tray
 
+## Browser Profiles
+
+YouClaw supports three browser profile drivers:
+
+- `Managed Chromium` — recommended for most users
+- `Remote CDP` — for existing advanced automation setups
+- `Extension Relay` — advanced local attach mode for a browser that already exposes a loopback CDP endpoint
+
+Detailed guide:
+
+- English: [docs/browser-profiles.md](./docs/browser-profiles.md)
+- 简体中文: [docs/browser-profiles.zh.md](./docs/browser-profiles.zh.md)
+
 ## Tech Stack
 
 | Layer | Choice |
