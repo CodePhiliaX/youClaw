@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
   Bot,
@@ -31,6 +32,16 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /** Inline horizontal padding, keeps icon centered within 52px when collapsed (8+36+8=52) */
 const ROW_PX = "px-2";
@@ -65,6 +76,7 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
   const { user, isLoggedIn, authLoading, login, logout, cloudEnabled } = useAppRuntimeStore();
   const { isMac } = usePlatform();
   const drag = useDragRegion();
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   const navItems = [
     { to: "/", icon: SquarePen, label: t.nav.chat },
@@ -195,133 +207,159 @@ export function AppSidebar({ onOpenSettings }: AppSidebarProps) {
         <div className="flex-1" {...drag} />
 
         {/* Bottom actions */}
-        <div className="border-t border-[var(--subtle-border)] py-2 px-1.5 space-y-2">
-          <button
-            type="button"
-            onClick={() => onOpenSettings("invitation")}
-            className={cn(
-              "relative flex w-full items-center overflow-hidden text-left",
-              "transition-[background-color,border-color] duration-300 ease-[var(--ease-soft)]",
-              isCollapsed
-                ? "h-10 justify-center rounded-[10px] border border-transparent bg-transparent px-0.5 text-primary hover:bg-[var(--surface-hover)]"
-                : "sidebar-invitation-card h-14 justify-start rounded-[14px] border border-primary/15 bg-gradient-to-br from-primary/10 via-background to-amber-500/8 px-3",
-            )}
-            aria-label={t.sidebar.invitationReward}
-            title={t.sidebar.invitationReward}
-          >
-            <div className={cn(
-              "relative z-[1] flex w-full items-center",
-              isCollapsed ? "justify-center" : "justify-start",
-            )}>
-              <Gift className={cn(
-                "shrink-0",
-                isCollapsed ? "h-[18px] w-[18px]" : "h-[18px] w-[18px] text-primary",
-              )} />
-              <div
-                className={cn(
-                  "min-w-0 overflow-hidden transition-[max-width,opacity,transform,margin] duration-300 ease-[var(--ease-soft)]",
-                  isCollapsed ? "ml-0 max-w-0 translate-x-1.5 opacity-0" : "ml-2.5 max-w-[134px] translate-x-0 opacity-100",
-                )}
-              >
-                <p className="truncate text-[12px] font-medium leading-[1.1] text-foreground">
-                  {t.sidebar.invitationTitle}
-                </p>
-                <p className="mt-1 truncate text-[11px] font-medium leading-none text-muted-foreground">
-                  {t.sidebar.invitationSubtitle}
-                </p>
-              </div>
-              <div
-                className={cn(
-                  "overflow-hidden transition-[max-width,opacity,transform,margin] duration-300 ease-[var(--ease-soft)]",
-                  isCollapsed ? "ml-0 max-w-0 translate-x-1 opacity-0" : "ml-auto max-w-4 translate-x-0 opacity-70",
-                )}
-              >
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </div>
-            </div>
-          </button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  "flex items-center w-full h-9 rounded-[10px] whitespace-nowrap overflow-hidden outline-none",
-                  "transition-all duration-200 ease-[var(--ease-soft)]",
-                  isCollapsed ? "px-0.5" : "px-1",
-                  "text-muted-foreground hover:text-foreground hover:bg-[var(--surface-hover)]",
-                )}
-              >
-                <div className="w-9 h-9 shrink-0 flex items-center justify-center">
-                  <AvatarView size="md" user={user} isLoggedIn={isLoggedIn} />
+        <AlertDialog open={logoutOpen} onOpenChange={setLogoutOpen}>
+          <div className="border-t border-[var(--subtle-border)] py-2 px-1.5 space-y-2">
+            <button
+              type="button"
+              onClick={() => onOpenSettings("invitation")}
+              className={cn(
+                "relative flex w-full items-center overflow-hidden text-left",
+                "transition-[background-color,border-color] duration-300 ease-[var(--ease-soft)]",
+                isCollapsed
+                  ? "h-10 justify-center rounded-[10px] border border-transparent bg-transparent px-0.5 text-primary hover:bg-[var(--surface-hover)]"
+                  : "sidebar-invitation-card h-14 justify-start rounded-[14px] border border-primary/15 bg-gradient-to-br from-primary/10 via-background to-amber-500/8 px-3",
+              )}
+              aria-label={t.sidebar.invitationReward}
+              title={t.sidebar.invitationReward}
+            >
+              <div className={cn(
+                "relative z-[1] flex w-full items-center",
+                isCollapsed ? "justify-center" : "justify-start",
+              )}>
+                <Gift className={cn(
+                  "shrink-0",
+                  isCollapsed ? "h-[18px] w-[18px]" : "h-[18px] w-[18px] text-primary",
+                )} />
+                <div
+                  className={cn(
+                    "min-w-0 overflow-hidden transition-[max-width,opacity,transform,margin] duration-300 ease-[var(--ease-soft)]",
+                    isCollapsed ? "ml-0 max-w-0 translate-x-1.5 opacity-0" : "ml-2.5 max-w-[134px] translate-x-0 opacity-100",
+                  )}
+                >
+                  <p className="truncate text-[12px] font-medium leading-[1.1] text-foreground">
+                    {t.sidebar.invitationTitle}
+                  </p>
+                  <p className="mt-1 truncate text-[11px] font-medium leading-none text-muted-foreground">
+                    {t.sidebar.invitationSubtitle}
+                  </p>
                 </div>
                 <div
                   className={cn(
-                    "flex-1 min-w-0 text-left ml-1.5 transition-opacity duration-200",
-                    isCollapsed ? "opacity-0" : "opacity-100",
+                    "overflow-hidden transition-[max-width,opacity,transform,margin] duration-300 ease-[var(--ease-soft)]",
+                    isCollapsed ? "ml-0 max-w-0 translate-x-1 opacity-0" : "ml-auto max-w-4 translate-x-0 opacity-70",
                   )}
                 >
-                  <p className="text-xs font-semibold truncate">{isLoggedIn && user ? user.name : (cloudEnabled ? t.account.login : t.account.offlineMode)}</p>
-                  {isLoggedIn && user && (
-                    <p className="text-[10px] text-muted-foreground truncate">Pro Plan</p>
-                  )}
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </div>
-              </button>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent
-              side="top"
-              align="start"
-              sideOffset={8}
-              className="w-[240px] rounded-xl p-2"
-            >
-              <div className="flex flex-col items-center py-3 px-2">
-                <div className="mb-2">
-                  <AvatarView size="md" user={user} isLoggedIn={isLoggedIn} />
-                </div>
-                <p className="text-sm font-semibold truncate max-w-full">{displayName}</p>
-                <p className="text-[11px] text-muted-foreground truncate max-w-full">{displaySub}</p>
               </div>
+            </button>
 
-              <DropdownMenuSeparator />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex items-center w-full h-9 rounded-[10px] whitespace-nowrap overflow-hidden outline-none",
+                    "transition-all duration-200 ease-[var(--ease-soft)]",
+                    isCollapsed ? "px-0.5" : "px-1",
+                    "text-muted-foreground hover:text-foreground hover:bg-[var(--surface-hover)]",
+                  )}
+                >
+                  <div className="w-9 h-9 shrink-0 flex items-center justify-center">
+                    <AvatarView size="md" user={user} isLoggedIn={isLoggedIn} />
+                  </div>
+                  <div
+                    className={cn(
+                      "flex-1 min-w-0 text-left ml-1.5 transition-opacity duration-200",
+                      isCollapsed ? "opacity-0" : "opacity-100",
+                    )}
+                  >
+                    <p className="text-xs font-semibold truncate">{isLoggedIn && user ? user.name : (cloudEnabled ? t.account.login : t.account.offlineMode)}</p>
+                    {isLoggedIn && user && (
+                      <p className="text-[10px] text-muted-foreground truncate">Pro Plan</p>
+                    )}
+                  </div>
+                </button>
+              </DropdownMenuTrigger>
 
-              {cloudEnabled && !isLoggedIn && (
-                <>
-                  <DropdownMenuItem onClick={() => login()} disabled={authLoading} className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
-                    <LogIn className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{authLoading ? t.account.loggingIn : t.account.login}</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                </>
-              )}
+              <DropdownMenuContent
+                side="top"
+                align="start"
+                sideOffset={8}
+                className="w-[240px] rounded-xl p-2"
+              >
+                <div className="flex flex-col items-center py-3 px-2">
+                  <div className="mb-2">
+                    <AvatarView size="md" user={user} isLoggedIn={isLoggedIn} />
+                  </div>
+                  <p className="text-sm font-semibold truncate max-w-full">{displayName}</p>
+                  <p className="text-[11px] text-muted-foreground truncate max-w-full">{displaySub}</p>
+                </div>
 
-              <DropdownMenuItem onClick={() => onOpenSettings()} className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
-                <Settings2 className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">{t.settings.title}</span>
-              </DropdownMenuItem>
+                <DropdownMenuSeparator />
 
-              <DropdownMenuItem onClick={() => openExternal("https://github.com/CodePhiliaX/youClaw")} className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
-                <Github className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">GitHub</span>
-              </DropdownMenuItem>
+                {cloudEnabled && !isLoggedIn && (
+                  <>
+                    <DropdownMenuItem onClick={() => login()} disabled={authLoading} className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
+                      <LogIn className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">{authLoading ? t.account.loggingIn : t.account.login}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
 
-              <DropdownMenuItem onClick={() => onOpenSettings("about")} className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
-                <BookOpen className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">{t.settings.about}</span>
-              </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onOpenSettings()} className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
+                  <Settings2 className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{t.settings.title}</span>
+                </DropdownMenuItem>
 
-              {isLoggedIn && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => logout()} className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer text-destructive focus:text-destructive">
-                    <LogOut className="h-4 w-4" />
-                    <span className="text-sm">{t.account.logout}</span>
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+                <DropdownMenuItem onClick={() => openExternal("https://github.com/CodePhiliaX/youClaw")} className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
+                  <Github className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">GitHub</span>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem onClick={() => onOpenSettings("about")} className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer">
+                  <BookOpen className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{t.settings.about}</span>
+                </DropdownMenuItem>
+
+                {isLoggedIn && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={(event) => {
+                        event.preventDefault();
+                        setLogoutOpen(true);
+                      }}
+                      className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer text-destructive focus:text-destructive"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span className="text-sm">{t.account.logout}</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t.account.logout}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t.account.logoutConfirm}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => logout()}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {t.account.logout}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </aside>
   );
 }
