@@ -96,10 +96,7 @@ describe('MessageRouter.handleInbound', () => {
     const enqueue = mock(() => Promise.resolve('router reply'))
     const appendDailyLog = mock(() => {})
     const rememberTurn = mock(() => Promise.resolve([]))
-    const loadAllSkills = mock(() => [
-      { name: 'pdf', usable: true },
-      { name: 'agent-browser', usable: true },
-    ])
+    const getUsableSkillNamesForAgent = mock(() => new Set(['pdf', 'agent-browser']))
     const router = new MessageRouter(
       {
         resolveAgent: () => createManagedAgent(),
@@ -107,14 +104,14 @@ describe('MessageRouter.handleInbound', () => {
       { enqueue } as any,
       new EventBus(),
       { appendDailyLog, rememberTurn } as any,
-      { loadAllSkills } as any,
+      { getUsableSkillNamesForAgent } as any,
     )
 
     await router.handleInbound(createMessage({
       content: '/pdf /agent-browser summarize report',
     }))
 
-    expect(loadAllSkills).toHaveBeenCalledTimes(1)
+    expect(getUsableSkillNamesForAgent).toHaveBeenCalledTimes(1)
     expect(enqueue).toHaveBeenCalledTimes(1)
     expect(enqueue.mock.calls[0]?.[0]).toBe('agent-1')
     expect(enqueue.mock.calls[0]?.[1]).toBe('web:chat-1')
@@ -151,7 +148,7 @@ describe('MessageRouter.handleInbound', () => {
 
   test('explicit requestedSkills take priority, prefix is not re-parsed', async () => {
     const enqueue = mock(() => Promise.resolve('ok'))
-    const loadAllSkills = mock(() => [{ name: 'pdf' }])
+    const getUsableSkillNamesForAgent = mock(() => new Set(['pdf']))
     const router = new MessageRouter(
       {
         resolveAgent: () => createManagedAgent(),
@@ -159,7 +156,7 @@ describe('MessageRouter.handleInbound', () => {
       { enqueue } as any,
       new EventBus(),
       undefined,
-      { loadAllSkills } as any,
+      { getUsableSkillNamesForAgent } as any,
     )
 
     await router.handleInbound(createMessage({
@@ -167,7 +164,7 @@ describe('MessageRouter.handleInbound', () => {
       requestedSkills: ['explicit-skill'],
     }))
 
-    expect(loadAllSkills).toHaveBeenCalledTimes(0)
+    expect(getUsableSkillNamesForAgent).toHaveBeenCalledTimes(0)
     expectTimestampedPrompt(enqueue.mock.calls[0]?.[2], '/pdf keep raw content')
     expect(enqueue.mock.calls[0]?.[3]).toMatchObject({
       requestedSkills: ['explicit-skill'],

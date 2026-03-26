@@ -80,6 +80,25 @@ export interface Skill {
   registryMeta?: SkillRegistryMeta // Metadata from .registry.json
 }
 
+export interface SkillPromptSnapshot {
+  prompt: string
+  skills: Skill[]
+  resolvedSkills: Skill[]
+  version: number
+  requestedSkills?: string[]
+}
+
+export interface SkillResolutionSummaryEntry {
+  name: string
+  source: SkillRuntimeSource
+  path: string
+}
+
+export interface SkillResolutionSummary {
+  version: number
+  skills: SkillResolutionSummaryEntry[]
+}
+
 /** Agent skills view */
 export interface AgentSkillsView {
   available: Skill[]       // All skills available to this agent

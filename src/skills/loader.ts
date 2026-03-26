@@ -3,16 +3,25 @@ import { dirname, resolve } from 'node:path'
 import { formatSkillsForPrompt, type Skill as PiAgentSkill } from '@mariozechner/pi-coding-agent'
 import { getPaths } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
+import { getSkillSettings, setSkillEnabled as dbSetSkillEnabled } from '../db/index.ts'
+import type { AgentConfig } from '../agent/types.ts'
 import { parseFrontmatter } from './frontmatter.ts'
 import { checkEligibility } from './eligibility.ts'
-import type { Skill, SkillsConfig, AgentSkillsView, SkillRegistryMeta } from './types.ts'
+import { bumpSkillsSnapshotVersion, getSkillsSnapshotVersion } from './refresh.ts'
+import type {
+  Skill,
+  SkillsConfig,
+  AgentSkillsView,
+  SkillRegistryMeta,
+  SkillPromptSnapshot,
+  SkillResolutionSummary,
+} from './types.ts'
 import { DEFAULT_SKILLS_CONFIG } from './types.ts'
-import type { AgentConfig } from '../agent/types.ts'
-import { getSkillSettings, setSkillEnabled as dbSetSkillEnabled } from '../db/index.ts'
 
 export class SkillsLoader {
-  private cache: Map<string, Skill> = new Map()
-  private lastLoadTime: number = 0
+  private baseCache: Map<string, Skill> = new Map()
+  private cacheVersion = 0
+  private lastLoadTime = 0
   private config: SkillsConfig
 
   constructor(config?: Partial<SkillsConfig>) {
@@ -20,70 +29,38 @@ export class SkillsLoader {
   }
 
   /**
-   * Load all available skills with three-tier priority override (higher priority overrides lower for same name).
-   * 1. Agent workspace: agents/<id>/skills/
-   * 2. Project-level: skills/
-   * 3. User-level: <app-data>/skills/
-   *
-   * Supports caching; pass forceReload=true to force reload.
+   * Load globally available skills.
+   * Global scope includes builtin resources and user-installed skills only.
    */
   loadAllSkills(forceReload?: boolean): Skill[] {
-    // Return cache if available and not forcing reload
-    if (!forceReload && this.cache.size > 0) {
-      return Array.from(this.cache.values())
-    }
+    return this.loadBaseSkills(forceReload)
+  }
 
-    const logger = getLogger()
-    const paths = getPaths()
+  /**
+   * Load all skills visible to a specific agent.
+   * Priority: builtin < user < workspace
+   */
+  loadAllSkillsForAgent(agentConfig: AgentConfig, forceReload?: boolean): Skill[] {
     const skillMap = new Map<string, Skill>()
 
-    // 3. User-level (lowest priority, loaded first)
-    const userSkillsDir = paths.userSkills
-    this.loadSkillsFromDir(userSkillsDir, 'user', skillMap)
-
-    // 2. Project-level (builtin)
-    const projectSkillsDir = paths.skills
-    logger.info({ projectSkillsDir, exists: existsSync(projectSkillsDir) }, 'Builtin skills path resolved')
-    this.loadSkillsFromDir(projectSkillsDir, 'builtin', skillMap)
-
-    // 1. Agent workspace-level (highest priority, loaded last to override)
-    const agentsDir = paths.agents
-    if (existsSync(agentsDir)) {
-      const agentEntries = readdirSync(agentsDir)
-      for (const agentName of agentEntries) {
-        const agentDir = resolve(agentsDir, agentName)
-        try {
-          if (!statSync(agentDir).isDirectory()) continue
-        } catch {
-          continue
-        }
-        const agentSkillsDir = resolve(agentDir, 'skills')
-        this.loadSkillsFromDir(agentSkillsDir, 'workspace', skillMap)
-      }
+    for (const skill of this.loadBaseSkills(forceReload)) {
+      skillMap.set(skill.name, skill)
     }
 
-    // Read user enable/disable settings and merge into each skill
-    const settings = getSkillSettings()
-    for (const [name, skill] of skillMap) {
-      const setting = settings[name]
-      skill.enabled = setting ? setting.enabled : true
-      skill.usable = skill.eligible && skill.enabled
-    }
+    this.loadSkillsFromDir(resolve(agentConfig.workspaceDir, 'skills'), 'workspace', skillMap)
+    this.applySettings(skillMap)
 
-    // Update cache
-    this.cache = skillMap
-    this.lastLoadTime = Date.now()
-
-    const skills = Array.from(skillMap.values())
-    logger.debug({ count: skills.length }, 'Skills loaded')
-    return skills
+    return Array.from(skillMap.values())
   }
 
   /**
    * Normalize agent skill bindings to local skill names.
    * Wildcard always wins; registry slugs are converted to installed local names when possible.
    */
-  normalizeAgentSkillNames(skills?: string[]): { skills: string[] | undefined; changed: boolean } {
+  normalizeAgentSkillNames(
+    skills?: string[],
+    availableSkills?: Skill[],
+  ): { skills: string[] | undefined; changed: boolean } {
     if (!skills || skills.length === 0) {
       return { skills, changed: false }
     }
@@ -92,10 +69,10 @@ export class SkillsLoader {
       return { skills: ['*'], changed: skills.length !== 1 || skills[0] !== '*' }
     }
 
-    const allSkills = this.loadAllSkills()
-    const knownNames = new Set(allSkills.map((skill) => skill.name))
+    const resolvedSkills = availableSkills ?? this.loadAllSkills()
+    const knownNames = new Set(resolvedSkills.map((skill) => skill.name))
     const namesBySlug = new Map<string, string>()
-    for (const skill of allSkills) {
+    for (const skill of resolvedSkills) {
       const slug = skill.registryMeta?.slug
       if (slug) {
         namesBySlug.set(slug, skill.name)
@@ -135,13 +112,11 @@ export class SkillsLoader {
    * "*" wildcard = all skills; undefined or empty = no skills; otherwise filter by explicit list.
    */
   loadSkillsForAgent(agentConfig: AgentConfig): Skill[] {
-    const allSkills = this.loadAllSkills()
-    const normalized = this.normalizeAgentSkillNames(agentConfig.skills).skills
-    // "*" wildcard = all skills
+    const allSkills = this.loadAllSkillsForAgent(agentConfig)
+    const normalized = this.normalizeAgentSkillNames(agentConfig.skills, allSkills).skills
     if (normalized?.includes('*')) {
       return allSkills
     }
-    // undefined or empty = no skills
     if (!normalized || normalized.length === 0) {
       return []
     }
@@ -161,62 +136,104 @@ export class SkillsLoader {
    * Get the skills view for a specific agent.
    */
   getAgentSkillsView(agentConfig: AgentConfig): AgentSkillsView {
-    const allSkills = this.loadAllSkills()
-    const normalized = this.normalizeAgentSkillNames(agentConfig.skills).skills
-    const available = allSkills
+    const available = this.loadAllSkillsForAgent(agentConfig)
+    const normalized = this.normalizeAgentSkillNames(agentConfig.skills, available).skills
     const isWildcard = normalized?.includes('*')
     const enabled = isWildcard
-      ? allSkills
+      ? available
       : normalized && normalized.length > 0
-        ? allSkills.filter((s) => normalized.includes(s.name))
+        ? available.filter((s) => normalized.includes(s.name))
         : []
     const eligible = enabled.filter((s) => s.eligible)
     return { available, enabled, eligible }
   }
 
-  buildPromptSnapshot(agentConfig: AgentConfig, requestedSkills?: string[]): {
-    prompt: string
-    skills: Skill[]
-  } {
+  /**
+   * Build the versioned runtime snapshot used by agent execution.
+   */
+  buildSnapshotForAgent(agentConfig: AgentConfig, requestedSkills?: string[]): SkillPromptSnapshot {
     const requested = requestedSkills
-      ? new Set(requestedSkills.map((name) => name.trim()).filter(Boolean))
-      : null
+      ? Array.from(new Set(requestedSkills.map((name) => name.trim()).filter(Boolean)))
+      : undefined
+    const requestedSet = requested ? new Set(requested) : null
     const enabledSkills = this.loadSkillsForAgent(agentConfig)
       .filter((skill) => skill.usable)
-      .filter((skill) => !requested || requested.has(skill.name))
+      .filter((skill) => !requestedSet || requestedSet.has(skill.name))
     const limited = this.applyPromptLimits(enabledSkills)
-    const prompt = formatSkillsForPrompt(limited.map((skill) => this.toPiSkill(skill)))
-    return { prompt, skills: limited }
+
+    return {
+      prompt: formatSkillsForPrompt(limited.map((skill) => this.toPiSkill(skill))),
+      skills: limited,
+      resolvedSkills: limited,
+      version: getSkillsSnapshotVersion(),
+      ...(requested ? { requestedSkills: requested } : {}),
+    }
   }
 
   /**
-   * Clear cache and reload all skills.
+   * Backward-compatible prompt snapshot helper.
    */
-  refresh(): Skill[] {
-    this.cache.clear()
-    this.lastLoadTime = 0
-    return this.loadAllSkills(true)
+  buildPromptSnapshot(agentConfig: AgentConfig, requestedSkills?: string[]): SkillPromptSnapshot {
+    return this.buildSnapshotForAgent(agentConfig, requestedSkills)
   }
 
-  private toPiSkill(skill: Skill): PiAgentSkill {
+  /**
+   * Return usable skill names for inline invocation parsing.
+   */
+  getUsableSkillNamesForAgent(agentConfig: AgentConfig): Set<string> {
+    return new Set(
+      this.loadAllSkillsForAgent(agentConfig)
+        .filter((skill) => skill.usable)
+        .map((skill) => skill.name),
+    )
+  }
+
+  /**
+   * Return versioned source metadata for agent-visible skills.
+   */
+  getResolutionSummary(agentConfig: AgentConfig): SkillResolutionSummary {
+    const skills = this.loadAllSkillsForAgent(agentConfig)
     return {
-      name: skill.name,
-      description: skill.frontmatter.description,
-      filePath: skill.path,
-      baseDir: dirname(skill.path),
-      source: skill.source,
-      disableModelInvocation: false,
+      version: getSkillsSnapshotVersion(),
+      skills: skills.map((skill) => ({
+        name: skill.name,
+        source: skill.source,
+        path: skill.path,
+      })),
     }
+  }
+
+  /**
+   * Clear cache, bump the snapshot version, and reload global skills.
+   */
+  refresh(options?: { bumpReason?: 'watch' | 'manual'; preserveVersion?: boolean }): Skill[] {
+    this.clearCache()
+    if (!options?.preserveVersion) {
+      bumpSkillsSnapshotVersion(options?.bumpReason ?? 'manual')
+    }
+    return this.loadBaseSkills(true)
+  }
+
+  /**
+   * Clear cache and bump the snapshot version without eagerly reloading.
+   */
+  invalidate(options?: { bumpReason?: 'watch' | 'manual'; preserveVersion?: boolean }): number {
+    this.clearCache()
+    if (options?.preserveVersion) {
+      return getSkillsSnapshotVersion()
+    }
+    return bumpSkillsSnapshotVersion(options?.bumpReason ?? 'manual')
   }
 
   /**
    * Get cache statistics.
    */
-  getCacheStats(): { skillCount: number; lastLoadTime: number; cached: boolean } {
+  getCacheStats(): { skillCount: number; lastLoadTime: number; cached: boolean; version: number } {
     return {
-      skillCount: this.cache.size,
+      skillCount: this.baseCache.size,
       lastLoadTime: this.lastLoadTime,
-      cached: this.cache.size > 0,
+      cached: this.baseCache.size > 0,
+      version: getSkillsSnapshotVersion(),
     }
   }
 
@@ -237,7 +254,6 @@ export class SkillsLoader {
   applyPromptLimits(skills: Skill[]): Skill[] {
     const { maxSingleSkillChars, maxSkillCount, maxTotalChars } = this.config
 
-    // Group by priority
     const critical: Skill[] = []
     const normal: Skill[] = []
     const low: Skill[] = []
@@ -249,7 +265,6 @@ export class SkillsLoader {
       else normal.push(skill)
     }
 
-    // Critical: only truncate individual content, exempt from count and total limits
     const truncate = (skill: Skill): Skill => {
       if (skill.content.length <= maxSingleSkillChars) return skill
       return {
@@ -259,12 +274,9 @@ export class SkillsLoader {
     }
 
     const limitedCritical = critical.map(truncate)
-
-    // Calculate quota used by critical skills
     const criticalCount = limitedCritical.length
     const criticalChars = limitedCritical.reduce((sum, s) => sum + s.content.length, 0)
 
-    // Normal + Low: merge and apply limits sequentially (minus critical usage)
     const rest = [...normal, ...low].map(truncate)
     const remainingCount = Math.max(0, maxSkillCount - criticalCount)
     const remainingChars = Math.max(0, maxTotalChars - criticalChars)
@@ -279,6 +291,55 @@ export class SkillsLoader {
     }
 
     return [...limitedCritical, ...limitedRest]
+  }
+
+  private loadBaseSkills(forceReload?: boolean): Skill[] {
+    const version = getSkillsSnapshotVersion()
+    if (!forceReload && this.baseCache.size > 0 && this.cacheVersion === version) {
+      return Array.from(this.baseCache.values())
+    }
+
+    const logger = getLogger()
+    const paths = getPaths()
+    const skillMap = new Map<string, Skill>()
+
+    this.loadSkillsFromDir(paths.skills, 'builtin', skillMap)
+    this.loadSkillsFromDir(paths.userSkills, 'user', skillMap)
+    this.applySettings(skillMap)
+
+    this.baseCache = skillMap
+    this.cacheVersion = version
+    this.lastLoadTime = Date.now()
+
+    const skills = Array.from(skillMap.values())
+    logger.debug({ count: skills.length, version }, 'Skills loaded')
+    return skills
+  }
+
+  private clearCache(): void {
+    this.baseCache.clear()
+    this.cacheVersion = 0
+    this.lastLoadTime = 0
+  }
+
+  private applySettings(skillMap: Map<string, Skill>): void {
+    const settings = getSkillSettings()
+    for (const [name, skill] of skillMap) {
+      const setting = settings[name]
+      skill.enabled = setting ? setting.enabled : true
+      skill.usable = skill.eligible && skill.enabled
+    }
+  }
+
+  private toPiSkill(skill: Skill): PiAgentSkill {
+    return {
+      name: skill.name,
+      description: skill.frontmatter.description,
+      filePath: skill.path,
+      baseDir: dirname(skill.path),
+      source: skill.source,
+      disableModelInvocation: false,
+    }
   }
 
   /**
@@ -317,7 +378,6 @@ export class SkillsLoader {
         const { frontmatter, content } = parseFrontmatter(raw)
         const { eligible, errors, detail } = checkEligibility(frontmatter)
 
-        // Read .registry.json metadata (if present)
         let registryMeta: SkillRegistryMeta | undefined
         const registryFile = resolve(skillDir, '.registry.json')
         if (existsSync(registryFile)) {
@@ -328,7 +388,7 @@ export class SkillsLoader {
           }
         }
 
-        const skill: Skill = {
+        skillMap.set(frontmatter.name, {
           name: frontmatter.name,
           source,
           frontmatter,
@@ -338,15 +398,12 @@ export class SkillsLoader {
           eligibilityErrors: errors,
           eligibilityDetail: detail,
           loadedAt: Date.now(),
-          enabled: true,  // Default enabled, overridden by settings later
+          enabled: true,
           usable: eligible,
           registryMeta,
-        }
+        })
 
-        // Higher priority overrides lower priority
-        skillMap.set(skill.name, skill)
-
-        logger.debug({ name: skill.name, source, eligible }, 'Skill loaded')
+        logger.debug({ name: frontmatter.name, source, eligible }, 'Skill loaded')
       } catch (err) {
         logger.warn(
           { skillDir, error: err instanceof Error ? err.message : String(err) },

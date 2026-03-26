@@ -75,8 +75,7 @@ export class MessageRouter {
     let contentForAgent = message.content
 
     if (requestedSkills.length === 0 && this.skillsLoader) {
-      const allSkills = this.skillsLoader.loadAllSkills()
-      const knownNames = new Set(allSkills.filter((s) => s.usable).map((s) => s.name))
+      const knownNames = this.skillsLoader.getUsableSkillNamesForAgent(config)
       const parsed = parseSkillInvocations(message.content, knownNames)
       requestedSkills = parsed.requestedSkills
       contentForAgent = parsed.cleanContent || message.content

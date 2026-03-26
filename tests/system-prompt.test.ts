@@ -102,13 +102,15 @@ describe('PromptBuilder channel context', () => {
       {
         agentId: 'default',
         chatId: 'web:chat-1',
-        skillsPrompt: '<skills>\nskill-body\n</skills>',
+        skillsPrompt: '<available_skills>\n  <skill>\n    <name>call-me-dad</name>\n  </skill>\n</available_skills>',
         memoryContext: '<memory>\nretrieved hit\n</memory>',
       },
     )
 
-    expect(prompt).toContain('<skills>')
-    expect(prompt).toContain('skill-body')
+    expect(prompt).toContain('## Skills (mandatory)')
+    expect(prompt).toContain('Before replying: scan <available_skills> <description> entries.')
+    expect(prompt).toContain('call-me-dad')
+    expect(prompt).toContain('<available_skills>')
     expect(prompt).toContain('<memory>')
     expect(prompt).toContain('retrieved hit')
   })

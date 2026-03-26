@@ -131,7 +131,10 @@ export class AgentManager {
         }
 
         if (this.skillsLoader) {
-          const normalizedSkills = this.skillsLoader.normalizeAgentSkillNames(config.skills)
+          const normalizedSkills = this.skillsLoader.normalizeAgentSkillNames(
+            config.skills,
+            this.skillsLoader.loadAllSkillsForAgent(config),
+          )
           if (normalizedSkills.changed) {
             config.skills = normalizedSkills.skills
             const nextYaml = {

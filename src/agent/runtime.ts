@@ -56,6 +56,19 @@ type RuntimeAttachment = {
   size?: number
 }
 
+type SessionWithSystemPromptOverride = {
+  _baseSystemPrompt?: string
+  _rebuildSystemPrompt?: (toolNames: string[]) => string
+}
+
+function applySystemPromptOverrideToSession(session: AgentSession, systemPrompt: string): void {
+  const prompt = systemPrompt.trim()
+  session.agent.setSystemPrompt(prompt)
+  const mutableSession = session as unknown as SessionWithSystemPromptOverride
+  mutableSession._baseSystemPrompt = prompt
+  mutableSession._rebuildSystemPrompt = () => prompt
+}
+
 export function buildEmptyAssistantResponseErrorMessage(modelConfig: {
   provider: string
   modelId: string
@@ -285,9 +298,17 @@ export class AgentRuntime {
       : null
     const effectiveBrowserProfileId = resolvedBrowserProfile?.id
     const skillSnapshot = this.skillsLoader
-      ? this.skillsLoader.buildPromptSnapshot(this.config, requestedSkills)
-      : { prompt: '', skills: [] }
+      ? this.skillsLoader.buildSnapshotForAgent(this.config, requestedSkills)
+      : { prompt: '', skills: [], resolvedSkills: [], version: 0 }
     const skillsPrompt = skillSnapshot.prompt
+    logger.info({
+      agentId,
+      chatId,
+      skillSnapshotVersion: skillSnapshot.version,
+      skillCount: skillSnapshot.skills.length,
+      skillNames: skillSnapshot.skills.map((skill) => skill.name),
+      category: 'agent',
+    }, 'Skill snapshot prepared')
     const memoryContext = this.memoryManager && this.config.memory?.enabled !== false
       ? this.memoryManager.getMemoryContext(agentId, {
           recentDays: this.config.memory?.recentDays,
@@ -406,7 +427,7 @@ export class AgentRuntime {
         sessionManager,
       })
 
-      session.agent.setSystemPrompt(systemPrompt)
+      applySystemPromptOverrideToSession(session, systemPrompt)
 
       const compactionSummaries: CompactionSummary[] = []
       await this.prepareSessionForPrompt(session, agentId, chatId, model.id, compactionSummaries)

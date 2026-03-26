@@ -131,8 +131,9 @@ export class PromptBuilder {
       )
     }
 
-    if (context?.skillsPrompt) {
-      parts.push(context.skillsPrompt)
+    const skillsSection = this.buildSkillsSection(context?.skillsPrompt)
+    if (skillsSection) {
+      parts.push(skillsSection)
     }
 
     if (context?.memoryContext) {
@@ -220,6 +221,24 @@ export class PromptBuilder {
 
   private getBootstrapCacheKey(agentId: string, chatId: string): string {
     return `${agentId}:${chatId}`
+  }
+
+  private buildSkillsSection(skillsPrompt?: string): string | null {
+    const trimmed = skillsPrompt?.trim()
+    if (!trimmed) {
+      return null
+    }
+
+    return [
+      '## Skills (mandatory)',
+      'Before replying: scan <available_skills> <description> entries.',
+      '- If exactly one skill clearly applies: read its SKILL.md at <location> with `Read`, then follow it.',
+      '- If multiple could apply: choose the most specific one, then read/follow it.',
+      '- If none clearly apply: do not read any SKILL.md.',
+      'Constraints: never read more than one skill up front; only read after selecting.',
+      '- When a skill drives external API writes, assume rate limits: prefer fewer larger writes, avoid tight one-item loops, serialize bursts when possible, and respect 429/Retry-After.',
+      trimmed,
+    ].join('\n')
   }
 
   private loadGlobalSystemPrompt(): string | null {
