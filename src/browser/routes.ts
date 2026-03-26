@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { z } from 'zod/v4'
 import type { AgentManager } from '../agent/index.ts'
 import type { BrowserManager } from './manager.ts'
+import { BrowserRelayTokenError } from './relay.ts'
 
 const CreateProfileSchema = z.object({
   name: z.string().min(1),
@@ -20,6 +21,25 @@ const CreateProfileSchema = z.object({
 const UpdateProfileSchema = CreateProfileSchema.partial().extend({
   name: z.string().min(1).optional(),
 })
+
+const RelayConnectSchema = z.object({
+  token: z.string().min(1),
+  cdpUrl: z.string().min(1),
+})
+
+function routeErrorStatus(err: unknown): 400 | 401 | 404 | 500 {
+  if (err instanceof BrowserRelayTokenError) return 401
+  const message = err instanceof Error ? err.message : String(err)
+  if (message === 'Browser profile not found') return 404
+  if (
+    message.includes('extension-relay') ||
+    message.includes('CDP URL') ||
+    message.includes('loopback')
+  ) {
+    return 400
+  }
+  return 500
+}
 
 export function createBrowserRoutes(browserManager: BrowserManager, _agentManager?: AgentManager) {
   const app = new Hono()
@@ -106,6 +126,51 @@ export function createBrowserRoutes(browserManager: BrowserManager, _agentManage
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 500)
+    }
+  })
+
+  app.get('/browser/profiles/:id/relay', (c) => {
+    try {
+      const relay = browserManager.getRelayState(c.req.param('id'))
+      return c.json(relay)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, { status: routeErrorStatus(err) })
+    }
+  })
+
+  app.post('/browser/profiles/:id/relay/connect', async (c) => {
+    const parsed = RelayConnectSchema.safeParse(await c.req.json())
+    if (!parsed.success) {
+      return c.json({ error: 'Invalid request', details: parsed.error.issues }, 400)
+    }
+
+    try {
+      const result = await browserManager.connectRelay(c.req.param('id'), parsed.data.token, parsed.data.cdpUrl)
+      return c.json({ ok: true, ...result })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, { status: routeErrorStatus(err) })
+    }
+  })
+
+  app.post('/browser/profiles/:id/relay/disconnect', async (c) => {
+    try {
+      const result = await browserManager.disconnectRelay(c.req.param('id'))
+      return c.json({ ok: true, ...result })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, { status: routeErrorStatus(err) })
+    }
+  })
+
+  app.post('/browser/profiles/:id/relay/rotate-token', async (c) => {
+    try {
+      const result = await browserManager.rotateRelayToken(c.req.param('id'))
+      return c.json({ ok: true, ...result })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, { status: routeErrorStatus(err) })
     }
   })
 

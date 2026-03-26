@@ -24,6 +24,17 @@ import {
   spawnManagedChrome,
   waitForCdpReady,
 } from './chrome.ts'
+import {
+  assertBrowserRelayToken,
+  clearBrowserRelayConnection,
+  deleteBrowserRelayProfile,
+  getBrowserRelayCdpUrl,
+  getBrowserRelayState,
+  normalizeLoopbackCdpUrl,
+  rotateBrowserRelayToken,
+  setBrowserRelayConnection,
+  type BrowserRelayState,
+} from './relay.ts'
 import type { BrowserProfile, BrowserProfileRuntime, CreateBrowserProfileInput, UpdateBrowserProfileInput } from './types.ts'
 
 type ProfileTab = {
@@ -50,6 +61,15 @@ export class BrowserManager {
 
   getProfile(id: string): BrowserProfile | null {
     return getBrowserProfile(id)
+  }
+
+  getRelayState(id: string): BrowserRelayState {
+    const profile = getBrowserProfile(id)
+    if (!profile) throw new Error('Browser profile not found')
+    if (profile.driver !== 'extension-relay') {
+      throw new Error('Browser profile does not use the extension-relay driver')
+    }
+    return getBrowserRelayState(id)
   }
 
   createProfile(input: CreateBrowserProfileInput): BrowserProfile {
@@ -80,6 +100,7 @@ export class BrowserManager {
 
     await this.stopProfile(id).catch(() => {})
     deleteBrowserProfile(id)
+    deleteBrowserRelayProfile(id)
 
     if (profile.driver === 'managed' && profile.userDataDir && this.isManagedDataDir(profile.userDataDir)) {
       try {
@@ -107,6 +128,10 @@ export class BrowserManager {
   }
 
   async restartProfile(id: string): Promise<BrowserProfileRuntime> {
+    const profile = getBrowserProfile(id)
+    if (profile?.driver === 'extension-relay') {
+      return this.getProfileStatus(id)
+    }
     await this.stopProfile(id)
     return this.startProfile(id)
   }
@@ -115,6 +140,10 @@ export class BrowserManager {
     const profile = getBrowserProfile(id)
     if (!profile) {
       throw new Error('Browser profile not found')
+    }
+
+    if (profile.driver === 'extension-relay') {
+      return (await this.disconnectRelay(id)).runtime
     }
 
     const child = this.managedProcesses.get(id)
@@ -147,11 +176,81 @@ export class BrowserManager {
     return this.reconcileProfileRuntime(profile)
   }
 
+  async connectRelay(id: string, token: string, cdpUrl: string): Promise<{ relay: BrowserRelayState; runtime: BrowserProfileRuntime }> {
+    const profile = getBrowserProfile(id)
+    if (!profile) throw new Error('Browser profile not found')
+    if (profile.driver !== 'extension-relay') {
+      throw new Error('Browser profile does not use the extension-relay driver')
+    }
+
+    assertBrowserRelayToken(id, token)
+    const normalizedCdpUrl = normalizeLoopbackCdpUrl(cdpUrl)
+    const activeProfile = {
+      ...profile,
+      cdpUrl: normalizedCdpUrl,
+    }
+    const meta = await this.probeProfileMetadata(activeProfile)
+    const now = new Date().toISOString()
+    const relay = setBrowserRelayConnection(id, normalizedCdpUrl)
+    const runtime = upsertBrowserProfileRuntime(id, {
+      status: 'running',
+      pid: null,
+      wsEndpoint: meta.webSocketDebuggerUrl,
+      lastError: null,
+      lastStartedAt: now,
+      heartbeatAt: now,
+    })
+
+    return { relay, runtime }
+  }
+
+  async disconnectRelay(id: string): Promise<{ relay: BrowserRelayState; runtime: BrowserProfileRuntime }> {
+    const profile = getBrowserProfile(id)
+    if (!profile) throw new Error('Browser profile not found')
+    if (profile.driver !== 'extension-relay') {
+      throw new Error('Browser profile does not use the extension-relay driver')
+    }
+
+    const relay = clearBrowserRelayConnection(id)
+    const runtime = upsertBrowserProfileRuntime(id, {
+      status: 'stopped',
+      pid: null,
+      wsEndpoint: null,
+      lastError: null,
+      heartbeatAt: new Date().toISOString(),
+    })
+
+    return { relay, runtime }
+  }
+
+  async rotateRelayToken(id: string): Promise<{ relay: BrowserRelayState; runtime: BrowserProfileRuntime }> {
+    const profile = getBrowserProfile(id)
+    if (!profile) throw new Error('Browser profile not found')
+    if (profile.driver !== 'extension-relay') {
+      throw new Error('Browser profile does not use the extension-relay driver')
+    }
+
+    const relay = rotateBrowserRelayToken(id)
+    const runtime = upsertBrowserProfileRuntime(id, {
+      status: 'stopped',
+      pid: null,
+      wsEndpoint: null,
+      lastError: null,
+      heartbeatAt: new Date().toISOString(),
+    })
+
+    return { relay, runtime }
+  }
+
   async listTabs(id: string): Promise<ProfileTab[]> {
     const profile = getBrowserProfile(id)
     if (!profile) throw new Error('Browser profile not found')
     await this.reconcileProfileRuntime(profile)
-    const tabs = await requestCdpJson<Array<{ id: string; title?: string; url?: string; type?: string }>>(profile, '/json/list')
+    const activeProfile = this.resolveRuntimeProfile(profile)
+    if (!activeProfile.cdpUrl && !activeProfile.cdpPort) {
+      throw new Error('Extension relay is not connected')
+    }
+    const tabs = await this.requestTabs(activeProfile)
     return tabs.map((tab) => ({
       id: tab.id,
       title: tab.title,
@@ -163,7 +262,17 @@ export class BrowserManager {
   async probeProfile(id: string): Promise<BrowserProfileRuntime> {
     const profile = getBrowserProfile(id)
     if (!profile) throw new Error('Browser profile not found')
-    const meta = await probeCdpVersion(profile)
+    const activeProfile = this.resolveRuntimeProfile(profile)
+    if (!activeProfile.cdpUrl && !activeProfile.cdpPort) {
+      return upsertBrowserProfileRuntime(id, {
+        status: 'stopped',
+        pid: null,
+        wsEndpoint: null,
+        lastError: null,
+        heartbeatAt: new Date().toISOString(),
+      })
+    }
+    const meta = await this.probeProfileMetadata(activeProfile)
     return upsertBrowserProfileRuntime(id, {
       status: 'running',
       wsEndpoint: meta.webSocketDebuggerUrl,
@@ -191,11 +300,7 @@ export class BrowserManager {
     }
 
     if (profile.driver === 'extension-relay') {
-      return upsertBrowserProfileRuntime(id, {
-        status: 'error',
-        lastError: 'extension-relay driver is not implemented yet',
-        heartbeatAt: new Date().toISOString(),
-      })
+      return this.reconcileProfileRuntime(profile)
     }
 
     const reconciled = await this.reconcileProfileRuntime(profile)
@@ -273,14 +378,21 @@ export class BrowserManager {
   private async reconcileProfileRuntime(profile: BrowserProfile): Promise<BrowserProfileRuntime> {
     const runtime = getBrowserProfileRuntime(profile.id)
     if (profile.driver === 'extension-relay') {
-      return runtime ?? upsertBrowserProfileRuntime(profile.id, {
-        status: 'stopped',
-        heartbeatAt: new Date().toISOString(),
-      })
+      const activeProfile = this.resolveRuntimeProfile(profile)
+      if (!activeProfile.cdpUrl) {
+        return upsertBrowserProfileRuntime(profile.id, {
+          status: 'stopped',
+          pid: null,
+          wsEndpoint: null,
+          lastError: null,
+          heartbeatAt: new Date().toISOString(),
+        })
+      }
     }
 
     try {
-      const meta = await probeCdpVersion(profile)
+      const activeProfile = this.resolveRuntimeProfile(profile)
+      const meta = await this.probeProfileMetadata(activeProfile)
       return upsertBrowserProfileRuntime(profile.id, {
         status: 'running',
         wsEndpoint: meta.webSocketDebuggerUrl,
@@ -303,6 +415,26 @@ export class BrowserManager {
         this.managedProcesses.delete(profile.id)
       }
       return next
+    }
+  }
+
+  protected async probeProfileMetadata(profile: BrowserProfile): Promise<{ webSocketDebuggerUrl: string | null; browser: string | null }> {
+    return probeCdpVersion(profile)
+  }
+
+  protected async requestTabs(profile: BrowserProfile): Promise<Array<{ id: string; title?: string; url?: string; type?: string }>> {
+    return requestCdpJson<Array<{ id: string; title?: string; url?: string; type?: string }>>(profile, '/json/list')
+  }
+
+  private resolveRuntimeProfile(profile: BrowserProfile): BrowserProfile {
+    if (profile.driver !== 'extension-relay') return profile
+
+    const relayCdpUrl = getBrowserRelayCdpUrl(profile.id)
+    if (!relayCdpUrl) return profile
+
+    return {
+      ...profile,
+      cdpUrl: relayCdpUrl,
     }
   }
 

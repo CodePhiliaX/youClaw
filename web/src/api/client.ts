@@ -766,6 +766,14 @@ export interface BrowserProfileDTO {
   } | null
 }
 
+export interface BrowserRelayDTO {
+  token: string
+  connected: boolean
+  cdpUrl: string | null
+  connectedAt: string | null
+  updatedAt: string | null
+}
+
 export async function getBrowserProfiles() {
   return apiFetch<BrowserProfileDTO[]>('/api/browser/profiles')
 }
@@ -814,6 +822,38 @@ export async function getBrowserProfileStatus(id: string) {
 
 export async function getBrowserProfileTabs(id: string) {
   return apiFetch<{ tabs: Array<{ id: string; title?: string; url?: string; type?: string }> }>(`/api/browser/profiles/${encodeURIComponent(id)}/tabs`)
+}
+
+export async function getBrowserProfileRelay(id: string) {
+  return apiFetch<BrowserRelayDTO>(`/api/browser/profiles/${encodeURIComponent(id)}/relay`)
+}
+
+export async function connectBrowserProfileRelay(id: string, input: { token: string; cdpUrl: string }) {
+  return apiFetch<{ ok: boolean; relay: BrowserRelayDTO; runtime: BrowserProfileDTO['runtime'] }>(
+    `/api/browser/profiles/${encodeURIComponent(id)}/relay/connect`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
+}
+
+export async function disconnectBrowserProfileRelay(id: string) {
+  return apiFetch<{ ok: boolean; relay: BrowserRelayDTO; runtime: BrowserProfileDTO['runtime'] }>(
+    `/api/browser/profiles/${encodeURIComponent(id)}/relay/disconnect`,
+    {
+      method: 'POST',
+    },
+  )
+}
+
+export async function rotateBrowserProfileRelayToken(id: string) {
+  return apiFetch<{ ok: boolean; relay: BrowserRelayDTO; runtime: BrowserProfileDTO['runtime'] }>(
+    `/api/browser/profiles/${encodeURIComponent(id)}/relay/rotate-token`,
+    {
+      method: 'POST',
+    },
+  )
 }
 
 // ===== Scheduled Tasks API =====
