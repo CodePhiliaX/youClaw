@@ -229,11 +229,6 @@ fn spawn_sidecar(app: &AppHandle) -> Result<u16, String> {
     env_vars.push(("PORT".into(), port.to_string()));
     env_vars.push(("YOUCLAW_USE_PREFERRED_PORT".into(), "1".into()));
 
-    // Set data directory
-    if let Some(app_data) = app.path().app_data_dir().ok() {
-        env_vars.push(("DATA_DIR".into(), app_data.to_string_lossy().to_string()));
-    }
-
     // Ensure PATH includes common bun/node install paths (PATH is minimal when launched from Finder/Explorer)
     {
         let current_path = std::env::var("PATH").unwrap_or_default();

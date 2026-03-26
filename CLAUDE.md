@@ -74,7 +74,7 @@ web/src/
 
 - `MODEL_API_KEY` (required)
 - `PORT` (default 62601)
-- `DATA_DIR` (default ./data)
+- `DATA_DIR` (default `./data` in dev, `~/.youclaw` for desktop production; use `~/.youclaw-dev` via env for dev isolation)
 - `MODEL_PROVIDER` / `MODEL_ID` (default minimax / MiniMax-M2.7-highspeed)
 - `LOG_LEVEL` (debug/info/warn/error, default info)
 - `TELEGRAM_BOT_TOKEN` (optional, enables Telegram channel)

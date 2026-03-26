@@ -193,7 +193,7 @@ bun test:e2e:ui      # Run E2E tests with UI
 | `MODEL_API_KEY` | Yes | — | Model API key |
 | `MODEL_BASE_URL` | No | — | Custom model API base URL |
 | `PORT` | No | `62601` | Backend server port |
-| `DATA_DIR` | No | `./data` | Data storage directory |
+| `DATA_DIR` | No | `./data` in dev, `~/.youclaw` in desktop production | Data storage directory. For dev, set `DATA_DIR=~/.youclaw-dev` if you want an isolated user-home data dir |
 | `LOG_LEVEL` | No | `info` | Log level |
 | `TELEGRAM_BOT_TOKEN` | No | — | Enable Telegram channel |
 | `DINGTALK_CLIENT_ID` | No | — | DingTalk app client ID |

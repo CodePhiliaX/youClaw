@@ -3,7 +3,7 @@ import type { AgentSession, AgentSessionEvent, SessionEntry, ToolDefinition } fr
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, existsSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { getEnv } from '../config/index.ts'
+import { getEnv, getPaths } from '../config/index.ts'
 import { getLogger } from '../logger/index.ts'
 import { writeModelInvocationLog } from '../logger/model-invocation.ts'
 import { getMessages, getSessionEntry, saveSession } from '../db/index.ts'
@@ -332,7 +332,7 @@ export class AgentRuntime {
       }
     }
 
-    const sessionsDir = resolve(env.DATA_DIR, 'sessions', agentId)
+    const sessionsDir = resolve(getPaths().data, 'sessions', agentId)
     mkdirSync(sessionsDir, { recursive: true })
     const existingSessionFile = resolveStoredSessionFile(sessionsDir, existingSession)
 

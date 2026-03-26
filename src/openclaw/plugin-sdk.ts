@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { tmpdir } from 'node:os'
-import { getPaths } from '../config/paths.ts'
+import { getPaths, resolvePathInput } from '../config/paths.ts'
 import type { OpenClawConfig } from './plugin-sdk-core.ts'
 
 export type { OpenClawConfig }
@@ -213,7 +213,7 @@ export function resolvePreferredOpenClawTmpDir(): string {
   } catch {
     const dataDir = process.env.DATA_DIR?.trim()
     preferred = dataDir
-      ? path.resolve(dataDir, 'tmp', 'openclaw')
+      ? path.resolve(resolvePathInput(dataDir), 'tmp', 'openclaw')
       : path.resolve(tmpdir(), 'youclaw-openclaw-tmp')
   }
   mkdirSync(preferred, { recursive: true })

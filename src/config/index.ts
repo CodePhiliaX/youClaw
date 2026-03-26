@@ -1,2 +1,11 @@
 export { loadEnv, getEnv, type EnvConfig } from './env.ts'
-export { getPaths, ROOT_DIR, resetPathsCache } from './paths.ts'
+export {
+  expandHomeDir,
+  getLegacyProductionDataDir,
+  getPaths,
+  getProductionDataDir,
+  resolvePathInput,
+  resolveProductionDataDir,
+  ROOT_DIR,
+  resetPathsCache,
+} from './paths.ts'

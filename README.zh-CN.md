@@ -193,7 +193,7 @@ bun test:e2e:ui      # 以 UI 模式运行 E2E 测试
 | `MODEL_API_KEY` | 是 | — | 模型 API key |
 | `MODEL_BASE_URL` | 否 | — | 自定义模型 API Base URL |
 | `PORT` | 否 | `62601` | 后端服务端口 |
-| `DATA_DIR` | 否 | `./data` | 数据存储目录 |
+| `DATA_DIR` | 否 | 开发环境 `./data`，桌面生产环境 `~/.youclaw` | 数据存储目录。开发时如果希望放到用户目录，建议显式设置 `DATA_DIR=~/.youclaw-dev` |
 | `LOG_LEVEL` | 否 | `info` | 日志级别 |
 | `TELEGRAM_BOT_TOKEN` | 否 | — | 启用 Telegram 渠道 |
 | `DINGTALK_CLIENT_ID` | 否 | — | 钉钉应用 Client ID |

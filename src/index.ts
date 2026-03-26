@@ -4,7 +4,7 @@ delete process.env.CLAUDECODE
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
-import { loadEnv, getEnv } from './config/index.ts'
+import { loadEnv, getEnv, resolvePathInput } from './config/index.ts'
 import { initLogger, getLogger } from './logger/index.ts'
 import { initDatabase } from './db/index.ts'
 import { EventBus } from './events/index.ts'
@@ -290,7 +290,7 @@ async function main() {
 function writeStartupCrashLog(errorText: string): void {
   try {
     const baseDir = process.env.DATA_DIR
-      ? resolve(process.env.DATA_DIR)
+      ? resolvePathInput(process.env.DATA_DIR)
       : resolve(tmpdir(), 'youclaw-data')
     mkdirSync(baseDir, { recursive: true })
     const logPath = resolve(baseDir, 'startup-crash.log')

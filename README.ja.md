@@ -193,7 +193,7 @@ bun test:e2e:ui      # UI 付きで E2E テストを実行
 | `MODEL_API_KEY` | はい | — | モデル API key |
 | `MODEL_BASE_URL` | いいえ | — | カスタムモデル API Base URL |
 | `PORT` | いいえ | `62601` | バックエンドサーバーポート |
-| `DATA_DIR` | いいえ | `./data` | データ保存ディレクトリ |
+| `DATA_DIR` | いいえ | 開発時は `./data`、デスクトップ本番では `~/.youclaw` | データ保存ディレクトリ。開発でユーザーホーム配下に分けたい場合は `DATA_DIR=~/.youclaw-dev` を明示設定してください |
 | `LOG_LEVEL` | いいえ | `info` | ログレベル |
 | `TELEGRAM_BOT_TOKEN` | いいえ | — | Telegram チャネルを有効化 |
 | `DINGTALK_CLIENT_ID` | いいえ | — | DingTalk アプリ Client ID |
