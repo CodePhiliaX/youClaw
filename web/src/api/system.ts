@@ -13,6 +13,7 @@ export interface SystemStatus {
   telegram: { connected: boolean }
   channels?: ChannelStatus[]
   database: { path: string; sizeBytes: number }
+  logsDir?: string
   startedAt: string
 }
 

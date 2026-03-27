@@ -57,6 +57,7 @@ export function createSystemRoutes(agentManager: AgentManager, eventBus: EventBu
         exists: existsSync(paths.skills),
         resourcesDir: process.env.RESOURCES_DIR ?? null,
       },
+      logsDir: paths.logs,
       startedAt,
     })
   })

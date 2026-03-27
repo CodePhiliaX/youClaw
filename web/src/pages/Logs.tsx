@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Search, ChevronDown, ChevronRight } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, FolderOpen } from 'lucide-react'
 import { getLogDates, getLogEntries } from '../api/client'
+import { getSystemStatus } from '../api/system'
 import type { LogEntry } from '../api/client'
 import { cn } from '../lib/utils'
 import { useI18n } from '../i18n'
 import { useLogSSE } from '../hooks/useLogSSE'
+import { isTauri } from '../api/transport'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 const LEVEL_LABELS: Record<number, string> = {
@@ -68,9 +70,11 @@ export function Logs() {
   // Track total entries fetched via pagination (desc order offset)
   const fetchedCountRef = useRef(0)
 
+  const [logsDir, setLogsDir] = useState('')
+
   const isToday = selectedDate === getToday()
 
-  // Load date list
+  // Load date list and logs directory path
   useEffect(() => {
     getLogDates().then((d) => {
       setDates(d)
@@ -78,6 +82,9 @@ export function Logs() {
         setSelectedDate(d[0]!)
       }
     }).catch(() => {})
+    if (isTauri) {
+      getSystemStatus().then((s) => setLogsDir(s.logsDir ?? '')).catch(() => {})
+    }
   }, [])
 
   // Debounce search
@@ -276,6 +283,19 @@ export function Logs() {
               </span>
               {t.logs.live}
             </span>
+          )}
+          {isTauri && logsDir && (
+            <button
+              className="ml-auto flex items-center gap-1.5 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground rounded-md border border-border hover:bg-accent/50 transition-colors"
+              title={logsDir}
+              onClick={async () => {
+                const { revealItemInDir } = await import('@tauri-apps/plugin-opener')
+                await revealItemInDir(logsDir)
+              }}
+            >
+              <FolderOpen className="h-3.5 w-3.5" />
+              {t.logs.openFolder}
+            </button>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">

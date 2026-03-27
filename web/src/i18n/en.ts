@@ -887,5 +887,6 @@ export const en = {
     live: 'Live',
     totalEntries: 'entries',
     duration: 'Duration',
+    openFolder: 'Open Folder',
   },
 } as const

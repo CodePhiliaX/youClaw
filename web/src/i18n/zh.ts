@@ -889,5 +889,6 @@ export const zh: Translations = {
     live: '实时',
     totalEntries: '条记录',
     duration: '耗时',
+    openFolder: '打开文件夹',
   },
 } as const
