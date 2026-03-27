@@ -37,6 +37,7 @@ export const en = {
     newChat: 'New chat',
     search: 'Search chats...',
     more: 'More',
+    feedback: 'Feedback',
     invitationReward: 'Share YouClaw with friends, earn 500 credits each',
     invitationTitle: 'Share YouClaw',
     invitationSubtitle: 'Earn 500 credits each',
